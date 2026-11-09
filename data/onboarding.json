@@ -1,0 +1,54 @@
+[
+  {
+    "id": "company",
+    "title": "Общий онбординг",
+    "role": "all",
+    "tasks": [
+      {
+        "id": "account",
+        "title": "Создать демо-профиль"
+      },
+      {
+        "id": "services",
+        "title": "Изучить рабочие сервисы"
+      }
+    ]
+  },
+  {
+    "id": "ml",
+    "title": "Онбординг ML-инженера",
+    "role": "ml",
+    "tasks": [
+      {
+        "id": "dataset",
+        "title": "Изучить синтетический датасет"
+      },
+      {
+        "id": "experiment",
+        "title": "Запланировать первый эксперимент"
+      }
+    ]
+  },
+  {
+    "id": "backend",
+    "title": "Онбординг backend-разработчика",
+    "role": "backend",
+    "tasks": [
+      {
+        "id": "api",
+        "title": "Изучить API-контракты"
+      }
+    ]
+  },
+  {
+    "id": "frontend",
+    "title": "Онбординг frontend-разработчика",
+    "role": "frontend",
+    "tasks": [
+      {
+        "id": "ui",
+        "title": "Запустить веб и расширение"
+      }
+    ]
+  }
+]

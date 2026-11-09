@@ -1,0 +1,17 @@
+{
+  "name": "ai-buddy",
+  "private": true,
+  "workspaces": [
+    "apps/web",
+    "apps/extension",
+    "packages/client"
+  ],
+  "scripts": {
+    "build": "npm run build --workspace @ai-buddy/web && npm run build --workspace @ai-buddy/extension",
+    "test": "node --test packages/client/test/*.test.js",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  }
+}

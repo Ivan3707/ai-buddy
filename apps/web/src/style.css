@@ -1,0 +1,5 @@
+:root {font-family:system-ui,sans-serif;color:#18342c;background:#f4f7f4;line-height:1.5}
+body {margin:0} main {max-width:840px;margin:auto;padding:32px 20px} h1 {font-size:48px;margin:8px 0}
+header span,footer {color:#52685d} section {background:white;padding:24px;margin:24px 0;border:1px solid #dbe5de;border-radius:16px}
+article {margin-top:20px}.task {display:flex;gap:12px;margin:10px 0} select,textarea,button {font:inherit;padding:10px;border:1px solid #9aada1;border-radius:8px}
+textarea {display:block;box-sizing:border-box;width:100%;min-height:90px;margin:8px 0}button {background:#176449;color:white;cursor:pointer}button:disabled{opacity:.6}a{color:#176449}footer{font-size:14px}

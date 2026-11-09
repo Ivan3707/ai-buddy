@@ -1,0 +1,12 @@
+{
+  "name": "@ai-buddy/extension",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@ai-buddy/client": "0.1.0"
+  }
+}

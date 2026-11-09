@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "background": {"service_worker": "background.js"},
+  "name": "AI-buddy Demo",
+  "version": "0.1.0",
+  "description": "Демо-помощник онбординга. Работает только с локальным Backend.",
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "host_permissions": [
+    "http://127.0.0.1:8080/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'; connect-src http://127.0.0.1:8080"
+  }
+}
