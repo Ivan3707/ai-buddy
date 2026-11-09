@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"github.com/nvkmaksim/ai-buddy/backend/internal/database"
 	"io"
 	"log"
 	"net/http"
@@ -117,14 +119,41 @@ func newHandler(aiURL string, onboarding []byte) http.Handler {
 }
 
 func main() {
-	data, err := os.ReadFile(env("DATA_DIR", "../../data") + "/onboarding.json")
-	if err != nil {
+	if err := run(); err != nil {
 		log.Fatal(err)
 	}
-	if !json.Valid(data) {
-		log.Fatal("invalid onboarding JSON")
+}
+
+func run() error {
+	data, err := os.ReadFile(env("DATA_DIR", "../../data") + "/onboarding.json")
+	if err != nil {
+		return fmt.Errorf("read onboarding data: %w", err)
 	}
-	server := &http.Server{Addr: ":8080", Handler: newHandler(env("AI_URL", "http://127.0.0.1:8001"), data), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 15 * time.Second, IdleTimeout: 60 * time.Second}
-	log.Print("AI-buddy backend listening on :8080 (mock mode)")
-	log.Fatal(server.ListenAndServe())
+
+	if !json.Valid(data) {
+		return fmt.Errorf("invalid onboarding JSON")
+	}
+
+	db, err := database.OpenPostgres()
+	if err != nil {
+		return fmt.Errorf("connect to PostgreSQL: %w", err)
+	}
+	defer db.Close()
+
+	server := &http.Server{
+		Addr:              ":8080",
+		Handler:           newHandler(env("AI_URL", "http://127.0.0.1:8001"), data),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      15 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
+
+	log.Print("AI-buddy backend listening on :8080")
+
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return fmt.Errorf("HTTP server: %w", err)
+	}
+
+	return nil
 }
