@@ -7,10 +7,13 @@ import (
 )
 
 type ChecklistItem struct {
-	ID          uuid.UUID
-	ChecklistID uuid.UUID
-	Title       string
-	Description string
-	Position    int
-	CreatedAt   time.Time
+    ID              uuid.UUID
+    ChecklistID     uuid.UUID
+    StageID         uuid.UUID
+    Title           string
+    Description     string
+    ExpectedResult  *string
+    RequiresReview  bool
+    Position        int
+    CreatedAt       time.Time
 }

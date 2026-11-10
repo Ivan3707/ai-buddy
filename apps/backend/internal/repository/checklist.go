@@ -66,7 +66,6 @@ func (r *ChecklistRepository) getChecklist(
 	if err == sql.ErrNoRows {
 		return nil, ErrNotFound
 	}
-
 	if err != nil {
 		return nil, fmt.Errorf("get checklist: %w", err)
 	}
@@ -79,12 +78,76 @@ func (r *ChecklistRepository) getChecklist(
 	return checklist, nil
 }
 
+func (r *ChecklistRepository) GetStages(
+	ctx context.Context,
+	checklistID uuid.UUID,
+) ([]model.ChecklistStage, error) {
+	query := `
+		SELECT
+			id,
+			checklist_id,
+			title,
+			week_start,
+			week_end,
+			goal,
+			expected_result,
+			position,
+			created_at
+		FROM checklist_stages
+		WHERE checklist_id = $1
+		ORDER BY position ASC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, checklistID)
+	if err != nil {
+		return nil, fmt.Errorf("get checklist stages: %w", err)
+	}
+	defer rows.Close()
+
+	stages := make([]model.ChecklistStage, 0)
+
+	for rows.Next() {
+		var stage model.ChecklistStage
+
+		if err := rows.Scan(
+			&stage.ID,
+			&stage.ChecklistID,
+			&stage.Title,
+			&stage.WeekStart,
+			&stage.WeekEnd,
+			&stage.Goal,
+			&stage.ExpectedResult,
+			&stage.Position,
+			&stage.CreatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan checklist stage: %w", err)
+		}
+
+		stages = append(stages, stage)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate checklist stages: %w", err)
+	}
+
+	return stages, nil
+}
+
 func (r *ChecklistRepository) GetItems(
 	ctx context.Context,
 	checklistID uuid.UUID,
 ) ([]model.ChecklistItem, error) {
 	query := `
-		SELECT id, checklist_id, title, description, position, created_at
+		SELECT
+			id,
+			checklist_id,
+			stage_id,
+			title,
+			description,
+			expected_result,
+			requires_review,
+			position,
+			created_at
 		FROM checklist_items
 		WHERE checklist_id = $1
 		ORDER BY position ASC
@@ -100,17 +163,29 @@ func (r *ChecklistRepository) GetItems(
 
 	for rows.Next() {
 		var item model.ChecklistItem
+		var description sql.NullString
+		var expectedResult sql.NullString
 
-		err := rows.Scan(
+		if err := rows.Scan(
 			&item.ID,
 			&item.ChecklistID,
+			&item.StageID,
 			&item.Title,
-			&item.Description,
+			&description,
+			&expectedResult,
+			&item.RequiresReview,
 			&item.Position,
 			&item.CreatedAt,
-		)
-		if err != nil {
+		); err != nil {
 			return nil, fmt.Errorf("scan checklist item: %w", err)
+		}
+
+		if description.Valid {
+			item.Description = description.String
+		}
+		if expectedResult.Valid {
+			value := expectedResult.String
+			item.ExpectedResult = &value
 		}
 
 		items = append(items, item)

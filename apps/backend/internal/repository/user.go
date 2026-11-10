@@ -24,14 +24,19 @@ func (r *UserRepository) Create(
 	user *model.User,
 ) error {
 	query := `
-        INSERT INTO users (email, password_hash, role, profession)
-        VALUES ($1, $2, $3, $4)
-        RETURNING id, created_at
-    `
+		INSERT INTO users (email, password_hash, role, profession, buddy_id)
+		VALUES ($1, $2, $3, $4, $5)
+		RETURNING id, created_at
+	`
 
 	var profession any
 	if user.Profession != nil {
 		profession = string(*user.Profession)
+	}
+
+	var buddyID any
+	if user.BuddyID != nil {
+		buddyID = *user.BuddyID
 	}
 
 	err := r.db.QueryRowContext(
@@ -41,6 +46,7 @@ func (r *UserRepository) Create(
 		user.PasswordHash,
 		string(user.Role),
 		profession,
+		buddyID,
 	).Scan(&user.ID, &user.CreatedAt)
 
 	if err != nil {
@@ -63,10 +69,10 @@ func (r *UserRepository) GetByID(
 	id uuid.UUID,
 ) (*model.User, error) {
 	query := `
-        SELECT id, email, password_hash, role, profession, created_at
-        FROM users
-        WHERE id = $1
-    `
+		SELECT id, email, password_hash, role, profession, buddy_id, created_at
+		FROM users
+		WHERE id = $1
+	`
 
 	return r.getUser(ctx, query, id)
 }
@@ -76,10 +82,10 @@ func (r *UserRepository) GetByEmail(
 	email string,
 ) (*model.User, error) {
 	query := `
-        SELECT id, email, password_hash, role, profession, created_at
-        FROM users
-        WHERE LOWER(email) = LOWER($1)
-    `
+		SELECT id, email, password_hash, role, profession, buddy_id, created_at
+		FROM users
+		WHERE LOWER(email) = LOWER($1)
+	`
 
 	return r.getUser(ctx, query, email)
 }
@@ -91,6 +97,7 @@ func (r *UserRepository) getUser(
 ) (*model.User, error) {
 	user := &model.User{}
 	var profession sql.NullString
+	var buddyID uuid.NullUUID
 
 	err := r.db.QueryRowContext(ctx, query, arg).Scan(
 		&user.ID,
@@ -98,6 +105,7 @@ func (r *UserRepository) getUser(
 		&user.PasswordHash,
 		&user.Role,
 		&profession,
+		&buddyID,
 		&user.CreatedAt,
 	)
 
@@ -112,6 +120,10 @@ func (r *UserRepository) getUser(
 	if profession.Valid {
 		value := model.Profession(profession.String)
 		user.Profession = &value
+	}
+
+	if buddyID.Valid {
+		user.BuddyID = &buddyID.UUID
 	}
 
 	return user, nil

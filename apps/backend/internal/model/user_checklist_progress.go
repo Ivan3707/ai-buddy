@@ -12,6 +12,7 @@ const (
 	StatusUnavailable ChecklistStatus = "unavailable"
 	StatusActive      ChecklistStatus = "active"
 	StatusCompleted   ChecklistStatus = "completed"
+	StatusVerified    ChecklistStatus = "verified"
 )
 
 type UserChecklistProgress struct {

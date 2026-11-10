@@ -9,8 +9,8 @@ import (
 type UserRole string
 
 const (
-	RoleIntern   UserRole = "intern"
-	RoleTeamlead UserRole = "teamlead"
+	RoleIntern UserRole = "intern"
+	RoleBuddy  UserRole = "buddy"
 )
 
 type Profession string
@@ -27,5 +27,6 @@ type User struct {
 	PasswordHash string
 	Role         UserRole
 	Profession   *Profession
+	BuddyID      *uuid.UUID
 	CreatedAt    time.Time
 }
