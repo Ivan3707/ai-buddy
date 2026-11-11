@@ -13,8 +13,11 @@ import (
 )
 
 type mockAuthUserRepository struct {
-	user *model.User
-	err  error
+	user             *model.User
+	err              error
+	recordErr        error
+	isFirstLogin     bool
+	recordLoginCalls int
 }
 
 func (m *mockAuthUserRepository) GetByEmail(
@@ -22,6 +25,17 @@ func (m *mockAuthUserRepository) GetByEmail(
 	email string,
 ) (*model.User, error) {
 	return m.user, m.err
+}
+
+func (m *mockAuthUserRepository) RecordLogin(
+	ctx context.Context,
+	id uuid.UUID,
+) (bool, error) {
+	m.recordLoginCalls++
+	if m.recordErr != nil {
+		return false, m.recordErr
+	}
+	return m.isFirstLogin, nil
 }
 
 func newTestAuthService(
@@ -41,8 +55,9 @@ func newTestAuthService(
 
 	return NewAuthService(
 		&mockAuthUserRepository{
-			user: user,
-			err:  repoErr,
+			user:         user,
+			err:          repoErr,
+			isFirstLogin: true,
 		},
 		jwtService,
 	)
@@ -85,6 +100,9 @@ func TestAuthServiceLogin(t *testing.T) {
 
 		if result.User.ID != user.ID {
 			t.Fatalf("expected user %s, got %s", user.ID, result.User.ID)
+		}
+		if !result.IsFirstLogin {
+			t.Fatal("expected first login")
 		}
 
 		jwtService, err := security.NewJWTService(
@@ -148,6 +166,26 @@ func TestAuthServiceLogin(t *testing.T) {
 		}
 		if !errors.Is(err, repoErr) {
 			t.Fatalf("expected wrapped repository error, got %v", err)
+		}
+	})
+
+	t.Run("record login error", func(t *testing.T) {
+		recordErr := errors.New("write failed")
+		repo := &mockAuthUserRepository{user: user, recordErr: recordErr}
+		jwtService, err := security.NewJWTService(
+			"test-secret-that-is-at-least-32-bytes-long",
+			15*time.Minute,
+		)
+		if err != nil {
+			t.Fatalf("create JWT service: %v", err)
+		}
+		result, err := NewAuthService(repo, jwtService).Login(
+			context.Background(),
+			user.Email,
+			password,
+		)
+		if result != nil || !errors.Is(err, recordErr) {
+			t.Fatalf("expected record error without login result, got result=%v err=%v", result, err)
 		}
 	})
 }

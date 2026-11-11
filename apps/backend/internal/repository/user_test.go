@@ -87,6 +87,18 @@ func TestUserRepository(t *testing.T) {
 		*foundByID.Profession != profession {
 		t.Errorf("unexpected profession: %v", foundByID.Profession)
 	}
+	if foundByID.LastLoginAt != nil {
+		t.Errorf("expected initial last_login_at to be nil, got %v", foundByID.LastLoginAt)
+	}
+
+	lastLoginAt := time.Now().UTC().Truncate(time.Microsecond)
+	if _, err := db.ExecContext(ctx, `
+		UPDATE users
+		SET last_login_at = $1
+		WHERE id = $2
+	`, lastLoginAt, user.ID); err != nil {
+		t.Fatalf("set last login time: %v", err)
+	}
 
 	// GetByEmail: проверяем регистронезависимый поиск.
 	foundByEmail, err := repo.GetByEmail(ctx, "TEST-"+email[len("test-"):])
@@ -96,6 +108,14 @@ func TestUserRepository(t *testing.T) {
 
 	if foundByEmail.ID != user.ID {
 		t.Errorf("expected ID %s, got %s", user.ID, foundByEmail.ID)
+	}
+	if foundByEmail.LastLoginAt == nil ||
+		!foundByEmail.LastLoginAt.Equal(lastLoginAt) {
+		t.Errorf(
+			"expected last_login_at %v, got %v",
+			lastLoginAt,
+			foundByEmail.LastLoginAt,
+		)
 	}
 
 	// Not found

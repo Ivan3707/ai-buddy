@@ -69,7 +69,8 @@ func (r *UserRepository) GetByID(
 	id uuid.UUID,
 ) (*model.User, error) {
 	query := `
-		SELECT id, email, password_hash, role, profession, buddy_id, created_at
+		SELECT id, email, password_hash, role, profession, buddy_id, created_at,
+			last_login_at
 		FROM users
 		WHERE id = $1
 	`
@@ -82,12 +83,44 @@ func (r *UserRepository) GetByEmail(
 	email string,
 ) (*model.User, error) {
 	query := `
-		SELECT id, email, password_hash, role, profession, buddy_id, created_at
+		SELECT id, email, password_hash, role, profession, buddy_id, created_at,
+			last_login_at
 		FROM users
 		WHERE LOWER(email) = LOWER($1)
 	`
 
 	return r.getUser(ctx, query, email)
+}
+
+// RecordLogin atomically updates last_login_at and reports whether its
+// previous value was NULL. The row lock is acquired only for this statement.
+func (r *UserRepository) RecordLogin(
+	ctx context.Context,
+	id uuid.UUID,
+) (bool, error) {
+	query := `
+		WITH previous AS (
+			SELECT id, last_login_at IS NULL AS is_first_login
+			FROM users
+			WHERE id = $1
+			FOR UPDATE
+		)
+		UPDATE users AS u
+		SET last_login_at = CURRENT_TIMESTAMP
+		FROM previous
+		WHERE u.id = previous.id
+		RETURNING previous.is_first_login
+	`
+
+	var isFirstLogin bool
+	if err := r.db.QueryRowContext(ctx, query, id).Scan(&isFirstLogin); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, ErrNotFound
+		}
+		return false, fmt.Errorf("record user login: %w", err)
+	}
+
+	return isFirstLogin, nil
 }
 
 func (r *UserRepository) getUser(
@@ -98,6 +131,7 @@ func (r *UserRepository) getUser(
 	user := &model.User{}
 	var profession sql.NullString
 	var buddyID uuid.NullUUID
+	var lastLoginAt sql.NullTime
 
 	err := r.db.QueryRowContext(ctx, query, arg).Scan(
 		&user.ID,
@@ -107,6 +141,7 @@ func (r *UserRepository) getUser(
 		&profession,
 		&buddyID,
 		&user.CreatedAt,
+		&lastLoginAt,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -124,6 +159,10 @@ func (r *UserRepository) getUser(
 
 	if buddyID.Valid {
 		user.BuddyID = &buddyID.UUID
+	}
+
+	if lastLoginAt.Valid {
+		user.LastLoginAt = &lastLoginAt.Time
 	}
 
 	return user, nil

@@ -116,12 +116,28 @@ func newHandler(
 		),
 	)
 	mux.Handle(
-		"POST /api/interns/{internID}/checklist-items/{itemID}/review",
-		authenticated(
-			middleware.RequireRole(model.RoleBuddy)(
-				http.HandlerFunc(deps.reviewItemHandler()),
-			),
-		),
+		"GET /api/checklists",
+		authenticated(middleware.RequireRole(model.RoleIntern)(deps.checklistsHandler())),
+	)
+	mux.Handle(
+		"POST /api/checklist-items/{itemID}/complete",
+		authenticated(middleware.RequireRole(model.RoleIntern)(deps.completeItemHandler())),
+	)
+	mux.Handle(
+		"POST /api/checklist-items/{itemID}/submissions",
+		authenticated(middleware.RequireRole(model.RoleIntern)(deps.submitItemHandler())),
+	)
+	mux.Handle(
+		"GET /api/checklist-items/{itemID}/submissions",
+		authenticated(middleware.RequireRole(model.RoleIntern)(deps.submissionHistoryHandler())),
+	)
+	mux.Handle(
+		"GET /api/buddy/submissions",
+		authenticated(middleware.RequireRole(model.RoleBuddy)(deps.pendingSubmissionsHandler())),
+	)
+	mux.Handle(
+		"POST /api/buddy/submissions/{submissionID}/review",
+		authenticated(middleware.RequireRole(model.RoleBuddy)(deps.reviewSubmissionHandler())),
 	)
 
 	chatHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -217,12 +233,15 @@ func run() error {
 	users := repository.NewUserRepository(db)
 	auth := service.NewAuthService(users, jwtService)
 
+	progress := service.NewProgressService(db)
 	deps := handlerDependencies{
-		auth:     auth,
-		users:    users,
-		jwt:      jwtService,
-		interns:  service.NewUserService(db),
-		progress: service.NewProgressService(db),
+		auth:        auth,
+		users:       users,
+		jwt:         jwtService,
+		interns:     service.NewUserService(db),
+		checklists:  service.NewChecklistService(db),
+		items:       progress,
+		submissions: progress,
 	}
 	defer db.Close()
 

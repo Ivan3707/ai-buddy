@@ -33,10 +33,11 @@ type publicUser struct {
 }
 
 type loginResponse struct {
-	AccessToken string     `json:"access_token"`
-	TokenType   string     `json:"token_type"`
-	ExpiresIn   int64      `json:"expires_in"`
-	User        publicUser `json:"user"`
+	AccessToken  string     `json:"access_token"`
+	TokenType    string     `json:"token_type"`
+	ExpiresIn    int64      `json:"expires_in"`
+	IsFirstLogin bool       `json:"is_first_login"`
+	User         publicUser `json:"user"`
 }
 
 type authService interface {
@@ -48,11 +49,13 @@ type handlerUserRepository interface {
 }
 
 type handlerDependencies struct {
-	auth     authService
-	users    handlerUserRepository
-	jwt      *security.JWTService
-	interns  internCreator
-	progress progressReviewer
+	auth        authService
+	users       handlerUserRepository
+	jwt         *security.JWTService
+	interns     internCreator
+	checklists  checklistReader
+	items       checklistItemService
+	submissions buddySubmissionService
 }
 
 type createInternRequest struct {
@@ -69,20 +72,6 @@ type internCreator interface {
 		profession model.Profession,
 		buddyID uuid.UUID,
 	) (*model.User, error)
-}
-
-type progressReviewer interface {
-	ReviewItem(
-		ctx context.Context,
-		buddyID uuid.UUID,
-		internID uuid.UUID,
-		itemID uuid.UUID,
-		approved bool,
-	) error
-}
-
-type reviewItemRequest struct {
-	Approved *bool `json:"approved"`
 }
 
 func toPublicUser(user *model.User) publicUser {
@@ -130,10 +119,11 @@ func (d handlerDependencies) loginHandler() http.HandlerFunc {
 		}
 
 		send(w, http.StatusOK, loginResponse{
-			AccessToken: result.AccessToken,
-			TokenType:   "Bearer",
-			ExpiresIn:   result.ExpiresIn,
-			User:        toPublicUser(result.User),
+			AccessToken:  result.AccessToken,
+			TokenType:    "Bearer",
+			ExpiresIn:    result.ExpiresIn,
+			IsFirstLogin: result.IsFirstLogin,
+			User:         toPublicUser(result.User),
 		})
 	}
 }
@@ -242,105 +232,5 @@ func (d handlerDependencies) createInternHandler() http.HandlerFunc {
 		}
 
 		send(w, http.StatusCreated, toPublicUser(user))
-	}
-}
-func (d handlerDependencies) reviewItemHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		currentUser, ok := middleware.CurrentUser(r.Context())
-		if !ok || currentUser.Role != model.RoleBuddy {
-			send(w, http.StatusUnauthorized, map[string]string{
-				"error": "unauthorized",
-			})
-			return
-		}
-
-		internID, err := uuid.Parse(r.PathValue("internID"))
-		if err != nil {
-			send(w, http.StatusBadRequest, map[string]string{
-				"error": "invalid intern ID",
-			})
-			return
-		}
-
-		itemID, err := uuid.Parse(r.PathValue("itemID"))
-		if err != nil {
-			send(w, http.StatusBadRequest, map[string]string{
-				"error": "invalid checklist item ID",
-			})
-			return
-		}
-
-		r.Body = http.MaxBytesReader(w, r.Body, 4096)
-
-		decoder := json.NewDecoder(r.Body)
-		decoder.DisallowUnknownFields()
-
-		var body reviewItemRequest
-		if err := decoder.Decode(&body); err != nil {
-			send(w, http.StatusBadRequest, map[string]string{
-				"error": "invalid JSON",
-			})
-			return
-		}
-
-		if decoder.Decode(&struct{}{}) != io.EOF {
-			send(w, http.StatusBadRequest, map[string]string{
-				"error": "expected one JSON object",
-			})
-			return
-		}
-
-		if body.Approved == nil {
-			send(w, http.StatusBadRequest, map[string]string{
-				"error": "approved is required",
-			})
-			return
-		}
-
-		err = d.progress.ReviewItem(
-			r.Context(),
-			currentUser.ID,
-			internID,
-			itemID,
-			*body.Approved,
-		)
-
-		switch {
-		case errors.Is(err, repository.ErrNotFound):
-			send(w, http.StatusNotFound, map[string]string{
-				"error": "user or checklist item not found",
-			})
-			return
-
-		case errors.Is(err, service.ErrUserNotBuddy),
-			errors.Is(err, service.ErrInternNotAssigned),
-			errors.Is(err, service.ErrCannotReviewSelf):
-			send(w, http.StatusForbidden, map[string]string{
-				"error": "forbidden",
-			})
-			return
-
-		case errors.Is(err, service.ErrUserNotIntern):
-			send(w, http.StatusNotFound, map[string]string{
-				"error": "intern not found",
-			})
-			return
-
-		case errors.Is(err, service.ErrReviewNotPending):
-			send(w, http.StatusConflict, map[string]string{
-				"error": "checklist item is not awaiting review",
-			})
-			return
-
-		case err != nil:
-			send(w, http.StatusInternalServerError, map[string]string{
-				"error": "internal server error",
-			})
-			return
-		}
-
-		send(w, http.StatusOK, map[string]string{
-			"status": "ok",
-		})
 	}
 }

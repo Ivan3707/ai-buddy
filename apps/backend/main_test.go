@@ -49,6 +49,19 @@ func (r *testUserRepository) GetByEmail(
 	return r.user, nil
 }
 
+func (r *testUserRepository) RecordLogin(
+	ctx context.Context,
+	id uuid.UUID,
+) (bool, error) {
+	if r.user == nil || r.user.ID != id {
+		return false, repository.ErrNotFound
+	}
+	isFirstLogin := r.user.LastLoginAt == nil
+	now := time.Now().UTC()
+	r.user.LastLoginAt = &now
+	return isFirstLogin, nil
+}
+
 func newTestHandler(
 	t *testing.T,
 	aiURL string,
@@ -237,6 +250,18 @@ func TestAuthLogin(t *testing.T) {
 
 	if strings.Contains(w.Body.String(), "password_hash") {
 		t.Fatal("response must not contain password hash")
+	}
+	if !strings.Contains(w.Body.String(), `"is_first_login":true`) {
+		t.Fatalf("expected first login flag: %s", w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(
+		w,
+		httptest.NewRequest("POST", "/api/auth/login", strings.NewReader(body)),
+	)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"is_first_login":false`) {
+		t.Fatalf("expected subsequent login flag: status=%d body=%s", w.Code, w.Body.String())
 	}
 }
 
@@ -553,323 +578,5 @@ func TestCreateInternRejectsShortPassword(t *testing.T) {
 
 	if interns.called {
 		t.Fatal("service must not be called for invalid password")
-	}
-}
-
-type testProgressReviewer struct {
-	buddyID  uuid.UUID
-	internID uuid.UUID
-	itemID   uuid.UUID
-	approved bool
-	called   bool
-	err      error
-}
-
-func (s *testProgressReviewer) ReviewItem(
-	ctx context.Context,
-	buddyID uuid.UUID,
-	internID uuid.UUID,
-	itemID uuid.UUID,
-	approved bool,
-) error {
-	s.called = true
-	s.buddyID = buddyID
-	s.internID = internID
-	s.itemID = itemID
-	s.approved = approved
-
-	return s.err
-}
-
-func newReviewHandler(
-	t *testing.T,
-	role model.UserRole,
-	reviewer progressReviewer,
-) (http.Handler, string, *model.User) {
-	t.Helper()
-
-	user := &model.User{
-		ID:        uuid.New(),
-		Email:     "reviewer@example.com",
-		Role:      role,
-		CreatedAt: time.Now().UTC(),
-	}
-
-	users := &testUserRepository{user: user}
-
-	jwtService, err := security.NewJWTService(
-		testJWTSecret,
-		15*time.Minute,
-	)
-	if err != nil {
-		t.Fatalf("create JWT service: %v", err)
-	}
-
-	token, err := jwtService.GenerateAccessToken(user.ID)
-	if err != nil {
-		t.Fatalf("generate access token: %v", err)
-	}
-
-	auth := service.NewAuthService(users, jwtService)
-
-	handler := newHandler(
-		"",
-		[]byte(demo),
-		handlerDependencies{
-			auth:     auth,
-			users:    users,
-			jwt:      jwtService,
-			progress: reviewer,
-		},
-	)
-
-	return handler, token, user
-}
-
-func TestReviewItem_Success(t *testing.T) {
-	reviewer := &testProgressReviewer{}
-	handler, token, buddy := newReviewHandler(
-		t,
-		model.RoleBuddy,
-		reviewer,
-	)
-
-	internID := uuid.New()
-	itemID := uuid.New()
-
-	target := "/api/interns/" + internID.String() +
-		"/checklist-items/" + itemID.String() + "/review"
-
-	w := httptest.NewRecorder()
-	req := authorizedRequest(
-		http.MethodPost,
-		target,
-		`{"approved":true}`,
-		token,
-	)
-
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("got %d: %s", w.Code, w.Body.String())
-	}
-
-	if !reviewer.called {
-		t.Fatal("expected ReviewItem to be called")
-	}
-
-	if reviewer.buddyID != buddy.ID {
-		t.Errorf("unexpected buddy ID: %s", reviewer.buddyID)
-	}
-
-	if reviewer.internID != internID {
-		t.Errorf("unexpected intern ID: %s", reviewer.internID)
-	}
-
-	if reviewer.itemID != itemID {
-		t.Errorf("unexpected item ID: %s", reviewer.itemID)
-	}
-
-	if !reviewer.approved {
-		t.Error("expected approved=true")
-	}
-}
-
-func TestReviewItem_Reject(t *testing.T) {
-	reviewer := &testProgressReviewer{}
-	handler, token, _ := newReviewHandler(
-		t,
-		model.RoleBuddy,
-		reviewer,
-	)
-
-	target := "/api/interns/" + uuid.NewString() +
-		"/checklist-items/" + uuid.NewString() + "/review"
-
-	w := httptest.NewRecorder()
-	req := authorizedRequest(
-		http.MethodPost,
-		target,
-		`{"approved":false}`,
-		token,
-	)
-
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Fatalf("got %d: %s", w.Code, w.Body.String())
-	}
-
-	if !reviewer.called {
-		t.Fatal("expected ReviewItem to be called")
-	}
-
-	if reviewer.approved {
-		t.Error("expected approved=false")
-	}
-}
-
-func TestReviewItem_RequiresBuddy(t *testing.T) {
-	reviewer := &testProgressReviewer{}
-	handler, token, _ := newReviewHandler(
-		t,
-		model.RoleIntern,
-		reviewer,
-	)
-
-	target := "/api/interns/" + uuid.NewString() +
-		"/checklist-items/" + uuid.NewString() + "/review"
-
-	w := httptest.NewRecorder()
-	req := authorizedRequest(
-		http.MethodPost,
-		target,
-		`{"approved":true}`,
-		token,
-	)
-
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("got %d, want %d", w.Code, http.StatusForbidden)
-	}
-
-	if reviewer.called {
-		t.Fatal("review service must not be called for intern")
-	}
-}
-
-func TestReviewItem_InvalidRequest(t *testing.T) {
-	reviewer := &testProgressReviewer{}
-	handler, token, _ := newReviewHandler(
-		t,
-		model.RoleBuddy,
-		reviewer,
-	)
-
-	validTarget := "/api/interns/" + uuid.NewString() +
-		"/checklist-items/" + uuid.NewString() + "/review"
-
-	tests := []struct {
-		name   string
-		target string
-		body   string
-	}{
-		{
-			name:   "missing approved",
-			target: validTarget,
-			body:   `{}`,
-		},
-		{
-			name:   "invalid JSON",
-			target: validTarget,
-			body:   `broken`,
-		},
-		{
-			name:   "unknown field",
-			target: validTarget,
-			body:   `{"approved":true,"extra":1}`,
-		},
-		{
-			name: "invalid intern ID",
-			target: "/api/interns/invalid/checklist-items/" +
-				uuid.NewString() + "/review",
-			body: `{"approved":true}`,
-		},
-		{
-			name: "invalid item ID",
-			target: "/api/interns/" + uuid.NewString() +
-				"/checklist-items/invalid/review",
-			body: `{"approved":true}`,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			w := httptest.NewRecorder()
-			req := authorizedRequest(
-				http.MethodPost,
-				tc.target,
-				tc.body,
-				token,
-			)
-
-			handler.ServeHTTP(w, req)
-
-			if w.Code != http.StatusBadRequest {
-				t.Fatalf(
-					"got %d, want %d: %s",
-					w.Code,
-					http.StatusBadRequest,
-					w.Body.String(),
-				)
-			}
-		})
-	}
-
-	if reviewer.called {
-		t.Fatal("review service must not be called for invalid requests")
-	}
-}
-
-func TestReviewItem_ServiceErrors(t *testing.T) {
-	tests := []struct {
-		name       string
-		serviceErr error
-		wantStatus int
-	}{
-		{
-			name:       "intern not assigned",
-			serviceErr: service.ErrInternNotAssigned,
-			wantStatus: http.StatusForbidden,
-		},
-		{
-			name:       "review not pending",
-			serviceErr: service.ErrReviewNotPending,
-			wantStatus: http.StatusConflict,
-		},
-		{
-			name:       "record not found",
-			serviceErr: repository.ErrNotFound,
-			wantStatus: http.StatusNotFound,
-		},
-		{
-			name:       "internal error",
-			serviceErr: errors.New("database unavailable"),
-			wantStatus: http.StatusInternalServerError,
-		},
-	}
-
-	for _, tc := range tests {
-		t.Run(tc.name, func(t *testing.T) {
-			reviewer := &testProgressReviewer{err: tc.serviceErr}
-			handler, token, _ := newReviewHandler(
-				t,
-				model.RoleBuddy,
-				reviewer,
-			)
-
-			target := "/api/interns/" + uuid.NewString() +
-				"/checklist-items/" + uuid.NewString() + "/review"
-
-			w := httptest.NewRecorder()
-			req := authorizedRequest(
-				http.MethodPost,
-				target,
-				`{"approved":true}`,
-				token,
-			)
-
-			handler.ServeHTTP(w, req)
-
-			if w.Code != tc.wantStatus {
-				t.Fatalf(
-					"got %d, want %d: %s",
-					w.Code,
-					tc.wantStatus,
-					w.Body.String(),
-				)
-			}
-		})
 	}
 }

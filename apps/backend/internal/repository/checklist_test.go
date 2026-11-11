@@ -110,12 +110,26 @@ func TestChecklistRepository(t *testing.T) {
 	}
 
 	// Создаём задания в обратном порядке.
+	var stageID uuid.UUID
+	err = db.QueryRowContext(ctx, `
+		INSERT INTO checklist_stages (
+			checklist_id, title, week_start, week_end, position
+		)
+		VALUES ($1, 'Test stage', 1, 1, 1)
+		RETURNING id
+	`, professionalID).Scan(&stageID)
+	if err != nil {
+		t.Fatalf("create checklist stage: %v", err)
+	}
+
 	_, err = db.ExecContext(ctx, `
-		INSERT INTO checklist_items (checklist_id, title, position)
+		INSERT INTO checklist_items (
+			checklist_id, stage_id, title, estimated_minutes, position
+		)
 		VALUES
-			($1, 'Second item', 2),
-			($1, 'First item', 1)
-	`, professionalID)
+			($1, $2, 'Second item', NULL, 2),
+			($1, $2, 'First item', 30, 1)
+	`, professionalID, stageID)
 	if err != nil {
 		t.Fatalf("create checklist items: %v", err)
 	}
@@ -135,6 +149,20 @@ func TestChecklistRepository(t *testing.T) {
 			"items are not ordered: positions %d, %d",
 			items[0].Position,
 			items[1].Position,
+		)
+	}
+
+	if items[0].EstimatedMinutes == nil ||
+		*items[0].EstimatedMinutes != 30 {
+		t.Errorf(
+			"expected first item estimated minutes 30, got %v",
+			items[0].EstimatedMinutes,
+		)
+	}
+	if items[1].EstimatedMinutes != nil {
+		t.Errorf(
+			"expected second item estimated minutes to be nil, got %d",
+			*items[1].EstimatedMinutes,
 		)
 	}
 

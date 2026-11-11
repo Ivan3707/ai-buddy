@@ -71,22 +71,38 @@ func TestProgressRepository(t *testing.T) {
 	commonSecondItemID := uuid.New()
 	professionalFirstItemID := uuid.New()
 	professionalSecondItemID := uuid.New()
+	commonStageID := uuid.New()
+	professionalStageID := uuid.New()
+
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO checklist_stages (
+			id, checklist_id, title, week_start, week_end, position
+		)
+		VALUES
+			($1, $2, 'Common stage', 1, 1, 1),
+			($3, $4, 'Professional stage', 1, 1, 1)
+	`, commonStageID, commonChecklistID, professionalStageID, professionalChecklistID)
+	if err != nil {
+		t.Fatalf("create test checklist stages: %v", err)
+	}
 
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO checklist_items (
-			id, checklist_id, title, description, position
+			id, checklist_id, stage_id, title, description, position
 		)
 		VALUES
-			($1, $2, 'Common 1', '', 1),
-			($3, $2, 'Common 2', '', 2),
-			($4, $5, 'Backend 1', '', 1),
-			($6, $5, 'Backend 2', '', 2)
+			($1, $2, $3, 'Common 1', '', 1),
+			($4, $2, $3, 'Common 2', '', 2),
+			($5, $6, $7, 'Backend 1', '', 1),
+			($8, $6, $7, 'Backend 2', '', 2)
 	`,
 		commonFirstItemID,
 		commonChecklistID,
+		commonStageID,
 		commonSecondItemID,
 		professionalFirstItemID,
 		professionalChecklistID,
+		professionalStageID,
 		professionalSecondItemID,
 	)
 	if err != nil {

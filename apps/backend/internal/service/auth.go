@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/model"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/repository"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/security"
@@ -17,6 +18,7 @@ var ErrInvalidCredentials = errors.New("invalid email or password")
 // Создание пользователей остаётся ответственностью UserService.
 type authUserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*model.User, error)
+	RecordLogin(ctx context.Context, id uuid.UUID) (bool, error)
 }
 
 type AuthService struct {
@@ -25,9 +27,10 @@ type AuthService struct {
 }
 
 type LoginResult struct {
-	AccessToken string
-	ExpiresIn   int64
-	User        *model.User
+	AccessToken  string
+	ExpiresIn    int64
+	IsFirstLogin bool
+	User         *model.User
 }
 
 func NewAuthService(
@@ -73,14 +76,20 @@ func (s *AuthService) Login(
 		return nil, ErrInvalidCredentials
 	}
 
+	isFirstLogin, err := s.users.RecordLogin(ctx, user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("record successful login: %w", err)
+	}
+
 	token, err := s.jwt.GenerateAccessToken(user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("generate access token: %w", err)
 	}
 
 	return &LoginResult{
-		AccessToken: token,
-		ExpiresIn:   int64(s.jwt.TTL().Seconds()),
-		User:        user,
+		AccessToken:  token,
+		ExpiresIn:    int64(s.jwt.TTL().Seconds()),
+		IsFirstLogin: isFirstLogin,
+		User:         user,
 	}, nil
 }

@@ -49,6 +49,18 @@ func openChecklistTestDB(t *testing.T) (*sql.DB, context.Context) {
 		t.Fatalf("ping database: %v", err)
 	}
 
+	var gooseVersion int
+	if err := db.QueryRowContext(ctx, `
+		SELECT COALESCE(MAX(version_id), 0)
+		FROM goose_db_version
+		WHERE is_applied
+	`).Scan(&gooseVersion); err != nil {
+		t.Fatalf("read Goose version: %v", err)
+	}
+	if gooseVersion != 3 {
+		t.Fatalf("TEST_DATABASE_URL must use Goose version 3, got %d", gooseVersion)
+	}
+
 	return db, ctx
 }
 
@@ -222,11 +234,25 @@ func createChecklistTestIntern(
 	t.Cleanup(func() {
 		_, err := db.ExecContext(
 			context.Background(),
-			"DELETE FROM buddy WHERE id = $1",
+			"DELETE FROM users WHERE id = $1",
 			buddy.ID,
 		)
 		if err != nil {
 			t.Errorf("cleanup test user: %v", err)
+		}
+	})
+
+	// Submissions reference progress without ON DELETE CASCADE, so remove only
+	// this test intern's submission rows before the existing user cleanup runs.
+	t.Cleanup(func() {
+		_, err := db.ExecContext(context.Background(), `
+			DELETE FROM checklist_item_submissions
+			WHERE progress_id IN (
+				SELECT id FROM user_checklist_progress WHERE user_id = $1
+			)
+		`, user.ID)
+		if err != nil {
+			t.Errorf("cleanup test submissions: %v", err)
 		}
 	})
 
@@ -487,10 +513,23 @@ func TestChecklistService_GetByUserID_UnexpectedProgress(t *testing.T) {
 	})
 
 	foreignItemID := uuid.New()
+	foreignStageID := uuid.New()
 	_, err = db.ExecContext(ctx, `
-		INSERT INTO checklist_items (id, checklist_id, title, position)
-		VALUES ($1, $2, $3, 1)
-	`, foreignItemID, foreignChecklistID, "Foreign item")
+		INSERT INTO checklist_stages (
+			id, checklist_id, title, week_start, week_end, position
+		)
+		VALUES ($1, $2, 'Foreign stage', 1, 1, 1)
+	`, foreignStageID, foreignChecklistID)
+	if err != nil {
+		t.Fatalf("create foreign stage: %v", err)
+	}
+
+	_, err = db.ExecContext(ctx, `
+		INSERT INTO checklist_items (
+			id, checklist_id, stage_id, title, position
+		)
+		VALUES ($1, $2, $3, $4, 1)
+	`, foreignItemID, foreignChecklistID, foreignStageID, "Foreign item")
 	if err != nil {
 		t.Fatalf("create foreign item: %v", err)
 	}

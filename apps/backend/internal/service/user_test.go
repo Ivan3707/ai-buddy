@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"errors"
-	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -53,54 +52,6 @@ func TestUserService_CreateIntern(t *testing.T) {
 	commonID := fixture.commonID
 	professionalID := fixture.professionalID
 
-	_, err = db.ExecContext(ctx, `
-		INSERT INTO checklists (id, name, type)
-		VALUES ($1, $2, 'common')
-	`, commonID, "Test common "+commonID.String())
-	if err != nil {
-		t.Fatalf("create common checklist: %v", err)
-	}
-
-	_, err = db.ExecContext(ctx, `
-		INSERT INTO checklists (id, name, type, profession)
-		VALUES ($1, $2, 'professional', $3)
-	`, professionalID, "Test backend "+professionalID.String(), profession)
-	if err != nil {
-		t.Fatalf("create professional checklist: %v", err)
-	}
-
-	// Добавляем задания в оба чек-листа.
-	insertItems := func(checklistID uuid.UUID, count int) {
-		t.Helper()
-
-		for i := 1; i <= count; i++ {
-			_, err := db.ExecContext(ctx, `
-				INSERT INTO checklist_items (
-					checklist_id, title, position
-				)
-				VALUES ($1, $2, $3)
-			`, checklistID, fmt.Sprintf("Test item %d", i), i)
-			if err != nil {
-				t.Fatalf("create checklist item: %v", err)
-			}
-		}
-	}
-
-	insertItems(commonID, 3)
-	insertItems(professionalID, 2)
-
-	// Удаляем тестовые данные после завершения теста.
-	t.Cleanup(func() {
-		_, err := db.ExecContext(
-			context.Background(),
-			"DELETE FROM checklists WHERE id IN ($1, $2)",
-			commonID,
-			professionalID,
-		)
-		if err != nil {
-			t.Errorf("cleanup test checklists: %v", err)
-		}
-	})
 	buddy := &model.User{
 		Email:        "buddy-" + uuid.NewString() + "@example.com",
 		PasswordHash: "test-password-hash",
@@ -112,7 +63,11 @@ func TestUserService_CreateIntern(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, err := db.ExecContext(ctx, "DELETE FROM users WHERE id = $1", buddy.ID)
+		_, err := db.ExecContext(
+			context.Background(),
+			"DELETE FROM users WHERE id = $1",
+			buddy.ID,
+		)
 		if err != nil {
 			t.Errorf("cleanup buddy: %v", err)
 		}
@@ -253,7 +208,11 @@ func TestUserService_CreateIntern_Rollback(t *testing.T) {
 	}
 
 	t.Cleanup(func() {
-		_, err := db.ExecContext(ctx, "DELETE FROM users WHERE id = $1", buddy.ID)
+		_, err := db.ExecContext(
+			context.Background(),
+			"DELETE FROM users WHERE id = $1",
+			buddy.ID,
+		)
 		if err != nil {
 			t.Errorf("cleanup buddy: %v", err)
 		}

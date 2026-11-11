@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -151,6 +152,96 @@ func (r *ProgressRepository) GetByUserAndItem(
 
 	if err != nil {
 		return nil, fmt.Errorf("get progress by user and item: %w", err)
+	}
+
+	if completedAt.Valid {
+		item.CompletedAt = &completedAt.Time
+	}
+
+	return item, nil
+}
+
+// GetByUserAndItemRead returns progress without taking a row lock. It is used
+// by read-only service methods; state transitions must use GetByUserAndItem.
+func (r *ProgressRepository) GetByUserAndItemRead(
+	ctx context.Context,
+	userID uuid.UUID,
+	itemID uuid.UUID,
+) (*model.UserChecklistProgress, error) {
+	query := `
+		SELECT
+			id,
+			user_id,
+			checklist_id,
+			checklist_item_id,
+			status,
+			completed_at,
+			created_at
+		FROM user_checklist_progress
+		WHERE user_id = $1 AND checklist_item_id = $2
+	`
+
+	item := &model.UserChecklistProgress{}
+	var completedAt sql.NullTime
+	err := r.db.QueryRowContext(ctx, query, userID, itemID).Scan(
+		&item.ID,
+		&item.UserID,
+		&item.ChecklistID,
+		&item.ChecklistItemID,
+		&item.Status,
+		&completedAt,
+		&item.CreatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get progress by user and item for reading: %w", err)
+	}
+	if completedAt.Valid {
+		item.CompletedAt = &completedAt.Time
+	}
+
+	return item, nil
+}
+
+// GetByIDForUpdate locks a progress row inside the caller's transaction.
+// The repository does not start or commit transactions itself.
+func (r *ProgressRepository) GetByIDForUpdate(
+	ctx context.Context,
+	id uuid.UUID,
+) (*model.UserChecklistProgress, error) {
+	query := `
+		SELECT
+			id,
+			user_id,
+			checklist_id,
+			checklist_item_id,
+			status,
+			completed_at,
+			created_at
+		FROM user_checklist_progress
+		WHERE id = $1
+		FOR UPDATE
+	`
+
+	item := &model.UserChecklistProgress{}
+	var completedAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, id).Scan(
+		&item.ID,
+		&item.UserID,
+		&item.ChecklistID,
+		&item.ChecklistItemID,
+		&item.Status,
+		&completedAt,
+		&item.CreatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get progress by ID for update: %w", err)
 	}
 
 	if completedAt.Valid {

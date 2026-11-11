@@ -1,2 +1,25 @@
-export type ChatResponse = { answer: string; sources: {id: string; title: string; url: string}[]; mode: 'mock' };
-export function chat(baseUrl: string, message: string): Promise<ChatResponse>;
+export type Role = 'intern' | 'buddy';
+export type Profession = 'backend' | 'frontend' | 'ml';
+export type ChecklistStatus = 'unavailable' | 'active' | 'completed' | 'verified';
+export type SubmissionStatus = 'pending' | 'approved' | 'rejected';
+export type User = { id: string; email: string; role: Role; profession: Profession | null; created_at: string };
+export type LoginResponse = { access_token: string; token_type: string; expires_in: number; is_first_login: boolean; user: User };
+export type ChecklistItem = { id: string; title: string; description: string; expected_result: string | null; requires_review: boolean; estimated_minutes: number | null; position: number; status: ChecklistStatus; completed_at: string | null };
+export type ChecklistStage = { id: string; title: string; week_start: number; week_end: number; goal: string; expected_result: string; position: number; items: ChecklistItem[] };
+export type Checklist = { id: string; name: string; type: 'common' | 'professional'; profession: Profession | null; stages: ChecklistStage[]; total_items: number; completed_items: number; completion_percent: number };
+export type ChecklistsResponse = { common: Checklist; professional: Checklist };
+export type Submission = { id: string; progress_id: string; attempt_number: number; result_text: string | null; result_url: string | null; status: SubmissionStatus; submitted_at: string };
+export type SubmissionHistory = Submission & { reviewed_at: string | null; review_comment: string | null };
+export type PendingSubmission = { id: string; intern_id: string; item_id: string; item_title: string; attempt_number: number; result_text: string | null; result_url: string | null; submitted_at: string };
+export type ChatResponse = { answer: string; sources: { id: string; title: string; url: string }[]; mode: 'mock' };
+export class ApiError extends Error { status: number; constructor(status: number, message: string); }
+export function chat(baseUrl: string, message: string, token?: string): Promise<ChatResponse>;
+export function login(baseUrl: string, email: string, password: string): Promise<LoginResponse>;
+export function getMe(baseUrl: string, token: string): Promise<User>;
+export function createIntern(baseUrl: string, token: string, input: { email: string; password: string; profession: Profession }): Promise<User>;
+export function getChecklists(baseUrl: string, token: string): Promise<ChecklistsResponse>;
+export function completeItem(baseUrl: string, token: string, itemID: string): Promise<void>;
+export function submitItem(baseUrl: string, token: string, itemID: string, input: { result_text: string | null; result_url: string | null }): Promise<Submission>;
+export function getSubmissionHistory(baseUrl: string, token: string, itemID: string): Promise<SubmissionHistory[]>;
+export function getPendingSubmissions(baseUrl: string, token: string): Promise<PendingSubmission[]>;
+export function reviewSubmission(baseUrl: string, token: string, submissionID: string, input: { approved: boolean; comment?: string }): Promise<void>;

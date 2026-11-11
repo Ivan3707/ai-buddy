@@ -146,6 +146,7 @@ func (r *ChecklistRepository) GetItems(
 			description,
 			expected_result,
 			requires_review,
+			estimated_minutes,
 			position,
 			created_at
 		FROM checklist_items
@@ -165,6 +166,7 @@ func (r *ChecklistRepository) GetItems(
 		var item model.ChecklistItem
 		var description sql.NullString
 		var expectedResult sql.NullString
+		var estimatedMinutes sql.NullInt64
 
 		if err := rows.Scan(
 			&item.ID,
@@ -174,6 +176,7 @@ func (r *ChecklistRepository) GetItems(
 			&description,
 			&expectedResult,
 			&item.RequiresReview,
+			&estimatedMinutes,
 			&item.Position,
 			&item.CreatedAt,
 		); err != nil {
@@ -186,6 +189,10 @@ func (r *ChecklistRepository) GetItems(
 		if expectedResult.Valid {
 			value := expectedResult.String
 			item.ExpectedResult = &value
+		}
+		if estimatedMinutes.Valid {
+			value := int(estimatedMinutes.Int64)
+			item.EstimatedMinutes = &value
 		}
 
 		items = append(items, item)

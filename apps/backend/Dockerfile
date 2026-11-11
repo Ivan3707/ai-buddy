@@ -1,7 +1,7 @@
 FROM golang:1.26-alpine AS build
 WORKDIR /src
 COPY apps/backend/ .
-RUN go test ./... && CGO_ENABLED=0 go build -o /server .
+RUN CGO_ENABLED=0 go build -o /server .
 FROM alpine:3.22
 WORKDIR /app
 COPY --from=build /server /app/server

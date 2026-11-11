@@ -29,4 +29,5 @@ type User struct {
 	Profession   *Profession
 	BuddyID      *uuid.UUID
 	CreatedAt    time.Time
+	LastLoginAt  *time.Time
 }
