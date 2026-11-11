@@ -65,8 +65,8 @@ if os.getenv("CHECK_LIVE") == "1":
     assert status == 401, ("unauthenticated chat", status)
 
     # Authenticate using the CI buddy account.
-    email = os.environ["BOOTSTRAP_TEAMLEAD_EMAIL"]
-    password = os.environ["BOOTSTRAP_TEAMLEAD_PASSWORD"]
+    email = os.environ["BOOTSTRAP_BUDDY_EMAIL"]
+    password = os.environ["BOOTSTRAP_BUDDY_PASSWORD"]
 
     status, login = request(
         "/api/auth/login",
