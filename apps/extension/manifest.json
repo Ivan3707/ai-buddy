@@ -3,7 +3,11 @@
   "background": {"service_worker": "background.js"},
   "name": "AI-buddy Demo",
   "version": "0.1.0",
+  "minimum_chrome_version": "102",
   "description": "Демо-помощник онбординга. Работает только с локальным Backend.",
+  "permissions": [
+    "storage"
+  ],
   "action": {
     "default_popup": "popup.html"
   },

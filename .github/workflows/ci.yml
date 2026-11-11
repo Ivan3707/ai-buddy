@@ -85,6 +85,9 @@ jobs:
         run: CHECK_LIVE=1 python scripts/check_contracts.py
 
       - name: Browser tests
+        env:
+          E2E_BUDDY_EMAIL: ${{ env.BOOTSTRAP_BUDDY_EMAIL }}
+          E2E_BUDDY_PASSWORD: ${{ env.BOOTSTRAP_BUDDY_PASSWORD }}
         run: |
           npx playwright install --with-deps chromium
           npm run test:e2e
