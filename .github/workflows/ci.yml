@@ -77,8 +77,8 @@ jobs:
           DB_HOST: 127.0.0.1
           DB_PORT: "5433"
           DB_SSLMODE: disable
-          BOOTSTRAP_BUDDY_EMAIL: ${{ env.BOOTSTRAP_TEAMLEAD_EMAIL }}
-          BOOTSTRAP_BUDDY_PASSWORD: ${{ env.BOOTSTRAP_TEAMLEAD_PASSWORD }}
+          BOOTSTRAP_TEAMLEAD_EMAIL: ${{ env.BOOTSTRAP_TEAMLEAD_EMAIL }}
+          BOOTSTRAP_TEAMLEAD_PASSWORD: ${{ env.BOOTSTRAP_TEAMLEAD_PASSWORD }}
         run: go run ./cmd/bootstrap-buddy
 
       - name: Live contract checks
