@@ -1,4 +1,4 @@
-package main
+package handler_test
 
 import (
 	"context"
@@ -114,13 +114,13 @@ func newChecklistAPIHandler(
 	if err != nil {
 		t.Fatalf("generate token: %v", err)
 	}
-	handler := newHandler("", []byte(demo), handlerDependencies{
-		auth:        service.NewAuthService(users, jwtService),
-		users:       users,
-		jwt:         jwtService,
-		checklists:  checklists,
-		items:       items,
-		submissions: submissions,
+	handler := handler.NewRouter("", []byte(demo), handler.Dependencies{
+		Auth:        service.NewAuthService(users, jwtService),
+		Users:       users,
+		JWT:         jwtService,
+		Checklists:  checklists,
+		Items:       items,
+		Submissions: submissions,
 	})
 	return handler, token, user
 }

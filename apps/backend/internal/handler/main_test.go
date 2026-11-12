@@ -1,8 +1,9 @@
-package main
+package handler_test
 
 import (
 	"context"
 	"errors"
+	"github.com/nvkmaksim/ai-buddy/backend/internal/handler"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -108,13 +109,13 @@ func newTestHandler(
 		t.Fatalf("generate access token: %v", err)
 	}
 
-	handler := newHandler(
+	handler := handler.NewRouter(
 		aiURL,
 		[]byte(demo),
-		handlerDependencies{
-			auth:  auth,
-			users: users,
-			jwt:   jwtService,
+		handler.Dependencies{
+			Auth:  auth,
+			Users: users,
+			JWT:   jwtService,
 		},
 	)
 
@@ -382,7 +383,7 @@ func (s *testInternCreator) CreateIntern(
 
 func newTeamleadHandler(
 	t *testing.T,
-	interns internCreator,
+	interns handler.InternCreator,
 ) (http.Handler, string) {
 	t.Helper()
 
@@ -410,14 +411,14 @@ func newTeamleadHandler(
 
 	auth := service.NewAuthService(users, jwtService)
 
-	handler := newHandler(
+	handler := handler.NewRouter(
 		"",
 		[]byte(demo),
-		handlerDependencies{
-			auth:    auth,
-			users:   users,
-			jwt:     jwtService,
-			interns: interns,
+		handler.Dependencies{
+			Auth:    auth,
+			Users:   users,
+			JWT:     jwtService,
+			Interns: interns,
 		},
 	)
 

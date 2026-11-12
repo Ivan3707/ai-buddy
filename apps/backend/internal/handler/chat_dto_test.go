@@ -1,4 +1,4 @@
-package main
+package handler_test
 
 type source struct {
 	ID    string `json:"id"`

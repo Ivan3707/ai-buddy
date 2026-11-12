@@ -1,4 +1,4 @@
-package main
+package handler_test
 
 import "github.com/nvkmaksim/ai-buddy/backend/internal/model"
 

@@ -12,3 +12,5 @@ coverage/
 playwright-report/
 test-results/
 .vscode
+# Local Go binaries
+/apps/backend/*.exe

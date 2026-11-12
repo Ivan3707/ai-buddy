@@ -1,9 +1,10 @@
-package main
+package handler_test
 
 import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"github.com/nvkmaksim/ai-buddy/backend/internal/handler"
 	"net/http/httptest"
 	"os"
 	"strings"
@@ -62,7 +63,7 @@ func TestAuthSessionsHTTPIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	auth := service.NewAuthServiceWithSessions(users, jwt, sessions)
-	handler := newHandler("", []byte(`[]`), handlerDependencies{auth: auth, users: users, jwt: jwt, sessions: auth, sessionCheck: sessions})
+	handler := handler.NewRouter("", []byte(`[]`), handler.Dependencies{Auth: auth, Users: users, JWT: jwt, Sessions: auth, SessionCheck: sessions})
 	call := func(method, path, body, token string) (int, []byte) {
 		t.Helper()
 		r := httptest.NewRequest(method, path, strings.NewReader(body))

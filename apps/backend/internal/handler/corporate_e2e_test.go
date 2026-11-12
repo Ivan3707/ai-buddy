@@ -1,10 +1,11 @@
-package main
+package handler_test
 
 import (
 	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
+	"github.com/nvkmaksim/ai-buddy/backend/internal/handler"
 	"net/http/httptest"
 	"os"
 	"testing"
@@ -69,7 +70,7 @@ func TestCorporateHTTPE2E(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := newHandler("", []byte(demo), handlerDependencies{users: repository.NewUserRepository(db), jwt: jwt, corporate: corp})
+	handler := handler.NewRouter("", []byte(demo), handler.Dependencies{Users: repository.NewUserRepository(db), JWT: jwt, Corporate: corp})
 	request := func(method, path string, user *model.User, body any, want int) []byte {
 		t.Helper()
 		var payload []byte

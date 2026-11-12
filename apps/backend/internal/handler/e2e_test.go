@@ -1,4 +1,4 @@
-package main
+package handler_test
 
 import (
 	"bytes"
@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/nvkmaksim/ai-buddy/backend/internal/handler"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -174,15 +175,15 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	}
 	users := repository.NewUserRepository(db)
 	progress := service.NewProgressService(db)
-	server := httptest.NewServer(newHandler("", []byte(demo), handlerDependencies{
-		auth:          service.NewAuthService(users, jwtService),
-		users:         users,
-		jwt:           jwtService,
-		interns:       service.NewUserService(db),
-		personalTasks: service.NewPersonalTaskService(db),
-		checklists:    service.NewChecklistService(db),
-		items:         progress,
-		submissions:   progress,
+	server := httptest.NewServer(handler.NewRouter("", []byte(demo), handler.Dependencies{
+		Auth:          service.NewAuthService(users, jwtService),
+		Users:         users,
+		JWT:           jwtService,
+		Interns:       service.NewUserService(db),
+		PersonalTasks: service.NewPersonalTaskService(db),
+		Checklists:    service.NewChecklistService(db),
+		Items:         progress,
+		Submissions:   progress,
 	}))
 	defer server.Close()
 	client := &http.Client{Timeout: 12 * time.Second}
