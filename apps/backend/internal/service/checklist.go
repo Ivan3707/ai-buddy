@@ -93,12 +93,12 @@ func (s *ChecklistService) GetByUserID(
 		return nil, fmt.Errorf("get professional checklist stages: %w", err)
 	}
 
-	commonItems, err := checklistRepo.GetItems(ctx, common.ID)
+	commonItems, err := checklistRepo.GetItemsForUser(ctx, common.ID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("get common checklist items: %w", err)
 	}
 
-	professionalItems, err := checklistRepo.GetItems(ctx, professional.ID)
+	professionalItems, err := checklistRepo.GetItemsForUser(ctx, professional.ID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("get professional checklist items: %w", err)
 	}

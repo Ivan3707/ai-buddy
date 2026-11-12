@@ -15,6 +15,9 @@ import (
 type userRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*model.User, error)
 }
+type sessionChecker interface {
+	IsActive(context.Context, uuid.UUID, uuid.UUID) (bool, error)
+}
 
 type contextKey string
 
@@ -23,6 +26,7 @@ const userContextKey contextKey = "authenticated_user"
 func Authenticate(
 	jwtService *security.JWTService,
 	users userRepository,
+	checks ...sessionChecker,
 ) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -36,10 +40,21 @@ func Authenticate(
 				return
 			}
 
-			userID, err := jwtService.ValidateAccessToken(parts[1])
+			userID, sessionID, err := jwtService.ValidateSessionAccessToken(parts[1])
 			if err != nil {
 				unauthorized(w)
 				return
+			}
+			if sessionID != uuid.Nil && len(checks) > 0 {
+				active, err := checks[0].IsActive(r.Context(), sessionID, userID)
+				if err != nil {
+					http.Error(w, `{"error":"internal server error"}`, 500)
+					return
+				}
+				if !active {
+					unauthorized(w)
+					return
+				}
 			}
 
 			user, err := users.GetByID(r.Context(), userID)

@@ -57,8 +57,8 @@ func openChecklistTestDB(t *testing.T) (*sql.DB, context.Context) {
 	`).Scan(&gooseVersion); err != nil {
 		t.Fatalf("read Goose version: %v", err)
 	}
-	if gooseVersion != 3 {
-		t.Fatalf("TEST_DATABASE_URL must use Goose version 3, got %d", gooseVersion)
+	if gooseVersion != 7 {
+		t.Fatalf("TEST_DATABASE_URL must use Goose version 7, got %d", gooseVersion)
 	}
 
 	return db, ctx
@@ -536,9 +536,9 @@ func TestChecklistService_GetByUserID_UnexpectedProgress(t *testing.T) {
 
 	_, err = db.ExecContext(ctx, `
 		INSERT INTO user_checklist_progress (
-			id, user_id, checklist_id, checklist_item_id, status
+			id, user_id, checklist_id, checklist_item_id, status, position
 		)
-		VALUES ($1, $2, $3, $4, 'unavailable')
+		VALUES ($1, $2, $3, $4, 'unavailable', 1)
 	`, uuid.New(), user.ID, foreignChecklistID, foreignItemID)
 	if err != nil {
 		t.Fatalf("create unexpected progress record: %v", err)

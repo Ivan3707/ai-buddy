@@ -24,8 +24,10 @@ func (r *UserRepository) Create(
 	user *model.User,
 ) error {
 	query := `
-		INSERT INTO users (email, password_hash, role, profession, buddy_id)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO users (email, password_hash, role, profession, buddy_id,
+			first_name, last_name, telegram_username, department, team,
+			teamlead_id,birth_date,employed_since)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		RETURNING id, created_at
 	`
 
@@ -47,6 +49,8 @@ func (r *UserRepository) Create(
 		string(user.Role),
 		profession,
 		buddyID,
+		user.FirstName, user.LastName, user.TelegramUsername, user.Department, user.Team,
+		user.TeamleadID, user.BirthDate, user.EmployedSince,
 	).Scan(&user.ID, &user.CreatedAt)
 
 	if err != nil {
@@ -70,7 +74,8 @@ func (r *UserRepository) GetByID(
 ) (*model.User, error) {
 	query := `
 		SELECT id, email, password_hash, role, profession, buddy_id, created_at,
-			last_login_at
+			last_login_at, first_name, last_name, telegram_username, department, team,
+			teamlead_id,birth_date,employed_since
 		FROM users
 		WHERE id = $1
 	`
@@ -84,7 +89,8 @@ func (r *UserRepository) GetByEmail(
 ) (*model.User, error) {
 	query := `
 		SELECT id, email, password_hash, role, profession, buddy_id, created_at,
-			last_login_at
+			last_login_at, first_name, last_name, telegram_username, department, team,
+			teamlead_id,birth_date,employed_since
 		FROM users
 		WHERE LOWER(email) = LOWER($1)
 	`
@@ -123,6 +129,15 @@ func (r *UserRepository) RecordLogin(
 	return isFirstLogin, nil
 }
 
+func (r *UserRepository) AssignTeamlead(ctx context.Context, internID, buddyID, teamleadID uuid.UUID) error {
+	var id uuid.UUID
+	err := r.db.QueryRowContext(ctx, `UPDATE users SET teamlead_id=$3 WHERE id=$1 AND buddy_id=$2 AND role='intern' RETURNING id`, internID, buddyID, teamleadID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
+}
+
 func (r *UserRepository) getUser(
 	ctx context.Context,
 	query string,
@@ -132,6 +147,9 @@ func (r *UserRepository) getUser(
 	var profession sql.NullString
 	var buddyID uuid.NullUUID
 	var lastLoginAt sql.NullTime
+	var firstName, lastName, telegram, department, team sql.NullString
+	var teamleadID uuid.NullUUID
+	var birthDate, employedSince sql.NullTime
 
 	err := r.db.QueryRowContext(ctx, query, arg).Scan(
 		&user.ID,
@@ -142,6 +160,8 @@ func (r *UserRepository) getUser(
 		&buddyID,
 		&user.CreatedAt,
 		&lastLoginAt,
+		&firstName, &lastName, &telegram, &department, &team,
+		&teamleadID, &birthDate, &employedSince,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -163,6 +183,30 @@ func (r *UserRepository) getUser(
 
 	if lastLoginAt.Valid {
 		user.LastLoginAt = &lastLoginAt.Time
+	}
+	if firstName.Valid {
+		user.FirstName = &firstName.String
+	}
+	if lastName.Valid {
+		user.LastName = &lastName.String
+	}
+	if telegram.Valid {
+		user.TelegramUsername = &telegram.String
+	}
+	if department.Valid {
+		user.Department = &department.String
+	}
+	if team.Valid {
+		user.Team = &team.String
+	}
+	if teamleadID.Valid {
+		user.TeamleadID = &teamleadID.UUID
+	}
+	if birthDate.Valid {
+		user.BirthDate = &birthDate.Time
+	}
+	if employedSince.Valid {
+		user.EmployedSince = &employedSince.Time
 	}
 
 	return user, nil

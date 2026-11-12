@@ -25,6 +25,13 @@ func main() {
 func run() error {
 	email := strings.TrimSpace(os.Getenv("BOOTSTRAP_BUDDY_EMAIL"))
 	password := os.Getenv("BOOTSTRAP_BUDDY_PASSWORD")
+	role := model.RoleBuddy
+	if os.Getenv("BOOTSTRAP_ROLE") == string(model.RoleTeamlead) {
+		role = model.RoleTeamlead
+	}
+	if value := os.Getenv("BOOTSTRAP_ROLE"); value != "" && value != string(model.RoleBuddy) && value != string(model.RoleTeamlead) {
+		return errors.New("BOOTSTRAP_ROLE must be buddy or teamlead")
+	}
 
 	if email == "" {
 		return errors.New("BOOTSTRAP_BUDDY_EMAIL is required")
@@ -57,7 +64,7 @@ func run() error {
 	user := &model.User{
 		Email:        email,
 		PasswordHash: passwordHash,
-		Role:         model.RoleBuddy,
+		Role:         role,
 		Profession:   nil,
 	}
 
@@ -71,7 +78,7 @@ func run() error {
 		return fmt.Errorf("create buddy: %w", err)
 	}
 
-	fmt.Printf("Buddy created successfully: %s (id: %s)\n", user.Email, user.ID)
+	fmt.Printf("%s created successfully: %s (id: %s)\n", role, user.Email, user.ID)
 
 	return nil
 }

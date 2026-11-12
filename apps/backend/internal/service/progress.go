@@ -18,10 +18,12 @@ type ProgressService struct {
 }
 
 type PendingSubmission struct {
-	Submission model.ChecklistItemSubmission
-	InternID   uuid.UUID
-	ItemID     uuid.UUID
-	ItemTitle  string
+	Submission      model.ChecklistItemSubmission
+	InternID        uuid.UUID
+	ItemID          uuid.UUID
+	ItemTitle       string
+	InternFirstName *string
+	InternLastName  *string
 }
 
 func NewProgressService(db *sql.DB) *ProgressService {
@@ -50,6 +52,7 @@ func (s *ProgressService) CompleteItem(
 			ctx,
 			checklistRepo,
 			currentProgress.ChecklistID,
+			userID,
 			itemID,
 		)
 		if err != nil {
@@ -138,6 +141,7 @@ func (s *ProgressService) SubmitItem(
 			ctx,
 			checklistRepo,
 			currentProgress.ChecklistID,
+			userID,
 			itemID,
 		)
 		if err != nil {
@@ -270,6 +274,7 @@ func (s *ProgressService) ReviewSubmission(
 			ctx,
 			checklistRepo,
 			currentProgress.ChecklistID,
+			currentProgress.UserID,
 			currentProgress.ChecklistItemID,
 		)
 		if err != nil {
@@ -393,10 +398,12 @@ func (s *ProgressService) ListPendingSubmissions(
 	result := make([]PendingSubmission, 0, len(rows))
 	for _, row := range rows {
 		result = append(result, PendingSubmission{
-			Submission: row.Submission,
-			InternID:   row.InternID,
-			ItemID:     row.ItemID,
-			ItemTitle:  row.ItemTitle,
+			Submission:      row.Submission,
+			InternID:        row.InternID,
+			ItemID:          row.ItemID,
+			ItemTitle:       row.ItemTitle,
+			InternFirstName: row.InternFirstName,
+			InternLastName:  row.InternLastName,
 		})
 	}
 
@@ -435,9 +442,10 @@ func getChecklistItemContext(
 	ctx context.Context,
 	checklistRepo *repository.ChecklistRepository,
 	checklistID uuid.UUID,
+	userID uuid.UUID,
 	itemID uuid.UUID,
 ) ([]model.ChecklistItem, int, error) {
-	items, err := checklistRepo.GetItems(ctx, checklistID)
+	items, err := checklistRepo.GetItemsForUser(ctx, checklistID, userID)
 	if err != nil {
 		return nil, -1, fmt.Errorf("get checklist items: %w", err)
 	}

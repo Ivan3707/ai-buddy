@@ -150,11 +150,24 @@ func (r *ChecklistRepository) GetItems(
 			position,
 			created_at
 		FROM checklist_items
-		WHERE checklist_id = $1
+		WHERE checklist_id = $1 AND assigned_user_id IS NULL
 		ORDER BY position ASC
 	`
 
-	rows, err := r.db.QueryContext(ctx, query, checklistID)
+	return r.queryItems(ctx, query, checklistID)
+}
+
+func (r *ChecklistRepository) GetItemsForUser(ctx context.Context, checklistID, userID uuid.UUID) ([]model.ChecklistItem, error) {
+	query := `SELECT i.id,i.checklist_id,i.stage_id,i.title,i.description,i.expected_result,
+	 i.requires_review,i.estimated_minutes,COALESCE(p.position,i.position),i.created_at
+	 FROM checklist_items i LEFT JOIN user_checklist_progress p ON p.checklist_item_id=i.id AND p.user_id=$2
+	 WHERE i.checklist_id=$1 AND (i.assigned_user_id IS NULL OR i.assigned_user_id=$2)
+	 ORDER BY COALESCE(p.position,i.position),i.id`
+	return r.queryItems(ctx, query, checklistID, userID)
+}
+
+func (r *ChecklistRepository) queryItems(ctx context.Context, query string, args ...any) ([]model.ChecklistItem, error) {
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("get checklist items: %w", err)
 	}

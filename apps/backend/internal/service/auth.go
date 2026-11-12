@@ -22,8 +22,9 @@ type authUserRepository interface {
 }
 
 type AuthService struct {
-	users authUserRepository
-	jwt   *security.JWTService
+	users    authUserRepository
+	jwt      *security.JWTService
+	sessions sessionStore
 }
 
 type LoginResult struct {
@@ -31,6 +32,7 @@ type LoginResult struct {
 	ExpiresIn    int64
 	IsFirstLogin bool
 	User         *model.User
+	RefreshToken string
 }
 
 func NewAuthService(
@@ -81,7 +83,18 @@ func (s *AuthService) Login(
 		return nil, fmt.Errorf("record successful login: %w", err)
 	}
 
-	token, err := s.jwt.GenerateAccessToken(user.ID)
+	var token string
+	var refresh string
+	if s.sessions != nil {
+		var sessionID uuid.UUID
+		refresh, sessionID, err = s.createSession(ctx, user.ID)
+		if err != nil {
+			return nil, fmt.Errorf("create session: %w", err)
+		}
+		token, err = s.jwt.GenerateSessionAccessToken(user.ID, sessionID)
+	} else {
+		token, err = s.jwt.GenerateAccessToken(user.ID)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("generate access token: %w", err)
 	}
@@ -91,5 +104,6 @@ func (s *AuthService) Login(
 		ExpiresIn:    int64(s.jwt.TTL().Seconds()),
 		IsFirstLogin: isFirstLogin,
 		User:         user,
+		RefreshToken: refresh,
 	}, nil
 }

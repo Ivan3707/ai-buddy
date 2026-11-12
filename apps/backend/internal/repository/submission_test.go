@@ -44,8 +44,8 @@ func TestSubmissionRepository(t *testing.T) {
 	`).Scan(&migrationVersion); err != nil {
 		t.Fatalf("get Goose version: %v", err)
 	}
-	if migrationVersion != 3 {
-		t.Fatalf("expected Goose version 3, got %d", migrationVersion)
+	if migrationVersion != 7 {
+		t.Fatalf("expected Goose version 7, got %d", migrationVersion)
 	}
 
 	tx, err := db.BeginTx(ctx, nil)
@@ -115,11 +115,11 @@ func TestSubmissionRepository(t *testing.T) {
 
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO user_checklist_progress (
-			id, user_id, checklist_id, checklist_item_id, status
+			id, user_id, checklist_id, checklist_item_id, status, position
 		)
 		VALUES
-			($1, $2, $3, $4, 'active'),
-			($5, $2, $3, $6, 'active')
+			($1, $2, $3, $4, 'active', 1),
+			($5, $2, $3, $6, 'active', 2)
 	`,
 		firstProgressID,
 		internID,

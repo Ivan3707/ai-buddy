@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nvkmaksim/ai-buddy/backend/internal/handler"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/model"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/repository"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/security"
@@ -93,9 +94,9 @@ func (s *buddySubmissionServiceStub) ReviewSubmission(
 func newChecklistAPIHandler(
 	t *testing.T,
 	role model.UserRole,
-	checklists checklistReader,
-	items checklistItemService,
-	submissions buddySubmissionService,
+	checklists handler.ChecklistReader,
+	items handler.ChecklistItemService,
+	submissions handler.BuddySubmissionService,
 ) (http.Handler, string, *model.User) {
 	t.Helper()
 	user := &model.User{

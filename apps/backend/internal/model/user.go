@@ -9,8 +9,9 @@ import (
 type UserRole string
 
 const (
-	RoleIntern UserRole = "intern"
-	RoleBuddy  UserRole = "buddy"
+	RoleIntern   UserRole = "intern"
+	RoleBuddy    UserRole = "buddy"
+	RoleTeamlead UserRole = "teamlead"
 )
 
 type Profession string
@@ -22,12 +23,20 @@ const (
 )
 
 type User struct {
-	ID           uuid.UUID
-	Email        string
-	PasswordHash string
-	Role         UserRole
-	Profession   *Profession
-	BuddyID      *uuid.UUID
-	CreatedAt    time.Time
-	LastLoginAt  *time.Time
+	ID               uuid.UUID
+	Email            string
+	PasswordHash     string
+	Role             UserRole
+	Profession       *Profession
+	BuddyID          *uuid.UUID
+	TeamleadID       *uuid.UUID
+	BirthDate        *time.Time
+	EmployedSince    *time.Time
+	CreatedAt        time.Time
+	LastLoginAt      *time.Time
+	FirstName        *string
+	LastName         *string
+	TelegramUsername *string
+	Department       *string
+	Team             *string
 }

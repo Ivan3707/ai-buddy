@@ -66,7 +66,7 @@ func newAuthIntegrationService(
 }
 
 func TestAuthService_FirstAndSubsequentLoginIntegration(t *testing.T) {
-	for _, role := range []model.UserRole{model.RoleIntern, model.RoleBuddy} {
+	for _, role := range []model.UserRole{model.RoleIntern, model.RoleBuddy, model.RoleTeamlead} {
 		t.Run(string(role), func(t *testing.T) {
 			db, ctx := openChecklistTestDB(t)
 			user := createAuthIntegrationUser(t, db, ctx, role)

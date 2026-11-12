@@ -21,6 +21,18 @@ import (
 	"github.com/nvkmaksim/ai-buddy/backend/internal/service"
 )
 
+type progressResponseDTO struct {
+	TotalItems        int     `json:"total_items"`
+	CompletedItems    int     `json:"completed_items"`
+	CompletionPercent float64 `json:"completion_percent"`
+	Common            *struct {
+		TotalItems int `json:"total_items"`
+	} `json:"common"`
+	Professional struct {
+		TotalItems int `json:"total_items"`
+	} `json:"professional"`
+}
+
 // Run explicitly with RUN_E2E=1 and TEST_DATABASE_URL pointing to ai_buddy_test.
 // This test uses real HTTP requests, services, repositories and PostgreSQL.
 // It creates and cleans up only its own rows. Do not run in parallel with
@@ -66,8 +78,8 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	`).Scan(&version); err != nil {
 		t.Fatalf("read goose version: %v", err)
 	}
-	if version != 3 {
-		t.Fatalf("test database must be at Goose v3, got v%d", version)
+	if version != 7 {
+		t.Fatalf("test database must be at Goose v7, got v%d", version)
 	}
 
 	// Only one common and one backend professional checklist are permitted.
@@ -86,7 +98,7 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	commonID, professionalID := uuid.New(), uuid.New()
 	commonItems := []uuid.UUID{uuid.New(), uuid.New()}
 	professionalItems := []uuid.UUID{uuid.New(), uuid.New()}
-	buddyID, otherBuddyID := uuid.New(), uuid.New()
+	buddyID, otherBuddyID, teamleadID := uuid.New(), uuid.New(), uuid.New()
 	var internID uuid.UUID
 
 	// Cleanup is registered before inserts, so it also runs on assertion failure.
@@ -99,11 +111,14 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 				WHERE progress_id IN (SELECT id FROM user_checklist_progress WHERE user_id = $1)`, internID); err != nil {
 				t.Errorf("E2E cleanup submissions: %v", err)
 			}
+			if _, err := db.ExecContext(cleanupCtx, `DELETE FROM checklist_items WHERE assigned_user_id=$1 AND checklist_id=$2`, internID, professionalID); err != nil {
+				t.Errorf("E2E cleanup personal items: %v", err)
+			}
 			if _, err := db.ExecContext(cleanupCtx, `DELETE FROM users WHERE id = $1`, internID); err != nil {
 				t.Errorf("E2E cleanup intern: %v", err)
 			}
 		}
-		if _, err := db.ExecContext(cleanupCtx, `DELETE FROM users WHERE id IN ($1, $2)`, buddyID, otherBuddyID); err != nil {
+		if _, err := db.ExecContext(cleanupCtx, `DELETE FROM users WHERE id IN ($1, $2, $3)`, buddyID, otherBuddyID, teamleadID); err != nil {
 			t.Errorf("E2E cleanup buddies: %v", err)
 		}
 		if _, err := db.ExecContext(cleanupCtx, `DELETE FROM checklists WHERE id IN ($1, $2)`, commonID, professionalID); err != nil {
@@ -147,9 +162,11 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	}
 	buddyEmail := "buddy-" + uuid.NewString() + "@example.com"
 	otherEmail := "other-" + uuid.NewString() + "@example.com"
-	mustExec(`INSERT INTO users (id, email, password_hash, role)
-		VALUES ($1, $2, $3, 'buddy'), ($4, $5, $3, 'buddy')`,
+	mustExec(`INSERT INTO users (id, email, password_hash, role, first_name, last_name, telegram_username)
+		VALUES ($1, $2, $3, 'buddy', 'Assigned', 'Buddy', 'assigned_buddy'), ($4, $5, $3, 'buddy', NULL, NULL, NULL)`,
 		buddyID, buddyEmail, buddyHash, otherBuddyID, otherEmail)
+	teamleadEmail := "lead-" + uuid.NewString() + "@example.com"
+	mustExec(`INSERT INTO users(id,email,password_hash,role,first_name,last_name) VALUES($1,$2,$3,'teamlead','Assigned','Lead')`, teamleadID, teamleadEmail, buddyHash)
 
 	jwtService, err := security.NewJWTService(testJWTSecret, 15*time.Minute)
 	if err != nil {
@@ -158,13 +175,14 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	users := repository.NewUserRepository(db)
 	progress := service.NewProgressService(db)
 	server := httptest.NewServer(newHandler("", []byte(demo), handlerDependencies{
-		auth:        service.NewAuthService(users, jwtService),
-		users:       users,
-		jwt:         jwtService,
-		interns:     service.NewUserService(db),
-		checklists:  service.NewChecklistService(db),
-		items:       progress,
-		submissions: progress,
+		auth:          service.NewAuthService(users, jwtService),
+		users:         users,
+		jwt:           jwtService,
+		interns:       service.NewUserService(db),
+		personalTasks: service.NewPersonalTaskService(db),
+		checklists:    service.NewChecklistService(db),
+		items:         progress,
+		submissions:   progress,
 	}))
 	defer server.Close()
 	client := &http.Client{Timeout: 12 * time.Second}
@@ -248,15 +266,20 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	request(http.MethodGet, "/api/checklists", "", nil, http.StatusUnauthorized, nil)
 	buddyToken := login(buddyEmail, buddyPassword, true)
 	otherBuddyToken := login(otherEmail, buddyPassword, true)
+	teamleadToken := login(teamleadEmail, buddyPassword, true)
 
 	internEmail := "intern-" + uuid.NewString() + "@example.com"
+	request(http.MethodPost, "/api/users", buddyToken, map[string]string{"email": internEmail, "password": internPassword, "profession": "backend"}, http.StatusBadRequest, nil)
 	var created publicUser
 	request(http.MethodPost, "/api/users", buddyToken, map[string]string{
-		"email": internEmail, "password": internPassword, "profession": "backend",
+		"email": internEmail, "password": internPassword, "profession": "backend", "first_name": "Test", "last_name": "Intern", "department": "Engineering", "team": "Backend", "teamlead_id": teamleadID.String(), "birth_date": "2000-01-01", "employed_since": "2026-01-01",
 	}, http.StatusCreated, &created)
 	internID, err = uuid.Parse(created.ID)
 	if err != nil || internID == uuid.Nil || created.Role != model.RoleIntern {
 		t.Fatalf("invalid created intern response: %+v", created)
+	}
+	if created.FirstName == nil || *created.FirstName != "Test" || created.LastName == nil || *created.LastName != "Intern" || created.Department == nil || *created.Department != "Engineering" || created.Team == nil || *created.Team != "Backend" {
+		t.Fatalf("created intern profile missing fields: %+v", created)
 	}
 	var assignedBuddy uuid.UUID
 	if err := db.QueryRowContext(ctx, `SELECT buddy_id FROM users WHERE id = $1`, internID).Scan(&assignedBuddy); err != nil {
@@ -265,8 +288,10 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	if assignedBuddy != buddyID {
 		t.Fatalf("created intern assigned to %s, want %s", assignedBuddy, buddyID)
 	}
+	request(http.MethodPut, "/api/buddy/interns/"+internID.String()+"/teamlead", otherBuddyToken, map[string]string{"teamlead_id": teamleadID.String()}, http.StatusNotFound, nil)
+	request(http.MethodPut, "/api/buddy/interns/"+internID.String()+"/teamlead", buddyToken, map[string]string{"teamlead_id": teamleadID.String()}, http.StatusNoContent, nil)
 	request(http.MethodPost, "/api/users", buddyToken, map[string]string{
-		"email": internEmail, "password": internPassword, "profession": "backend",
+		"email": internEmail, "password": internPassword, "profession": "backend", "first_name": "Test", "last_name": "Intern", "department": "Engineering", "team": "Backend", "teamlead_id": teamleadID.String(), "birth_date": "2000-01-01", "employed_since": "2026-01-01",
 	}, http.StatusConflict, nil)
 
 	request(http.MethodPost, "/api/auth/login", "", map[string]string{
@@ -287,10 +312,28 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	if me.ID != internID.String() || me.Role != model.RoleIntern {
 		t.Fatalf("/api/auth/me returned wrong user: %+v", me)
 	}
+	if me.Buddy == nil || me.Buddy.ID != buddyID.String() || me.Buddy.TelegramUsername == nil || *me.Buddy.TelegramUsername != "assigned_buddy" {
+		t.Fatalf("/api/auth/me missing assigned buddy: %+v", me)
+	}
+	if me.Teamlead == nil || me.Teamlead.ID != teamleadID.String() || me.AgeYears == nil || *me.AgeYears < 16 || me.TenureMonths == nil {
+		t.Fatalf("/api/auth/me missing age, tenure or teamlead: %+v", me)
+	}
 	request(http.MethodGet, "/api/checklists", buddyToken, nil, http.StatusForbidden, nil)
 	request(http.MethodGet, "/api/buddy/submissions", internToken, nil, http.StatusForbidden, nil)
 
 	initial := getChecklists(internToken)
+	var ownProgress progressResponseDTO
+	request(http.MethodGet, "/api/progress", internToken, nil, http.StatusOK, &ownProgress)
+	if ownProgress.TotalItems != len(commonItems)+len(professionalItems) || ownProgress.CompletedItems != 0 || ownProgress.Common == nil {
+		t.Fatalf("initial overall progress: %+v", ownProgress)
+	}
+	var leadProgress progressResponseDTO
+	request(http.MethodGet, "/api/staff/interns/"+internID.String()+"/progress", teamleadToken, nil, http.StatusOK, &leadProgress)
+	if leadProgress.Common != nil || leadProgress.TotalItems != len(professionalItems) || leadProgress.Professional.TotalItems != len(professionalItems) {
+		t.Fatalf("teamlead progress: %+v", leadProgress)
+	}
+	request(http.MethodGet, "/api/staff/interns/"+internID.String()+"/progress", otherBuddyToken, nil, http.StatusNotFound, nil)
+	request(http.MethodPost, "/api/teamlead/interns/"+internID.String()+"/checklist-items", buddyToken, map[string]any{"position": 1, "title": "denied", "expected_result": "x", "estimated_minutes": 30}, http.StatusForbidden, nil)
 	if initial.Common.TotalItems != 2 || initial.Professional.TotalItems != 2 ||
 		initial.Common.CompletedItems != 0 || initial.Professional.CompletedItems != 0 {
 		t.Fatalf("unexpected initial checklists: %+v", initial)
@@ -415,6 +458,19 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	request(http.MethodGet, "/api/buddy/submissions", buddyToken, nil, http.StatusOK, &pending)
 	if len(pending) != 0 {
 		t.Fatalf("buddy queue should be empty after approval: %+v", pending)
+	}
+	var inserted map[string]string
+	request(http.MethodPost, "/api/teamlead/interns/"+internID.String()+"/checklist-items", teamleadToken, map[string]any{"position": 1, "title": "Lead personal task", "description": "Demo", "expected_result": "Documented", "estimated_minutes": 30, "requires_review": false}, http.StatusCreated, &inserted)
+	if inserted["id"] == "" {
+		t.Fatal("personal item ID missing")
+	}
+	request(http.MethodGet, "/api/progress", internToken, nil, http.StatusOK, &ownProgress)
+	if ownProgress.TotalItems != 5 || ownProgress.CompletedItems != 2 || ownProgress.CompletionPercent != 40 {
+		t.Fatalf("overall progress after insertion: %+v", ownProgress)
+	}
+	updated := getChecklists(internToken)
+	if updated.Professional.Stages[0].Items[0].ID != inserted["id"] || updated.Professional.Stages[0].Items[1].Status != model.StatusVerified || updated.Professional.Stages[0].Items[2].Status != model.StatusActive {
+		t.Fatalf("personal task changed existing progress: %+v", updated.Professional)
 	}
 	t.Log("E2E passed: auth, intern creation, checklists, completion, reject/retry, review, permissions and DB persistence")
 }

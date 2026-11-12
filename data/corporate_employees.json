@@ -1,0 +1,6 @@
+[
+  {"id":"corp-intern-ml-001","email":"ml.intern@demo.example","role":"intern","profession":"ml","department":"Technology","team":"Machine Learning","manager_id":"corp-lead-001","buddy_id":"corp-buddy-001","allowed_tools":["ml-platform","issue-tracker"]},
+  {"id":"corp-buddy-001","email":"buddy@demo.example","role":"buddy","department":"Technology","team":"Machine Learning","allowed_tools":[]},
+  {"id":"corp-lead-001","email":"teamlead@demo.example","role":"teamlead","department":"Technology","team":"Machine Learning","allowed_tools":[]},
+  {"id":"corp-intern-ml-002","email":"ml.other@demo.example","role":"intern","profession":"ml","department":"Technology","team":"Machine Learning","manager_id":"corp-lead-001","buddy_id":"corp-buddy-001","allowed_tools":["issue-tracker"]}
+]

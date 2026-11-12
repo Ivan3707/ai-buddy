@@ -1,36 +1,15 @@
-package main
+package handler
 
 import (
-	"context"
-	"encoding/json"
 	"errors"
-	"io"
-	"log"
 	"net/http"
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/middleware"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/model"
-	"github.com/nvkmaksim/ai-buddy/backend/internal/repository"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/service"
 )
-
-type checklistReader interface {
-	GetByUserID(context.Context, uuid.UUID) (*service.UserChecklists, error)
-}
-
-type checklistItemService interface {
-	CompleteItem(context.Context, uuid.UUID, uuid.UUID) error
-	SubmitItem(context.Context, uuid.UUID, uuid.UUID, *string, *string) (model.ChecklistItemSubmission, error)
-	ListSubmissions(context.Context, uuid.UUID, uuid.UUID) ([]model.ChecklistItemSubmission, error)
-}
-
-type buddySubmissionService interface {
-	ListPendingSubmissions(context.Context, uuid.UUID) ([]service.PendingSubmission, error)
-	ReviewSubmission(context.Context, uuid.UUID, uuid.UUID, bool, *string) error
-}
 
 type checklistItemDTO struct {
 	ID               string                `json:"id"`
@@ -93,14 +72,16 @@ type submissionHistoryDTO struct {
 }
 
 type pendingSubmissionDTO struct {
-	ID            string  `json:"id"`
-	InternID      string  `json:"intern_id"`
-	ItemID        string  `json:"item_id"`
-	ItemTitle     string  `json:"item_title"`
-	AttemptNumber int     `json:"attempt_number"`
-	ResultText    *string `json:"result_text"`
-	ResultURL     *string `json:"result_url"`
-	SubmittedAt   string  `json:"submitted_at"`
+	ID              string  `json:"id"`
+	InternID        string  `json:"intern_id"`
+	InternFirstName *string `json:"first_name"`
+	InternLastName  *string `json:"last_name"`
+	ItemID          string  `json:"item_id"`
+	ItemTitle       string  `json:"item_title"`
+	AttemptNumber   int     `json:"attempt_number"`
+	ResultText      *string `json:"result_text"`
+	ResultURL       *string `json:"result_url"`
+	SubmittedAt     string  `json:"submitted_at"`
 }
 
 type reviewSubmissionRequest struct {
@@ -108,10 +89,10 @@ type reviewSubmissionRequest struct {
 	Comment  *string `json:"comment"`
 }
 
-func (d handlerDependencies) checklistsHandler() http.Handler {
+func (d Dependencies) checklistsHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, _ := middleware.CurrentUser(r.Context())
-		result, err := d.checklists.GetByUserID(r.Context(), user.ID)
+		result, err := d.Checklists.GetByUserID(r.Context(), user.ID)
 		if err != nil {
 			writeServiceError(w, err)
 			return
@@ -123,14 +104,14 @@ func (d handlerDependencies) checklistsHandler() http.Handler {
 	})
 }
 
-func (d handlerDependencies) completeItemHandler() http.Handler {
+func (d Dependencies) completeItemHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		itemID, ok := parsePathUUID(w, r, "itemID", "invalid checklist item ID")
 		if !ok {
 			return
 		}
 		user, _ := middleware.CurrentUser(r.Context())
-		if err := d.items.CompleteItem(r.Context(), user.ID, itemID); err != nil {
+		if err := d.Items.CompleteItem(r.Context(), user.ID, itemID); err != nil {
 			writeServiceError(w, err)
 			return
 		}
@@ -138,7 +119,7 @@ func (d handlerDependencies) completeItemHandler() http.Handler {
 	})
 }
 
-func (d handlerDependencies) submitItemHandler() http.Handler {
+func (d Dependencies) submitItemHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		itemID, ok := parsePathUUID(w, r, "itemID", "invalid checklist item ID")
 		if !ok {
@@ -149,7 +130,7 @@ func (d handlerDependencies) submitItemHandler() http.Handler {
 			return
 		}
 		user, _ := middleware.CurrentUser(r.Context())
-		submission, err := d.items.SubmitItem(r.Context(), user.ID, itemID, body.ResultText, body.ResultURL)
+		submission, err := d.Items.SubmitItem(r.Context(), user.ID, itemID, body.ResultText, body.ResultURL)
 		if err != nil {
 			writeServiceError(w, err)
 			return
@@ -158,14 +139,14 @@ func (d handlerDependencies) submitItemHandler() http.Handler {
 	})
 }
 
-func (d handlerDependencies) submissionHistoryHandler() http.Handler {
+func (d Dependencies) submissionHistoryHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		itemID, ok := parsePathUUID(w, r, "itemID", "invalid checklist item ID")
 		if !ok {
 			return
 		}
 		user, _ := middleware.CurrentUser(r.Context())
-		history, err := d.items.ListSubmissions(r.Context(), user.ID, itemID)
+		history, err := d.Items.ListSubmissions(r.Context(), user.ID, itemID)
 		if err != nil {
 			writeServiceError(w, err)
 			return
@@ -182,10 +163,10 @@ func (d handlerDependencies) submissionHistoryHandler() http.Handler {
 	})
 }
 
-func (d handlerDependencies) pendingSubmissionsHandler() http.Handler {
+func (d Dependencies) pendingSubmissionsHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user, _ := middleware.CurrentUser(r.Context())
-		pending, err := d.submissions.ListPendingSubmissions(r.Context(), user.ID)
+		pending, err := d.Submissions.ListPendingSubmissions(r.Context(), user.ID)
 		if err != nil {
 			writeServiceError(w, err)
 			return
@@ -193,21 +174,23 @@ func (d handlerDependencies) pendingSubmissionsHandler() http.Handler {
 		response := make([]pendingSubmissionDTO, 0, len(pending))
 		for _, item := range pending {
 			response = append(response, pendingSubmissionDTO{
-				ID:            item.Submission.ID.String(),
-				InternID:      item.InternID.String(),
-				ItemID:        item.ItemID.String(),
-				ItemTitle:     item.ItemTitle,
-				AttemptNumber: item.Submission.AttemptNumber,
-				ResultText:    item.Submission.ResultText,
-				ResultURL:     item.Submission.ResultURL,
-				SubmittedAt:   formatTime(item.Submission.SubmittedAt),
+				ID:              item.Submission.ID.String(),
+				InternID:        item.InternID.String(),
+				InternFirstName: item.InternFirstName,
+				InternLastName:  item.InternLastName,
+				ItemID:          item.ItemID.String(),
+				ItemTitle:       item.ItemTitle,
+				AttemptNumber:   item.Submission.AttemptNumber,
+				ResultText:      item.Submission.ResultText,
+				ResultURL:       item.Submission.ResultURL,
+				SubmittedAt:     formatTime(item.Submission.SubmittedAt),
 			})
 		}
 		send(w, http.StatusOK, response)
 	})
 }
 
-func (d handlerDependencies) reviewSubmissionHandler() http.Handler {
+func (d Dependencies) reviewSubmissionHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		submissionID, ok := parsePathUUID(w, r, "submissionID", "invalid submission ID")
 		if !ok {
@@ -226,7 +209,7 @@ func (d handlerDependencies) reviewSubmissionHandler() http.Handler {
 			return
 		}
 		user, _ := middleware.CurrentUser(r.Context())
-		err := d.submissions.ReviewSubmission(r.Context(), user.ID, submissionID, *body.Approved, body.Comment)
+		err := d.Submissions.ReviewSubmission(r.Context(), user.ID, submissionID, *body.Approved, body.Comment)
 		if errors.Is(err, service.ErrInternNotAssigned) {
 			send(w, http.StatusNotFound, map[string]string{"error": "submission not found"})
 			return
@@ -237,49 +220,6 @@ func (d handlerDependencies) reviewSubmissionHandler() http.Handler {
 		}
 		w.WriteHeader(http.StatusNoContent)
 	})
-}
-
-func decodeJSONBody(w http.ResponseWriter, r *http.Request, destination any) bool {
-	r.Body = http.MaxBytesReader(w, r.Body, 4096)
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(destination); err != nil {
-		send(w, http.StatusBadRequest, map[string]string{"error": "invalid JSON"})
-		return false
-	}
-	if decoder.Decode(&struct{}{}) != io.EOF {
-		send(w, http.StatusBadRequest, map[string]string{"error": "expected one JSON object"})
-		return false
-	}
-	return true
-}
-
-func parsePathUUID(w http.ResponseWriter, r *http.Request, name, message string) (uuid.UUID, bool) {
-	id, err := uuid.Parse(r.PathValue(name))
-	if err != nil || id == uuid.Nil {
-		send(w, http.StatusBadRequest, map[string]string{"error": message})
-		return uuid.Nil, false
-	}
-	return id, true
-}
-
-func writeServiceError(w http.ResponseWriter, err error) {
-	switch {
-	case errors.Is(err, repository.ErrNotFound):
-		send(w, http.StatusNotFound, map[string]string{"error": "resource not found"})
-	case errors.Is(err, service.ErrUserNotIntern), errors.Is(err, service.ErrUserNotBuddy),
-		errors.Is(err, service.ErrCannotReviewSelf), errors.Is(err, service.ErrInternNotAssigned):
-		send(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
-	case errors.Is(err, service.ErrInvalidSubmission), errors.Is(err, service.ErrSubmissionRequired):
-		send(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
-	case errors.Is(err, service.ErrItemNotActive), errors.Is(err, service.ErrReviewNotPending),
-		errors.Is(err, service.ErrSubmissionAlreadyReviewed), errors.Is(err, service.ErrProgressIncomplete),
-		errors.Is(err, service.ErrProfessionNotSet):
-		send(w, http.StatusConflict, map[string]string{"error": err.Error()})
-	default:
-		log.Printf("checklist API error: %v", err)
-		send(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
-	}
 }
 
 func toChecklistDTO(value service.ChecklistWithProgress) checklistDTO {

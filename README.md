@@ -117,12 +117,16 @@ goose -dir apps/backend/migrations status
 - `00001_init.sql` — пользователи, чек-листы, задания, прогресс;
 - `00002_checklist_stages_and_buddy.sql` — этапы и роль buddy;
 - `00003_checklist_submissions_and_progress.sql` — результаты заданий, ревью и дополнительные ограничения.
+- `00004_profiles_sessions.sql` — поля профиля и refresh-сессии;
+- `00005_personal_tasks_hints.sql` — персональные задания, индивидуальный порядок и подсказки;
+- `00006_calendar_notes.sql` — личные события и заметки.
+- `00007_teamlead_profile_and_requests.sql` — отдельная роль teamlead, даты профиля и заявки на доступ.
 
 **Замечание по безопасности:** не публикуйте вывод команд с секретами; не сохраняйте строку подключения в Git. Если пароль содержит символы, значимые для синтаксиса строки подключения, потребуется корректное экранирование.
 
 ### 6. Заполнить демонстрационные чек-листы
 
-Seed требует базу с именем **`app`** (либо `ai_buddy_test`) и полностью применённую миграцию `00003`.
+Существующий seed рассчитан только на Goose v3 и откажется работать после миграции `00004`–`00007`. Не запускайте его на схеме v7. Отдельный `apps/backend/scripts/seed_demo_ml_checklist_v1.sql` подготовлен для Goose v7, но не загружается автоматически. Пример ниже сохраняется как историческая инструкция для стенда v3, а не как шаг обновления основной БД.
 
 ```bash
 docker exec -i ai-buddy-postgres \
@@ -275,7 +279,14 @@ export TEST_DATABASE_URL="host=127.0.0.1 port=5433 user=${DB_USER} password=${DB
 GOOSE_DBSTRING="$TEST_DATABASE_URL" goose -dir apps/backend/migrations up
 ```
 
-В зависимости от конкретных тестов может потребоваться seed в `ai_buddy_test`. Не запускайте тесты против основной базы `app`, если тесты изменяют данные.
+Для Go-интеграционных тестов нужен Goose v6. Seed в `ai_buddy_test` не требуется: тесты создают собственные fixtures и удаляют их. Не запускайте тесты против основной базы `app`.
+
+```bash
+cd apps/backend
+RUN_E2E=1 go test -count=1 -p 1 ./...
+go vet ./...
+go build ./...
+```
 
 > Проверка тестов на чистой машине ещё не выполнена. Некоторые интеграционные тесты используют `TEST_DATABASE_URL`, а Dockerfile backend содержит `RUN go test ./...` во время сборки. Это нужно проверить отдельно: контейнер сборки не получает тестовую PostgreSQL автоматически.
 
@@ -316,7 +327,7 @@ ai-buddy/
 │   ├── backend/               # Go API
 │   │   ├── cmd/bootstrap-buddy/ # Первоначальное создание buddy
 │   │   ├── internal/          # model, repository, service, security, database
-│   │   ├── migrations/        # Goose 00001–00003
+│   │   ├── migrations/        # Goose 00001–00006
 │   │   └── scripts/           # SQL seed
 │   ├── web/                   # React / TypeScript / Vite
 │   └── extension/             # Chrome MV3
@@ -373,7 +384,7 @@ ai-buddy/
 
 **`user with email ... already exists`** — bootstrap не перезаписывает существующего пользователя. Войдите с уже созданной учётной записью.
 
-**Нет профессионального чек-листа** — демо seed содержит профессиональные задания только для `backend`.
+**Нет профессионального чек-листа** — базовый демо seed содержит профессиональные задания только для `backend`; отдельный ML-скрипт подготовлен для v7 и требует отдельного запуска на проверенной БД.
 
 **Сборка backend Dockerfile падает на тестах** — проверьте интеграционные тесты: в текущем Dockerfile тесты запускаются во время сборки без отдельной тестовой БД.
 
@@ -394,5 +405,6 @@ ai-buddy/
 - [Проверки](docs/verification.md)
 - [Контракты API](contracts/README.md)
 - [Модели данных](docs/models.md) — после добавления файла
+- [Backend: роли, прогресс, корпоративный mock и AI-контракт](docs/backend-corporate-integration.md)
 
 ---
