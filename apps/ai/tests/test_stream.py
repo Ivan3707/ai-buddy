@@ -13,7 +13,7 @@ from app.retrieval import BM25Retriever, Doc, Hit, load_markdown_kb
 from app.schemas import AccessRequestParams, MentorQuestionParams
 from conftest import parse_sse
 
-client = TestClient(create_app(Settings()))
+client = TestClient(create_app(Settings(rag_mode="bm25")))
 TERMINAL = {"done", "error"}
 
 
@@ -97,7 +97,7 @@ class ScriptedLLM:
 
 
 def scripted_client(llm):
-    return TestClient(create_app(Settings(provider="mock"), llm=llm))
+    return TestClient(create_app(Settings(provider="mock", rag_mode="bm25"), llm=llm))
 
 
 @pytest.mark.parametrize("error,code", [(LLMError("timeout"), "timeout"),
@@ -156,11 +156,23 @@ def test_summaries_and_proposal_validation():
         {"kind": "vacation", "date_from": "2026-12-14", "date_to": "2026-12-01"}))
     assert to_proposal(backwards, {"leave_request"}) is None
     assert to_proposal(ToolCall("propose_mentor_question", "not json"), {"mentor_question"}) is None
+    admin = ToolCall("propose_access_request", json.dumps(
+        {"system": "grafana", "resource": "ML", "access_level": "admin", "justification": "надо"}))
+    assert to_proposal(admin, {"access_request"}, "intern") is None
+    assert to_proposal(admin, {"access_request"}, "buddy").params["access_level"] == "admin"
+
+
+def test_intern_tool_schema_has_no_admin_level():
+    from app.prompts import build_tools
+    level = lambda tools: tools[0]["function"]["parameters"]["properties"]["access_level"]["enum"]  # noqa: E731
+    assert level(build_tools(["access_request"], "intern")) == ["read", "write"]
+    assert level(build_tools(["access_request"], "buddy")) == ["read", "write", "admin"]
+    assert level(build_tools(["access_request"], "intern")) == ["read", "write"]  # shared TOOLS not mutated
 
 
 def test_health_reports_mode():
     assert client.get("/health").json() == {"status": "ok", "mode": "mock"}
-    llm_app = TestClient(create_app(Settings(provider="openai_compatible", model="m"), llm=ScriptedLLM()))
+    llm_app = TestClient(create_app(Settings(provider="openai_compatible", model="m", rag_mode="bm25"), llm=ScriptedLLM()))
     assert llm_app.get("/health").json() == {"status": "ok", "mode": "llm", "model": "m"}
 
 

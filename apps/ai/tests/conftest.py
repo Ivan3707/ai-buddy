@@ -1,3 +1,7 @@
+import os
+
+os.environ.setdefault("RAG_MODE", "bm25")  # unit tests never download embedding models
+
 import json
 
 import pytest

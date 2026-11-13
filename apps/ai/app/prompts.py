@@ -1,6 +1,7 @@
 """System prompt, context rendering and the tool menu shown to the LLM."""
 from __future__ import annotations
 
+import copy
 import json
 from typing import Any
 
@@ -71,9 +72,22 @@ TOOLS: dict[str, dict[str, Any]] = {
 TOOL_TO_ACTION = {tool["function"]["name"]: action for action, tool in TOOLS.items()}
 
 
-def build_tools(allowed_actions: list[str]) -> list[dict[str, Any]]:
-    """RBAC in depth: the model never even sees tools for actions the user may not perform."""
-    return [TOOLS[a] for a in TOOLS if a in allowed_actions]
+# Access levels each verified role may request. Mirrors the company policy "interns never get admin";
+# Backend enforces it again on confirm. Here it shapes the tool schema, so the model cannot even
+# produce a forbidden value - safety does not depend on retrieval finding the policy paragraph.
+ACCESS_LEVELS_BY_ROLE = {"intern": ["read", "write"], "buddy": ["read", "write", "admin"]}
+
+
+def build_tools(allowed_actions: list[str], role: str = "intern") -> list[dict[str, Any]]:
+    """RBAC in depth: the model never even sees tools or values the user may not use."""
+    tools = []
+    for action in (a for a in TOOLS if a in allowed_actions):
+        tool = copy.deepcopy(TOOLS[action])
+        if action == "access_request":
+            levels = ACCESS_LEVELS_BY_ROLE.get(role, ["read"])
+            tool["function"]["parameters"]["properties"]["access_level"]["enum"] = levels
+        tools.append(tool)
+    return tools
 
 
 def render_kb(hits: list[Hit]) -> str:

@@ -16,8 +16,8 @@ from pydantic import BaseModel, ValidationError
 
 from .config import Settings
 from .llm import LLM, LLMError, TextDelta, ToolCall, Turn, Usage
-from .prompts import FALLBACK_TEXT, TOOL_TO_ACTION, build_messages, build_tools
-from .retrieval import BM25Retriever, Hit
+from .prompts import ACCESS_LEVELS_BY_ROLE, FALLBACK_TEXT, TOOL_TO_ACTION, build_messages, build_tools
+from .retrieval import Hit, Retriever
 from .schemas import (AccessRequestParams, ActionProposal, AgentChatRequest, LeaveRequestParams,
                       MentorQuestionParams, Source)
 
@@ -53,7 +53,7 @@ def summarize(action: str, p: BaseModel) -> str:
     return f"Вопрос наставнику: {q}"
 
 
-def to_proposal(call: ToolCall, allowed: set[str]) -> ActionProposal | None:
+def to_proposal(call: ToolCall, allowed: set[str], role: str = "intern") -> ActionProposal | None:
     action = TOOL_TO_ACTION.get(call.name)
     if action is None or action not in allowed:
         log.warning("dropped tool call: unknown or not allowed tool=%s", call.name)
@@ -62,6 +62,9 @@ def to_proposal(call: ToolCall, allowed: set[str]) -> ActionProposal | None:
         params = PARAMS[action].model_validate(json.loads(call.arguments or "{}"))
     except (ValueError, ValidationError):  # bad JSON or schema violation
         log.warning("dropped tool call: invalid arguments tool=%s", call.name)
+        return None
+    if isinstance(params, AccessRequestParams) and params.access_level not in ACCESS_LEVELS_BY_ROLE.get(role, ["read"]):
+        log.warning("dropped tool call: access level not allowed for role=%s", role)
         return None
     return ActionProposal(type=action, params=params.model_dump(mode="json", exclude_none=True),
                           summary=summarize(action, params))
@@ -87,13 +90,13 @@ def cited_sources(text: str, hits: list[Hit]) -> list[Source]:
     return sources
 
 
-async def run_turn(req: AgentChatRequest, retriever: BM25Retriever, llm: LLM,
+async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
                    settings: Settings) -> AsyncIterator[Event]:
     t0 = time.monotonic()
     yield "status", {"stage": "retrieving"}
     hits = retriever.search(req.message, settings.top_k, settings.min_score)
     allowed = set(req.user_context.allowed_actions)
-    turn = Turn(req, hits, build_messages(req, hits), build_tools(sorted(allowed)))
+    turn = Turn(req, hits, build_messages(req, hits), build_tools(sorted(allowed), req.user_context.role))
 
     yield "status", {"stage": "generating"}
     parts: list[str] = []
@@ -117,7 +120,7 @@ async def run_turn(req: AgentChatRequest, retriever: BM25Retriever, llm: LLM,
         yield "error", {"code": "internal", "message": ERROR_MESSAGES["internal"]}
         return
 
-    proposal = next((p for p in (to_proposal(c, allowed) for c in calls) if p), None)
+    proposal = next((p for p in (to_proposal(c, allowed, req.user_context.role) for c in calls) if p), None)
     text = "".join(parts)
     if proposal:
         yield "status", {"stage": "preparing_action"}

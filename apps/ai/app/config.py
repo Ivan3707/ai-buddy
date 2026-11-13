@@ -21,6 +21,8 @@ class Settings:
     max_output_tokens: int = 1024
     temperature: float | None = None
     extra_body: dict[str, Any] = field(default_factory=dict)
+    rag_mode: str = "hybrid"
+    embedding_model: str = "intfloat/multilingual-e5-small"
     top_k: int = 4
     min_score: float = 0.2
 
@@ -48,9 +50,13 @@ def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
         max_output_tokens=int(get("LLM_MAX_OUTPUT_TOKENS", "1024")),
         temperature=float(temperature) if temperature else None,
         extra_body=json.loads(get("LLM_EXTRA_BODY") or "{}"),
+        rag_mode=get("RAG_MODE", "hybrid"),
+        embedding_model=get("RAG_EMBEDDING_MODEL", "intfloat/multilingual-e5-small"),
         top_k=int(get("RAG_TOP_K", "4")),
         min_score=float(get("RAG_MIN_SCORE", "0.2")),
     )
+    if settings.rag_mode not in ("bm25", "hybrid"):
+        raise ValueError(f"RAG_MODE must be bm25 or hybrid, got {settings.rag_mode!r}")
     if provider == "openai_compatible":
         missing = [n for n, v in (("LLM_BASE_URL", settings.base_url), ("LLM_API_KEY", settings.api_key),
                                   ("LLM_MODEL", settings.model)) if not v]

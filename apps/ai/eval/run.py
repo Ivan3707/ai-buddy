@@ -23,7 +23,7 @@ from typing import Any
 from app.agent import run_turn
 from app.config import load_settings
 from app.llm import make_llm
-from app.retrieval import BM25Retriever, load_markdown_kb
+from app.retrieval import Retriever, build_retriever, load_markdown_kb
 from app.schemas import AgentChatRequest
 
 HERE = Path(__file__).resolve().parent
@@ -45,19 +45,20 @@ def base_context(**overrides: Any) -> dict[str, Any]:
     return ctx
 
 
-def retriever() -> BM25Retriever:
-    return BM25Retriever(load_markdown_kb(DATA / "kb"))
+def retriever() -> Retriever:
+    s = load_settings()
+    return build_retriever(load_markdown_kb(DATA / "kb"), s.rag_mode, s.embedding_model)
 
 
 # ------------------------------------------------------------------ retrieval
 
-def eval_retrieval(cases: list[dict[str, Any]], k: int) -> dict[str, Any]:
-    r = retriever()
+def eval_retrieval(cases: list[dict[str, Any]], k: int, r: Any = None) -> dict[str, Any]:
+    r = r or retriever()
     recalls, rr, misses = [], [], []
     in_kb_top, out_kb_top = [], []
     for c in cases:
         hits = r.search(c["question"], k=50, min_score=0.0)
-        top = hits[0].score if hits else 0.0
+        top = max((h.lexical for h in hits), default=0.0)
         if c["behavior"] == "no_answer":
             out_kb_top.append(top)
             continue
@@ -103,7 +104,7 @@ class Outcome:
     reason: str = ""
 
 
-async def run_case(case: dict[str, Any], r: BM25Retriever, llm: Any, settings: Any) -> Outcome:
+async def run_case(case: dict[str, Any], r: Retriever, llm: Any, settings: Any) -> Outcome:
     req = AgentChatRequest(message=case["question"], user_context=base_context(**case.get("ctx", {})))
     out, t0 = Outcome(case), time.monotonic()
     async for event, data in run_turn(req, r, llm, settings):
@@ -155,7 +156,8 @@ def judge(o: Outcome) -> tuple[bool, str]:
     elif b == "clarify":
         if p:
             return False, f"proposed {p['type']} instead of asking"
-        if "?" not in o.text:
+        asks = ("?", "напиши", "уточни", "укажи", "подскажи", "скажи")
+        if not any(a in o.text.casefold() for a in asks):
             return False, "no clarifying question"
     elif b == "contradiction":
         if not expected <= set(o.sources):
@@ -178,7 +180,7 @@ def quantile(xs: list[float], q: float) -> float:
     return xs[min(len(xs) - 1, int(round(q * (len(xs) - 1))))] if xs else 0.0
 
 
-def report(outs: list[Outcome], settings: Any, retr: dict[str, Any]) -> str:
+def report(outs: list[Outcome], settings: Any, retr: dict[str, Any], dataset: str = "dataset.jsonl") -> str:
     by_cat: dict[str, list[Outcome]] = defaultdict(list)
     for o in outs:
         by_cat[o.case["category"]].append(o)
@@ -192,10 +194,10 @@ def report(outs: list[Outcome], settings: Any, retr: dict[str, Any]) -> str:
     lines = [
         "# Eval report", "",
         f"Model: `{settings.model or 'mock'}` (mode `{settings.mode}`), cases: {len(outs)}, "
-        f"date: {time.strftime('%Y-%m-%d %H:%M')}. Dataset: `eval/dataset.jsonl` (synthetic).", "",
+        f"date: {time.strftime('%Y-%m-%d %H:%M')}. Dataset: `eval/{dataset}` (synthetic).", "",
         "## Key metrics", "",
         "| Metric | Value | Target |", "|---|---|---|",
-        f"| retrieval recall@{retr['k']} (BM25 baseline) | {retr['recall']:.3f} | ≥ 0.9 |",
+        f"| retrieval recall@{retr['k']} ({settings.rag_mode}) | {retr['recall']:.3f} | ≥ 0.9 |",
         f"| retrieval MRR | {retr['mrr']:.3f} | — |",
         f"| correct source in answer | {pct(src)} | ≥ 90% |",
         f"| refusal correctness (out of KB → no_answer) | {pct([o.passed for o in by_cat['out_of_kb']])} | ≥ 90% |",
@@ -242,16 +244,18 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--only", help="comma-separated case ids")
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--out", default=str(HERE / "report.md"))
+    ap.add_argument("--dataset", default=str(HERE / "dataset.jsonl"), help="e.g. eval/holdout.jsonl")
     args = ap.parse_args(argv)
-    cases = load_cases()
+    all_cases = load_cases(Path(args.dataset))
+    cases = list(all_cases)
     if args.only:
         wanted = set(args.only.split(","))
         cases = [c for c in cases if c["id"] in wanted]
-    retr = eval_retrieval(load_cases(), args.k)
+    retr = eval_retrieval(all_cases, args.k)
     print_retrieval(retr)
     if args.mode == "e2e":
         outs = asyncio.run(eval_e2e(cases, args.concurrency))
-        text = report(outs, load_settings(), retr)
+        text = report(outs, load_settings(), retr, Path(args.dataset).name)
         Path(args.out).write_text(text, encoding="utf-8", newline="\n")
         print("\n" + text)
     return 0
