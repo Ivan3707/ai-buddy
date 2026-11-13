@@ -368,7 +368,8 @@ async function ask(message, view, userNode) {
 
   try {
     const conversationId = await readConversationId();
-    const pageContext = await pageContextForRequest(userNode);
+    // Legacy fallback cannot carry page_context, so the page is not even read then.
+    const pageContext = streamingSupported ? await pageContextForRequest(userNode) : null;
     const request = {
       message,
       ...(conversationId ? {conversation_id: conversationId} : {}),
@@ -387,7 +388,9 @@ async function ask(message, view, userNode) {
         view.render(state);
       },
     });
-    if (result.transport === 'legacy' && streamingSupported) {
+    if (result.transport === 'legacy') {
+      // Legacy /api/chat does not accept page_context: do not claim it was sent.
+      userNode?.querySelector('.msg-context')?.remove();
       streamingSupported = false;
       modeHint.hidden = false;
     }
