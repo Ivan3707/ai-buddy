@@ -72,6 +72,7 @@ class OpenAICompatibleLLM:
         }
         if turn.tools:
             body["tools"] = turn.tools
+        body.update(self.s.extra_body)  # provider-specific knobs, e.g. {"reasoning": {"effort": "low"}}
         if self.s.temperature is not None:  # some reasoning models reject temperature, so it is opt-in
             body["temperature"] = self.s.temperature
         return body
@@ -126,6 +127,9 @@ class OpenAICompatibleLLM:
 
 ACTION_WORDS = ("оформ", "заявк", "создай", "подай", "запроси")
 SYSTEMS = ("jira", "confluence", "gitlab", "grafana", "redash", "kubernetes")
+# The mock does not understand language, so a weak keyword match is treated as "not found".
+# BM25 top-1 scores on eval: answerable median ~6.4, out-of-KB max ~4.6 (they overlap; the LLM decides better).
+MOCK_MIN_SCORE = 3.0
 
 
 class MockLLM:
@@ -146,8 +150,10 @@ class MockLLM:
             yield ToolCall("propose_access_request", json.dumps({
                 "system": system, "resource": "demo", "access_level": "read",
                 "justification": "Нужно для задач онбординга (демо)"}, ensure_ascii=False))
-        elif turn.hits:
-            for word in f"{turn.hits[0].doc.text} [1]".split(" "):
+        elif confident := [h for h in turn.hits[:2] if h.score >= MOCK_MIN_SCORE]:
+            parts = [f"**{h.doc.title}**: {h.doc.text} [{n}]" for n, h in enumerate(confident, 1)]
+            text = "Вот что нашёл в базе знаний (демо-режим без LLM):\n\n" + "\n\n".join(parts)
+            for word in text.split(" "):
                 yield TextDelta(word + " ")
         else:
             yield TextDelta("В базе знаний этого нет. Могу передать вопрос наставнику.")

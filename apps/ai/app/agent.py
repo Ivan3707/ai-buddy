@@ -34,7 +34,7 @@ ERROR_MESSAGES = {
     "internal": "Что-то пошло не так. Попробуй ещё раз.",
 }
 EMPTY_ANSWER = "Не получилось сформулировать ответ. Переформулируй вопрос или спроси наставника."
-CITATION = re.compile(r"\[(\d{1,2})\]")
+CITATION = re.compile(r"\[([^\[\]]{1,60})\]")
 Event = tuple[str, dict[str, Any]]
 
 
@@ -68,14 +68,23 @@ def to_proposal(call: ToolCall, allowed: set[str]) -> ActionProposal | None:
 
 
 def cited_sources(text: str, hits: list[Hit]) -> list[Source]:
-    """Only documents the answer actually cites ([n]) are returned as sources."""
+    """Only documents the answer actually cites are returned as sources.
+
+    Models write citations as [1], [1, 2] or [1, обновлено 01.09.2026]: inside brackets we take
+    the comma-separated parts that are plain numbers.
+    """
     seen: list[int] = []
     for m in CITATION.finditer(text):
-        n = int(m.group(1))
-        if 1 <= n <= len(hits) and n not in seen:
-            seen.append(n)
-    return [Source(id=hits[n - 1].doc.id, title=hits[n - 1].doc.title, url=hits[n - 1].doc.url,
-                   snippet=hits[n - 1].doc.text[:200]) for n in seen]
+        for part in m.group(1).split(","):
+            part = part.strip()
+            if part.isdigit() and 1 <= int(part) <= len(hits) and int(part) not in seen:
+                seen.append(int(part))
+    sources: list[Source] = []
+    for n in seen:
+        doc = hits[n - 1].doc
+        if all(s.id != doc.id for s in sources):  # several chunks of one document -> one source
+            sources.append(Source(id=doc.id, title=doc.title, url=doc.url, snippet=doc.text[:200]))
+    return sources
 
 
 async def run_turn(req: AgentChatRequest, retriever: BM25Retriever, llm: LLM,
@@ -124,10 +133,10 @@ async def run_turn(req: AgentChatRequest, retriever: BM25Retriever, llm: LLM,
 
     if proposal and proposal.type != "mentor_question":
         finish = "action_proposed"
-    elif proposal or not hits:
-        finish = "no_answer"  # escalation offered or nothing grounded found
+    elif proposal and not sources:
+        finish = "no_answer"  # nothing grounded to say, escalation offered
     else:
-        finish = "answered"
+        finish = "answered"  # grounded in KB or in the user's own context (possibly + escalation offer)
     latency_ms = int((time.monotonic() - t0) * 1000)
     # metadata only: no message text or PII in logs
     log.info("turn finish=%s hits=%d tool_calls=%d action=%s latency_ms=%d in=%d out=%d",

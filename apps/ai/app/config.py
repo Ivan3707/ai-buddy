@@ -1,9 +1,11 @@
 """Runtime settings from environment variables (see .env.example)."""
 from __future__ import annotations
 
+import json
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 PROVIDERS = ("mock", "openai_compatible")
 
@@ -18,6 +20,7 @@ class Settings:
     first_byte_timeout_s: float = 15.0
     max_output_tokens: int = 1024
     temperature: float | None = None
+    extra_body: dict[str, Any] = field(default_factory=dict)
     top_k: int = 4
     min_score: float = 0.2
 
@@ -44,6 +47,7 @@ def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
         first_byte_timeout_s=float(get("LLM_FIRST_BYTE_TIMEOUT_SECONDS", "15")),
         max_output_tokens=int(get("LLM_MAX_OUTPUT_TOKENS", "1024")),
         temperature=float(temperature) if temperature else None,
+        extra_body=json.loads(get("LLM_EXTRA_BODY") or "{}"),
         top_k=int(get("RAG_TOP_K", "4")),
         min_score=float(get("RAG_MIN_SCORE", "0.2")),
     )

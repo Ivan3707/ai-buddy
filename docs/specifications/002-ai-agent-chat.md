@@ -81,9 +81,17 @@ UI ──POST /api/actions/{id}/confirm──> Backend ──> mock-адапте
 | `LLM_BASE_URL` | адрес API провайдера |
 | `LLM_API_KEY` | ключ |
 | `LLM_MODEL` | модель (проверена `openai/gpt-6.1-terra` через OpenRouter) |
+| `LLM_EXTRA_BODY` | опционально, JSON с параметрами провайдера; для OpenRouter рекомендуем `{"reasoning":{"effort":"low"}}` |
 | `LLM_TEMPERATURE` | опционально; пусто — значение провайдера (часть reasoning-моделей не принимает temperature) |
 | `LLM_TIMEOUT_SECONDS` / `LLM_FIRST_BYTE_TIMEOUT_SECONDS` | общий тайм-аут (60 с) / максимальная пауза в стриме (15 с) |
 | `RAG_TOP_K` / `RAG_MIN_SCORE` | число фрагментов для модели / порог релевантности BM25 |
+
+## 6a. База знаний
+
+- Источник: `data/kb/*.md` — 18 синтетических документов с front matter (`id`, `title`, `url`, `updated`).
+- Каждый раздел `## ` становится фрагментом для поиска. Источник в ответе — документ (`id`), дата `updated` передаётся модели, чтобы при противоречиях она сравнивала свежесть документов.
+- Намеренно заложены противоречия (`leave` / `first-week`, `git-workflow` / `code-review`) и непрямая prompt injection (`wiki-faq`).
+- Старый `data/kb.json` обслуживает только устаревший `POST /chat`.
 
 ## 7. Метрики
 
@@ -114,7 +122,7 @@ UI ──POST /api/actions/{id}/confirm──> Backend ──> mock-адапте
 | AC-4 | Действие вне `allowed_actions` не предлагается; confirm чужого action → 404 (AI unit + Go unit) |
 | AC-5 | Недоступность AI → `error` в стриме, UI не зависает (Go unit + web test) |
 | AC-6 | `mode=mock` проходит все тесты без сети; покрытие каждой части > 80% |
-| AC-7 | Метрики eval из раздела 7 зафиксированы в `apps/ai/eval/report.md` |
+| AC-7 | Метрики eval из раздела 7 зафиксированы в `apps/ai/eval/report.md`; recall@4 ≥ 0.9 проверяется в CI (`tests/test_eval.py`) |
 
 ## 9. Совместимость
 

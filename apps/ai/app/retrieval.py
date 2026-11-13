@@ -35,6 +35,7 @@ class Doc:
     url: str
     text: str
     keywords: tuple[str, ...] = field(default=())
+    updated: str = ""
 
 
 @dataclass(frozen=True)
@@ -47,6 +48,41 @@ def load_kb(path: Path) -> list[Doc]:
     items = json.loads(path.read_text(encoding="utf-8"))
     return [Doc(id=i["id"], title=i["title"], url=i["url"], text=i["text"],
                 keywords=tuple(i.get("keywords", ()))) for i in items]
+
+
+def _front_matter(raw: str) -> tuple[dict[str, str], str]:
+    if not raw.startswith("---\n"):
+        return {}, raw
+    head, _, body = raw[4:].partition("\n---\n")
+    meta = dict(line.split(":", 1) for line in head.splitlines() if ":" in line)
+    return {k.strip(): v.strip() for k, v in meta.items()}, body
+
+
+def load_markdown_kb(directory: Path) -> list[Doc]:
+    """One .md per document; every '## ' section becomes a chunk (Doc) that keeps the document id.
+
+    Chunking matters: the model gets the relevant section, not a whole page, and BM25 length
+    normalisation works on comparable pieces.
+    """
+    chunks: list[Doc] = []
+    for path in sorted(directory.glob("*.md")):
+        meta, body = _front_matter(path.read_text(encoding="utf-8").replace("\r\n", "\n"))
+        if "id" not in meta:
+            continue
+        heading, lines = "", []
+        sections: list[tuple[str, str]] = []
+        for line in body.splitlines() + ["## "]:  # sentinel flushes the last section
+            if line.startswith("## "):
+                if "".join(lines).strip():
+                    sections.append((heading, "\n".join(lines).strip()))
+                heading, lines = line[3:].strip(), []
+            else:
+                lines.append(line)
+        for heading, text in sections:
+            title = f"{meta['title']} — {heading}" if heading else meta["title"]
+            chunks.append(Doc(id=meta["id"], title=title, url=meta["url"], text=text,
+                              updated=meta.get("updated", "")))
+    return chunks
 
 
 class BM25Retriever:

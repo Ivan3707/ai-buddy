@@ -12,7 +12,7 @@ from fastapi.responses import StreamingResponse
 from .agent import run_turn, sse
 from .config import Settings, load_settings
 from .llm import LLM, make_llm
-from .retrieval import BM25Retriever, load_kb
+from .retrieval import BM25Retriever, load_kb, load_markdown_kb
 from .schemas import AgentChatRequest, ChatRequest, ChatResponse, Source
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -23,7 +23,9 @@ NO_ANSWER = "В демо-базе нет ответа. Попробуйте сп
 def create_app(settings: Settings | None = None, retriever: BM25Retriever | None = None,
                llm: LLM | None = None) -> FastAPI:
     settings = settings or load_settings()
-    retriever = retriever or BM25Retriever(load_kb(DATA / "kb.json"))
+    retriever = retriever or BM25Retriever(load_markdown_kb(DATA / "kb"))
+    # Legacy /chat keeps the old two-document KB: current web/extension e2e tests assert on it.
+    legacy = BM25Retriever(load_kb(DATA / "kb.json"))
     llm = llm or make_llm(settings)
     app = FastAPI(title="AI-buddy AI", version="0.2.0")
 
@@ -37,7 +39,7 @@ def create_app(settings: Settings | None = None, retriever: BM25Retriever | None
     @app.post("/chat", response_model=ChatResponse, deprecated=True)
     def chat(body: ChatRequest):
         """Legacy non-streaming endpoint: retrieval only, no LLM. Kept until clients move to /v1/chat/stream."""
-        hits = retriever.search(body.message, 1, settings.min_score)
+        hits = legacy.search(body.message, 1, settings.min_score)
         if not hits:
             return ChatResponse(answer=NO_ANSWER, sources=[])
         d = hits[0].doc

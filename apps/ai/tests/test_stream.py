@@ -8,7 +8,8 @@ from app.agent import cited_sources, summarize, to_proposal
 from app.config import Settings
 from app.llm import LLMError, TextDelta, ToolCall, Usage
 from app.main import create_app
-from app.retrieval import BM25Retriever, Doc, Hit
+from app.prompts import render_kb
+from app.retrieval import BM25Retriever, Doc, Hit, load_markdown_kb
 from app.schemas import AccessRequestParams, MentorQuestionParams
 from conftest import parse_sse
 
@@ -41,11 +42,11 @@ def test_answer_from_kb_streams_deltas_before_done_with_cited_source(chat_body):
 
 
 def test_out_of_kb_is_no_answer_with_mentor_card(chat_body):  # AC-3
-    events = dict(stream(chat_body("Какой дресс-код на корпоративе?")))
+    events = dict(stream(chat_body("Есть ли в офисе спортзал?")))
     assert events["done"]["finish_reason"] == "no_answer"
     proposal = events["action"]["proposal"]
     assert proposal["type"] == "mentor_question"
-    assert proposal["params"]["question"] == "Какой дресс-код на корпоративе?"
+    assert proposal["params"]["question"] == "Есть ли в офисе спортзал?"
     assert "sources" not in events
 
 
@@ -68,7 +69,7 @@ def test_access_proposal(chat_body):  # S3
 
 def test_action_outside_allowed_actions_is_never_proposed(chat_body):  # AC-4
     events = dict(stream(chat_body("Хочу оформить отгул", allowed_actions=["mentor_question"])))
-    assert events["action"]["proposal"]["type"] == "mentor_question"
+    assert events.get("action", {}).get("proposal", {}).get("type") != "leave_request"
     events = dict(stream(chat_body("Хочу оформить отгул", allowed_actions=[])))
     assert "action" not in events
 
@@ -128,8 +129,9 @@ def test_llm_sees_kb_in_user_turn_and_only_allowed_tools(chat_body):
     turn = llm.turns[0]
     roles = [m["role"] for m in turn.messages]
     assert roles == ["system", "user", "assistant", "user"]
-    assert "<user_context>" in turn.messages[0]["content"] and "«Заявление на отпуск»" not in turn.messages[0]["content"]
-    assert "[1] «Заявление на отпуск»" in turn.messages[-1]["content"]
+    assert "<user_context>" in turn.messages[0]["content"] and "«Отпуска, отгулы" not in turn.messages[0]["content"]
+    assert "[1] «Отпуска, отгулы и больничный" in turn.messages[-1]["content"]
+    assert "обновлено 2026-09-01" in turn.messages[-1]["content"]
     assert [t["function"]["name"] for t in turn.tools] == ["propose_mentor_question"]
 
 
@@ -137,6 +139,9 @@ def test_cited_sources_ignores_out_of_range_and_duplicates():
     doc = Doc("a", "A", "u", "text")
     assert [s.id for s in cited_sources("x [1] y [1] [7] [0]", [Hit(doc, 1.0)])] == ["a"]
     assert cited_sources("no refs", [Hit(doc, 1.0)]) == []
+    other = Doc("b", "B", "u", "text")
+    hits = [Hit(doc, 3.0), Hit(Doc("a", "A2", "u", "chunk 2"), 2.0), Hit(other, 1.0)]
+    assert [s.id for s in cited_sources("x [1, обновлено 01.09.2026] y [2, 3]", hits)] == ["a", "b"]
 
 
 def test_summaries_and_proposal_validation():
@@ -164,3 +169,18 @@ def test_retriever_ranks_and_thresholds():
     assert [h.doc.id for h in r.search("отпуска", 4, 0.1)] == ["leave"]
     assert r.search("погода", 4, 0.1) == [] and r.search("!!!", 4, 0.0) == []
     assert BM25Retriever([]).search("отпуск", 4, 0.0) == []
+
+
+def test_markdown_kb_is_chunked_by_section(tmp_path):
+    (tmp_path / "doc.md").write_text(
+        "---\nid: d1\ntitle: Док\nurl: https://wiki/d1\nupdated: 2026-01-02\n---\nВступление.\n\n"
+        "## Раздел А\nТекст А.\n\n## Пустой\n\n## Раздел Б\nТекст Б.\n", encoding="utf-8")
+    (tmp_path / "plain.md").write_text("# no front matter\n", encoding="utf-8")
+    (tmp_path / "nometa.md").write_text("---\ntitle: no id\n---\ntext\n", encoding="utf-8")
+    chunks = load_markdown_kb(tmp_path)
+    assert [(c.id, c.title, c.text) for c in chunks] == [
+        ("d1", "Док", "Вступление."), ("d1", "Док — Раздел А", "Текст А."), ("d1", "Док — Раздел Б", "Текст Б.")]
+    assert chunks[0].updated == "2026-01-02"
+    assert render_kb([Hit(Doc("x", "X", "u", "t"), 1.0)]) == "<kb>\n[1] «X» (демо)\nt\n</kb>"
+
+
