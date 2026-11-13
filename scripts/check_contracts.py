@@ -11,8 +11,13 @@ root = Path(__file__).resolve().parents[1]
 specs = {s:json.loads((root / f"contracts/{s}.openapi.json").read_text()) for s in ("backend", "ai")}
 for spec in specs.values():
     validate_spec(spec)
-assert specs["backend"]["components"] == specs["ai"]["components"]
-print("OpenAPI documents valid; shared chat schemas agree")
+backend_schemas = specs["backend"]["components"]["schemas"]
+ai_schemas = specs["ai"]["components"]["schemas"]
+shared = sorted(set(backend_schemas) & set(ai_schemas))
+assert {"ChatRequest", "ChatResponse", "Source", "ActionProposal", "UserContext"} <= set(shared), shared
+for name in shared:
+    assert backend_schemas[name] == ai_schemas[name], f"schema {name} differs between backend and ai"
+print(f"OpenAPI documents valid; {len(shared)} shared schemas agree")
 
 if os.getenv("CHECK_LIVE") == "1":
     base = os.getenv("BACKEND_URL", "http://127.0.0.1:8080")

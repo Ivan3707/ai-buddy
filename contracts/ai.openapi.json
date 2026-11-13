@@ -1,8 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "AI-buddy ai",
-    "version": "0.1.0"
+    "title": "AI-buddy ai (internal)",
+    "version": "0.2.0",
+    "description": "Internal API. Called only by Backend inside the Docker network."
   },
   "servers": [
     {
@@ -32,10 +33,10 @@
                       ]
                     },
                     "mode": {
-                      "type": "string",
-                      "enum": [
-                        "mock"
-                      ]
+                      "$ref": "#/components/schemas/AiMode"
+                    },
+                    "model": {
+                      "type": "string"
                     }
                   }
                 }
@@ -48,6 +49,8 @@
     "/chat": {
       "post": {
         "operationId": "chat",
+        "deprecated": true,
+        "description": "Legacy non-streaming chat without user context. Use /v1/chat/stream.",
         "requestBody": {
           "required": true,
           "content": {
@@ -74,18 +77,46 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "detail"
-                  ],
-                  "properties": {
-                    "detail": {
-                      "type": "array",
-                      "items": {
-                        "type": "object"
-                      }
-                    }
-                  }
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/chat/stream": {
+      "post": {
+        "operationId": "chatStream",
+        "description": "Agent turn: retrieval + LLM + optional action proposal. Stateless: Backend sends history and verified user context on each call. Event data schemas: #/components/schemas/AiStreamEvent (event `action` carries AiActionEvent).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AgentChatRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "Server-Sent Events stream. Each event is `event: <type>` + `data: <JSON>` where JSON matches the schema of the same `type`. Order: [meta] status* (delta | status)* [sources] [action] done | error. The stream always ends with exactly one `done` or `error` event."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
                 }
               }
             }
@@ -125,32 +156,545 @@
           "sources": {
             "type": "array",
             "items": {
-              "type": "object",
-              "required": [
-                "id",
-                "title",
-                "url"
-              ],
-              "properties": {
-                "id": {
-                  "type": "string"
-                },
-                "title": {
-                  "type": "string"
-                },
-                "url": {
-                  "type": "string"
-                }
-              }
+              "$ref": "#/components/schemas/Source"
             }
           },
           "mode": {
+            "$ref": "#/components/schemas/AiMode"
+          }
+        }
+      },
+      "AiMode": {
+        "type": "string",
+        "enum": [
+          "mock",
+          "llm"
+        ],
+        "description": "mock = deterministic offline mode (tests/CI/no key); llm = real model"
+      },
+      "Source": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "url"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string",
+            "description": "Short quote used for the answer"
+          }
+        }
+      },
+      "ActionType": {
+        "type": "string",
+        "enum": [
+          "leave_request",
+          "access_request",
+          "mentor_question"
+        ]
+      },
+      "LeaveRequestParams": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "date_from",
+          "date_to"
+        ],
+        "properties": {
+          "kind": {
             "type": "string",
             "enum": [
-              "mock"
+              "day_off",
+              "vacation"
+            ],
+            "description": "Отгул и отпуск — разные процессы"
+          },
+          "date_from": {
+            "type": "string",
+            "format": "date"
+          },
+          "date_to": {
+            "type": "string",
+            "format": "date"
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 500
+          }
+        }
+      },
+      "AccessRequestParams": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "system",
+          "resource",
+          "access_level",
+          "justification"
+        ],
+        "properties": {
+          "system": {
+            "type": "string",
+            "enum": [
+              "jira",
+              "confluence",
+              "gitlab",
+              "grafana",
+              "redash",
+              "kubernetes"
+            ]
+          },
+          "resource": {
+            "type": "string",
+            "maxLength": 200,
+            "description": "Проект Jira, пространство Confluence, репозиторий, дашборд и т.п."
+          },
+          "access_level": {
+            "type": "string",
+            "enum": [
+              "read",
+              "write",
+              "admin"
+            ]
+          },
+          "justification": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "MentorQuestionParams": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "question"
+        ],
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "context": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Что бот уже нашёл/почему не смог ответить (противоречие, нет документа)"
+          }
+        }
+      },
+      "ActionProposal": {
+        "type": "object",
+        "required": [
+          "type",
+          "params",
+          "summary"
+        ],
+        "description": "Proposed by the AI. Never executed by the AI: Backend stores it as PendingAction and executes only after explicit user confirmation.",
+        "properties": {
+          "type": {
+            "$ref": "#/components/schemas/ActionType"
+          },
+          "params": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LeaveRequestParams"
+              },
+              {
+                "$ref": "#/components/schemas/AccessRequestParams"
+              },
+              {
+                "$ref": "#/components/schemas/MentorQuestionParams"
+              }
+            ]
+          },
+          "summary": {
+            "type": "string",
+            "description": "Human-readable card text, e.g. 'Отгул 20.11.2026'"
+          }
+        }
+      },
+      "ServiceRequest": {
+        "type": "object",
+        "required": [
+          "id",
+          "number",
+          "type",
+          "status",
+          "params",
+          "created_at",
+          "updated_at"
+        ],
+        "description": "A request created in a (mocked) corporate service: absence or access system.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "number": {
+            "type": "string",
+            "examples": [
+              "ABS-000123",
+              "ACC-000045"
+            ]
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "leave_request",
+              "access_request"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending_approval",
+              "approved",
+              "rejected"
+            ]
+          },
+          "approver": {
+            "type": "string",
+            "description": "Роль/имя согласующего (руководитель, владелец проекта)"
+          },
+          "params": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/LeaveRequestParams"
+              },
+              {
+                "$ref": "#/components/schemas/AccessRequestParams"
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TaskContext": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "status",
+          "checklist"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "description": "As stored by Backend (unavailable/active/submitted/completed/...)"
+          },
+          "checklist": {
+            "type": "string",
+            "enum": [
+              "common",
+              "professional"
+            ]
+          },
+          "stage_title": {
+            "type": "string"
+          },
+          "requires_result": {
+            "type": "boolean"
+          },
+          "review_comment": {
+            "type": "string",
+            "description": "Последний комментарий наставника, если есть"
+          }
+        }
+      },
+      "UserContext": {
+        "type": "object",
+        "required": [
+          "user_id",
+          "role",
+          "tasks",
+          "open_requests",
+          "allowed_actions"
+        ],
+        "description": "Verified by Backend from the JWT and DB. The AI trusts only this, never claims from chat text.",
+        "properties": {
+          "user_id": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "intern",
+              "buddy"
+            ]
+          },
+          "profession": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "backend",
+              "frontend",
+              "ml",
+              null
+            ]
+          },
+          "team": {
+            "type": "string"
+          },
+          "buddy_name": {
+            "type": "string"
+          },
+          "today": {
+            "type": "string",
+            "format": "date",
+            "description": "Для разбора 'завтра', 'в пятницу'"
+          },
+          "current_stage": {
+            "type": "object",
+            "required": [
+              "title",
+              "position",
+              "total"
+            ],
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "position": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              }
+            }
+          },
+          "tasks": {
+            "type": "array",
+            "maxItems": 30,
+            "items": {
+              "$ref": "#/components/schemas/TaskContext"
+            },
+            "description": "Active and next tasks first"
+          },
+          "open_requests": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/ServiceRequest"
+            }
+          },
+          "allowed_actions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ActionType"
+            },
+            "description": "RBAC: actions this user may perform. AI must not propose others."
+          }
+        }
+      },
+      "ChatTurn": {
+        "type": "object",
+        "required": [
+          "role",
+          "content"
+        ],
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "user",
+              "assistant"
+            ]
+          },
+          "content": {
+            "type": "string",
+            "maxLength": 8000
+          }
+        }
+      },
+      "StatusEvent": {
+        "type": "object",
+        "required": [
+          "stage"
+        ],
+        "properties": {
+          "stage": {
+            "type": "string",
+            "enum": [
+              "retrieving",
+              "generating",
+              "preparing_action"
             ]
           }
         }
+      },
+      "DeltaEvent": {
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        }
+      },
+      "SourcesEvent": {
+        "type": "object",
+        "required": [
+          "sources"
+        ],
+        "properties": {
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            }
+          }
+        }
+      },
+      "DoneEvent": {
+        "type": "object",
+        "required": [
+          "finish_reason",
+          "mode"
+        ],
+        "properties": {
+          "finish_reason": {
+            "type": "string",
+            "enum": [
+              "answered",
+              "no_answer",
+              "action_proposed"
+            ],
+            "description": "no_answer = KB has no grounded answer (bot offered escalation)"
+          },
+          "mode": {
+            "$ref": "#/components/schemas/AiMode"
+          },
+          "latency_ms": {
+            "type": "integer"
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "input_tokens": {
+                "type": "integer"
+              },
+              "output_tokens": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      },
+      "ErrorEvent": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "enum": [
+              "llm_unavailable",
+              "timeout",
+              "internal"
+            ]
+          },
+          "message": {
+            "type": "string",
+            "description": "Safe to show to the user"
+          }
+        }
+      },
+      "AgentChatRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "message",
+          "user_context"
+        ],
+        "properties": {
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000,
+            "pattern": "\\S"
+          },
+          "history": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "$ref": "#/components/schemas/ChatTurn"
+            },
+            "description": "Previous turns, oldest first, without the current message"
+          },
+          "user_context": {
+            "$ref": "#/components/schemas/UserContext"
+          }
+        }
+      },
+      "AiActionEvent": {
+        "type": "object",
+        "required": [
+          "proposal"
+        ],
+        "properties": {
+          "proposal": {
+            "$ref": "#/components/schemas/ActionProposal"
+          }
+        }
+      },
+      "AiStreamEvent": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/StatusEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DeltaEvent"
+          },
+          {
+            "$ref": "#/components/schemas/SourcesEvent"
+          },
+          {
+            "$ref": "#/components/schemas/AiActionEvent"
+          },
+          {
+            "$ref": "#/components/schemas/DoneEvent"
+          },
+          {
+            "$ref": "#/components/schemas/ErrorEvent"
+          }
+        ]
       }
     }
   }
