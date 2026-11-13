@@ -9,6 +9,7 @@ import json
 import logging
 import re
 import time
+from collections import Counter
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -16,6 +17,7 @@ from pydantic import BaseModel, ValidationError
 
 from .config import Settings
 from .llm import LLM, LLMError, TextDelta, ToolCall, Turn, Usage
+from .pii import mask
 from .prompts import ACCESS_LEVELS_BY_ROLE, FALLBACK_TEXT, TOOL_TO_ACTION, build_messages, build_tools
 from .retrieval import Hit, Retriever, fuse
 from .schemas import (AccessRequestParams, ActionProposal, AgentChatRequest, LeaveRequestParams,
@@ -90,6 +92,21 @@ def cited_sources(text: str, hits: list[Hit]) -> list[Source]:
     return sources
 
 
+def mask_request(req: AgentChatRequest) -> tuple[AgentChatRequest, Counter[str]]:
+    """Personal data never leaves the service: mask it in everything the user typed."""
+    total: Counter[str] = Counter()
+    message, found = mask(req.message)
+    total += found
+    history = []
+    for turn in req.history:
+        if turn.role == "user":
+            content, found = mask(turn.content)
+            total += found
+            turn = turn.model_copy(update={"content": content})
+        history.append(turn)
+    return req.model_copy(update={"message": message, "history": history}), total
+
+
 def retrieve(req: AgentChatRequest, retriever: Retriever, k: int, min_score: float,
              use_history: bool = True) -> list[Hit]:
     """Follow-ups like "а за сколько дней?" carry no topic on their own. We search twice - the message
@@ -107,6 +124,7 @@ def retrieve(req: AgentChatRequest, retriever: Retriever, k: int, min_score: flo
 async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
                    settings: Settings) -> AsyncIterator[Event]:
     t0 = time.monotonic()
+    req, masked = mask_request(req)
     yield "status", {"stage": "retrieving"}
     hits = retrieve(req, retriever, settings.top_k, settings.min_score)
     allowed = set(req.user_context.allowed_actions)
@@ -156,9 +174,9 @@ async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
         finish = "answered"  # grounded in KB or in the user's own context (possibly + escalation offer)
     latency_ms = int((time.monotonic() - t0) * 1000)
     # metadata only: no message text or PII in logs
-    log.info("turn finish=%s hits=%d tool_calls=%d action=%s latency_ms=%d in=%d out=%d",
+    log.info("turn finish=%s hits=%d tool_calls=%d action=%s latency_ms=%d in=%d out=%d pii_masked=%d",
              finish, len(hits), len(calls), proposal.type if proposal else "-", latency_ms,
-             usage.input_tokens, usage.output_tokens)
+             usage.input_tokens, usage.output_tokens, sum(masked.values()))
     yield "done", {"finish_reason": finish, "mode": settings.mode, "latency_ms": latency_ms,
                    "usage": {"input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens}}
 
