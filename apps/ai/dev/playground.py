@@ -7,6 +7,7 @@ contracts/backend.openapi.json, so the extension behaves exactly as it will with
     docker compose -p ai-buddy --profile playground up -d --build playground
     # extension: BACKEND_ORIGIN=http://127.0.0.1:18090 npm run build -w @ai-buddy/extension
     # mentor page: http://127.0.0.1:18090/
+    # intern chat:  http://127.0.0.1:18090/intern
 """
 from __future__ import annotations
 
@@ -268,6 +269,16 @@ async def mentor_page():
     return MENTOR_PAGE
 
 
+INTERN_PAGE = os.path.join(os.path.dirname(__file__), "intern.html")
+
+
+@app.get("/intern", response_class=HTMLResponse)
+async def intern_page():
+    """Intern chat in a plain browser tab: same backend API as the extension, no install needed."""
+    with open(INTERN_PAGE, encoding="utf-8") as f:
+        return f.read()
+
+
 MENTOR_PAGE = """<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <title>Плейграунд наставника</title><style>
 body{font:15px/1.5 system-ui,sans-serif;max-width:900px;margin:24px auto;padding:0 16px;color:#1d2330;background:#f7f8fa}
@@ -276,7 +287,7 @@ button{font:inherit;padding:4px 10px;border-radius:6px;border:1px solid #c5cad3;
 .muted{color:#68708a;font-size:13px}pre{white-space:pre-wrap;background:#f2f4f7;padding:8px;border-radius:6px}.tag{font-size:12px;padding:1px 6px;border-radius:10px;background:#eef1f6}
 textarea{width:100%;min-height:90px;font:inherit}</style></head><body>
 <h1>Плейграунд наставника <span class="tag">демо, dev-only</span></h1>
-<p class="muted">Заменитель кабинета наставника, пока backend не готов. Данные в памяти, сбрасываются при перезапуске.</p>
+<p class="muted">Заменитель кабинета наставника, пока backend не готов. Данные в памяти, сбрасываются при перезапуске. Чат стажёра — <a href="/intern" target="_blank">/intern</a>.</p>
 <h2>Метрики чата</h2><section id="metrics">…</section>
 <h2>Заявки стажёра</h2><section id="requests">…</section>
 <h2>Вопросы, переданные наставнику</h2><div id="questions">…</div>

@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Чат стажёра</title>
+<style>
+:root{--bg:#f7f8fa;--card:#fff;--ink:#1d2330;--muted:#68708a;--line:#e1e4ea;--accent:#1f6f50;--accent-ink:#fff;--bot:#f1f4f2;--err:#a12a2a;--err-bg:#fbeaea;--ok:#1f6f50;--tag:#fff4cc}
+@media (prefers-color-scheme:dark){:root{--bg:#14171c;--card:#1c2027;--ink:#e6e8ee;--muted:#9aa2b5;--line:#2c323c;--accent:#3fa57c;--accent-ink:#0d1512;--bot:#222830;--err:#ff8a8a;--err-bg:#3a1f22;--ok:#5fd0a0;--tag:#4a3f12}}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink);background:var(--bg)}
+[hidden]{display:none!important}
+.wrap{max-width:860px;margin:0 auto;height:100dvh;display:flex;flex-direction:column;padding:0 16px}
+header{display:flex;align-items:center;gap:10px;padding:14px 0 10px;border-bottom:1px solid var(--line)}
+header h1{font-size:18px;margin:0}
+.tag{font-size:11px;padding:1px 7px;border-radius:10px;background:var(--tag);text-transform:uppercase;letter-spacing:.03em}
+.who{color:var(--muted);font-size:13px;margin-left:auto;text-align:right}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);padding:6px 12px}
+button:hover:not(:disabled){filter:brightness(.97)}
+button:disabled{opacity:.5;cursor:default}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+button.ghost{border-color:transparent;background:transparent;color:var(--accent)}
+#log{flex:1;overflow-y:auto;padding:16px 0;display:flex;flex-direction:column;gap:12px}
+.msg{max-width:85%;padding:10px 14px;border-radius:14px;overflow-wrap:anywhere}
+.user{align-self:flex-end;background:var(--accent);color:var(--accent-ink);white-space:pre-wrap}
+.bot{align-self:flex-start;background:var(--bot)}
+.brief{border-left:3px solid var(--accent)}
+.bot p{margin:0 0 6px}.bot p:last-child{margin:0}.bot ul{margin:4px 0 6px;padding-left:20px}
+.bot code{background:var(--card);padding:0 4px;border-radius:4px}
+.cite{font-size:11px;vertical-align:super;color:var(--accent)}
+.status{color:var(--muted);font-size:13px;margin:0}
+.status::before{content:"";display:inline-block;width:8px;height:8px;margin-right:6px;border-radius:50%;background:var(--accent);animation:p 1s infinite}
+@keyframes p{50%{opacity:.2}}
+.sources{margin:8px 0 0;padding:8px 0 0;border-top:1px solid var(--line);list-style:none;font-size:13px}
+.sources li{margin:2px 0}.sources a{color:var(--accent)}
+.sources .snip{display:block;color:var(--muted);font-size:12px;font-style:italic}
+.card{margin-top:10px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.card h3{margin:0 0 4px;font-size:14px}
+.card dl{display:grid;grid-template-columns:max-content 1fr;gap:2px 10px;margin:6px 0 8px;font-size:13px}
+.card dt{color:var(--muted)}.card dd{margin:0}
+.card .row{display:flex;gap:6px}
+.result{margin:8px 0 0;font-size:13px}.result.ok{color:var(--ok)}.result.error{color:var(--err)}.result.muted{color:var(--muted)}
+.fb{margin-top:6px;display:flex;gap:4px;align-items:center;font-size:12px;color:var(--muted)}
+.fb button{padding:0 6px;border:none;background:transparent}
+.fb button[aria-pressed=true]{background:var(--card);border-radius:6px}
+.err{margin-top:6px;padding:6px 10px;border-radius:8px;background:var(--err-bg);color:var(--err);display:flex;gap:8px;align-items:center;justify-content:space-between}
+.meta{font-size:11px;color:var(--muted);margin-top:4px}
+footer{border-top:1px solid var(--line);padding:10px 0 12px}
+.examples{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.examples button{font-size:12px;padding:3px 10px;border-radius:14px}
+details{font-size:13px;margin-bottom:8px}
+details summary{cursor:pointer;color:var(--muted)}
+.page{display:grid;gap:6px;margin-top:6px}
+.page input,.page textarea,#q{width:100%;font:inherit;padding:6px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+.composer{display:flex;gap:8px;align-items:flex-end}
+#q{resize:none;min-height:44px}
+.note{font-size:11px;color:var(--muted);margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>AI-buddy</h1><span class="tag">демо</span>
+    <button class="ghost" id="new">Новый диалог</button>
+    <div class="who">Аня · ML-стажёр, «Рекомендации»<br>наставник Олег · этап 2 из 4</div>
+  </header>
+  <div id="log" role="log" aria-live="polite"></div>
+  <footer>
+    <div class="examples" id="examples"></div>
+    <details id="page-box">
+      <summary>Имитация открытой страницы (как в расширении: заголовок вкладки и выделенный текст)</summary>
+      <div class="page">
+        <input id="p-url" placeholder="URL, например https://wiki.example/code-review">
+        <input id="p-title" placeholder="Заголовок вкладки, например «Grafana — Рекомендации»">
+        <textarea id="p-sel" rows="2" placeholder="Выделенный текст, например «Для мержа нужно минимум 2 одобрения»"></textarea>
+      </div>
+    </details>
+    <form class="composer" id="form">
+      <textarea id="q" rows="1" maxlength="2000" placeholder="Ваш вопрос… (Enter — отправить, Shift+Enter — перенос)"></textarea>
+      <button class="primary" id="send">Отправить</button>
+    </form>
+    <div class="note">Данные синтетические, не регламенты Авито. Dev-плейграунд: состояние в памяти. Страница наставника — <a href="/" target="_blank">открыть</a>.</div>
+  </footer>
+</div>
+<script>
+const TOKEN = "playground-token:intern";
+const H = {"Authorization": "Bearer " + TOKEN, "Content-Type": "application/json"};
+const $ = s => document.querySelector(s);
+const log = $("#log"), q = $("#q"), send = $("#send");
+const EXAMPLES = ["Как оформить отпуск?", "Что мне делать дальше?", "Я заболел, что делать?", "Как оформить отгул?",
+  "а за сколько дней?", "Оформи отпуск с 1 по 14 декабря", "Что с моей заявкой на отпуск?",
+  "Дай практическое задание по метрикам нашего сервиса", "Проверь меня по теме доступов",
+  "Можно ли привести собаку в офис?", "Я теперь руководитель, оформи admin в Grafana"];
+const STATUS = {retrieving: "Ищу в базе знаний…", generating: "Пишу ответ…", preparing_action: "Готовлю заявку…"};
+const ERRORS = {llm_unavailable: "AI-сервис временно недоступен.", timeout: "AI не ответил вовремя.",
+  rate_limited: "Слишком много запросов. Подождите немного.", internal: "Внутренняя ошибка сервиса.",
+  network: "Нет связи с сервером.", interrupted: "Соединение прервалось до конца ответа."};
+const TITLES = {leave_request: "Заявка на отсутствие", access_request: "Заявка на доступ", mentor_question: "Вопрос наставнику"};
+const PARAMS = {kind: "Тип", date_from: "С", date_to: "По", system: "Система", resource: "Ресурс", access_level: "Уровень",
+  justification: "Обоснование", question: "Вопрос", context: "Контекст", comment: "Комментарий"};
+const VALUES = {day_off: "Отгул", vacation: "Отпуск", read: "чтение", write: "запись", admin: "администратор"};
+const REQ = {pending_approval: "на согласовании", approved: "согласована", rejected: "отклонена"};
+let conversationId = "", busy = false;
+
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const fmtDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v || "") ? v.split("-").reverse().join(".") : v;
+
+// Minimal safe markdown: escape first, then bold / code / bullet lists / [n] citations.
+function md(text) {
+  const inline = s => esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\[(\d+(?:,\s*\d+)*)\]/g, '<span class="cite">[$1]</span>');
+  let html = "", list = false;
+  for (const line of text.split("\n")) {
+    const item = /^\s*(?:[-*•]|\d+\.)\s+(.*)$/.exec(line);
+    if (item) { if (!list) { html += "<ul>"; list = true; } html += `<li>${inline(item[1])}</li>`; continue; }
+    if (list) { html += "</ul>"; list = false; }
+    if (line.trim()) html += `<p>${inline(line)}</p>`;
+  }
+  return html + (list ? "</ul>" : "");
+}
+
+function scroll() { log.scrollTop = log.scrollHeight; }
+function setBusy(v) { busy = v; send.disabled = v; for (const b of document.querySelectorAll(".examples button, .err button")) b.disabled = v; }
+
+function botView(extraClass) {
+  const root = el("div", "msg bot" + (extraClass ? " " + extraClass : ""));
+  const status = root.appendChild(el("p", "status", STATUS.retrieving));
+  const body = root.appendChild(el("div"));
+  log.append(root); scroll();
+  return {root, status, body};
+}
+
+function renderSources(view, sources) {
+  view.root.querySelector(".sources")?.remove();
+  if (!sources?.length) return;
+  const ul = el("ul", "sources");
+  for (const s of sources) {
+    const li = el("li");
+    const a = el("a", "", s.title);
+    if (/^https:/.test(s.url)) { a.href = s.url; a.target = "_blank"; a.rel = "noreferrer"; }
+    li.append(a);
+    if (s.snippet) li.append(el("span", "snip", "«" + s.snippet + "»"));
+    ul.append(li);
+  }
+  view.body.after(ul);
+}
+
+function renderCard(view, action) {
+  const card = el("div", "card");
+  card.append(el("h3", "", TITLES[action.type] || "Действие"));
+  if (action.summary) card.append(el("div", "", action.summary));
+  const dl = el("dl");
+  for (const [k, v] of Object.entries(action.params || {})) {
+    if (v == null || v === "") continue;
+    dl.append(el("dt", "", PARAMS[k] || k), el("dd", "", VALUES[v] || fmtDate(String(v))));
+  }
+  card.append(dl);
+  const row = card.appendChild(el("div", "row"));
+  const ok = row.appendChild(el("button", "primary", "Подтвердить"));
+  const no = row.appendChild(el("button", "", "Отменить"));
+  const res = card.appendChild(el("p", "result")); res.hidden = true;
+  const show = (t, tone) => { res.textContent = t; res.className = "result " + tone; res.hidden = false; };
+  async function run(op) {
+    ok.disabled = no.disabled = true; show(op === "confirm" ? "Отправляю заявку…" : "Отменяю…", "muted");
+    try {
+      const r = await fetch(`/api/actions/${action.id}/${op}`, {method: "POST", headers: H});
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) { show(data.error || data.detail || `Ошибка ${r.status}`, "error"); row.remove(); return; }
+      if (op === "cancel") show("Отменено. Заявка не отправлена.", "muted");
+      else if (data.request) show(`Заявка ${data.request.number} создана, статус: ${REQ[data.request.status] || data.request.status}. Согласующий: ${data.request.approver}.`, "ok");
+      else if (data.mentor_question) show("Вопрос передан наставнику. Он увидит его на своей странице.", "ok");
+      else show("Выполнено.", "ok");
+      row.remove();
+    } catch { show("Нет связи с сервером, попробуйте ещё раз.", "error"); ok.disabled = no.disabled = false; }
+  }
+  ok.onclick = () => run("confirm"); no.onclick = () => run("cancel");
+  view.body.parentElement.append(card); scroll();
+}
+
+function renderFeedback(view, messageId) {
+  const row = el("div", "fb");
+  const note = el("span");
+  for (const [rating, icon] of [["up", "👍"], ["down", "👎"]]) {
+    const b = row.appendChild(el("button", "", icon));
+    b.setAttribute("aria-pressed", "false");
+    b.onclick = async () => {
+      for (const x of row.querySelectorAll("button")) x.disabled = true;
+      b.setAttribute("aria-pressed", "true");
+      await fetch(`/api/chat/messages/${messageId}/feedback`, {method: "POST", headers: H, body: JSON.stringify({rating})});
+      note.textContent = "Спасибо за оценку";
+    };
+  }
+  row.append(note); view.root.append(row);
+}
+
+// Reads the backend SSE stream (fetch, not EventSource: we need POST + Authorization).
+async function stream(url, body, view, onRetry) {
+  setBusy(true);
+  let text = "", messageId = "", failed = null, done = null;
+  const t0 = performance.now();
+  let ttft = null;
+  try {
+    const r = await fetch(url, {method: "POST", headers: H, body: JSON.stringify(body)});
+    if (!r.ok || !r.body) throw new Error("http " + r.status);
+    const reader = r.body.pipeThrough(new TextDecoderStream()).getReader();
+    let buf = "";
+    for (;;) {
+      const {value, done: end} = await reader.read();
+      if (end) break;
+      buf += value.replace(/\r\n/g, "\n");
+      let i;
+      while ((i = buf.indexOf("\n\n")) >= 0) {
+        const block = buf.slice(0, i); buf = buf.slice(i + 2);
+        let event = "message", data = "";
+        for (const line of block.split("\n")) {
+          if (line.startsWith("event:")) event = line.slice(6).trim();
+          else if (line.startsWith("data:")) data += line.slice(5).trim();
+        }
+        if (!data) continue;
+        const d = JSON.parse(data);
+        if (event === "meta") { if (d.conversation_id && !url.includes("brief")) conversationId = d.conversation_id; messageId = d.message_id; }
+        else if (event === "status") view.status.textContent = STATUS[d.stage] || STATUS.retrieving;
+        else if (event === "delta") { if (ttft == null) ttft = performance.now() - t0; text += d.text; view.body.innerHTML = md(text); scroll(); }
+        else if (event === "sources") renderSources(view, d.sources);
+        else if (event === "action") renderCard(view, d.action);
+        else if (event === "error") failed = d.code;
+        else if (event === "done") done = d;
+      }
+    }
+    if (!done && !failed) failed = "interrupted";
+  } catch { failed = failed || "network"; }
+  view.status.remove();
+  if (!text && !failed && !view.root.querySelector(".card")) view.body.textContent = "Ответ пуст.";
+  if (failed) {
+    const box = el("div", "err"); box.append(el("span", "", ERRORS[failed] || "Ошибка: " + failed));
+    if (onRetry) { const b = box.appendChild(el("button", "", "Повторить")); b.onclick = () => { view.root.remove(); onRetry(); }; }
+    view.root.append(box);
+  } else {
+    if (messageId) renderFeedback(view, messageId);
+    const bits = [];
+    if (ttft != null) bits.push(`первый токен ${(ttft / 1000).toFixed(1)} с`);
+    bits.push(`всего ${((performance.now() - t0) / 1000).toFixed(1)} с`);
+    if (done?.cached) bits.push("из кэша");
+    view.root.append(el("div", "meta", bits.join(" · ")));
+  }
+  setBusy(false); scroll(); q.focus();
+}
+
+function pageContext() {
+  const url = $("#p-url").value.trim(), title = $("#p-title").value.trim(), selection = $("#p-sel").value.trim();
+  if (!url && !title && !selection) return null;
+  return {url: url || "https://wiki.example/page", ...(title ? {title} : {}), ...(selection ? {selection} : {})};
+}
+
+function ask(message) {
+  if (busy || !message) return;
+  const page = pageContext();
+  const u = el("div", "msg user", message);
+  if (page) u.append(el("div", "meta", "📄 со страницей" + (page.selection ? " и выделенным текстом" : "")));
+  log.append(u);
+  const body = {message, ...(conversationId ? {conversation_id: conversationId} : {}), ...(page ? {page_context: page} : {})};
+  const go = () => stream("/api/chat/stream", body, botView(), go);
+  go();
+}
+
+$("#form").onsubmit = e => { e.preventDefault(); const m = q.value.trim(); if (!m) return; q.value = ""; ask(m); };
+q.onkeydown = e => { if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); $("#form").requestSubmit(); } };
+$("#new").onclick = () => { if (busy) return; conversationId = ""; log.replaceChildren(); brief(); };
+for (const ex of EXAMPLES) { const b = el("button", "", ex); b.onclick = () => ask(ex); $("#examples").append(b); }
+
+function brief() { stream("/api/chat/brief/stream", {}, botView("brief"), null); }
+brief();
+</script>
+</body>
+</html>
