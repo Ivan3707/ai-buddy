@@ -13,6 +13,8 @@
 }
 
 * { box-sizing: border-box; }
+/* Author display rules (.chat, .top-actions) must not override the hidden attribute. */
+[hidden] { display: none !important; }
 
 html, body { height: 100%; }
 

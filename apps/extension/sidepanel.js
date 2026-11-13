@@ -81,7 +81,11 @@ async function logout(message = '') {
 
 async function verifyStoredSession() {
   showSessionCheck();
-  const restored = await restoreSession(storage, token => getMe(backend, token));
+  // A hanging request must not leave the panel on "Проверяем сессию…" forever.
+  const withTimeout = request => Promise.race([
+    request, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
+  ]);
+  const restored = await restoreSession(storage, token => withTimeout(getMe(backend, token)));
   if (restored.status === 'authenticated') {
     accessToken = restored.token;
     showAssistant(restored.user);
@@ -532,5 +536,9 @@ chrome.tabs.onUpdated.addListener((_tabId, change) => {
 });
 globalThis.addEventListener('focus', () => { void refreshPageStatus(); });
 
-await loadPagePreference();
-await verifyStoredSession();
+try {
+  await loadPagePreference();
+  await verifyStoredSession();
+} catch (error) {
+  showSessionCheck(`Не удалось открыть панель: ${error?.message || error}. Нажмите «Проверить снова».`, true);
+}
