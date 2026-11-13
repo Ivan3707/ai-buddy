@@ -11,4 +11,6 @@ __pycache__/
 coverage/
 playwright-report/
 test-results/
-.vscode
+.vscode.coverage
+coverage.xml
+htmlcov/
