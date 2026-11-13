@@ -165,11 +165,13 @@ def retrieve(req: AgentChatRequest, retriever: Retriever, k: int, min_score: flo
 
 
 async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
-                   settings: Settings) -> AsyncIterator[Event]:
+                   settings: Settings, query: str | None = None) -> AsyncIterator[Event]:
+    """query overrides what is searched in the KB (used by the brief, whose message is an instruction)."""
     t0 = time.monotonic()
     req, masked = mask_request(req)
     yield "status", {"stage": "retrieving"}
-    hits = retrieve(req, retriever, settings.top_k, settings.min_score)
+    search_req = req if query is None else req.model_copy(update={"message": query, "history": []})
+    hits = retrieve(search_req, retriever, settings.top_k, settings.min_score)
     allowed = set(req.user_context.allowed_actions)
     turn = Turn(req, hits, build_messages(req, hits), build_tools(sorted(allowed), req.user_context.role))
 

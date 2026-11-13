@@ -1,7 +1,7 @@
 """Pydantic models mirroring contracts/ai.openapi.json (source: contracts/build_contracts.py)."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -128,6 +128,12 @@ class PageContext(BaseModel):
     url: str = Field(max_length=2000)
     title: str | None = Field(default=None, max_length=300)
     selection: str | None = Field(default=None, max_length=2000)
+
+
+class BriefRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    user_context: UserContext
+    last_seen_at: datetime | None = None
 
 
 class AgentChatRequest(BaseModel):

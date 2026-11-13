@@ -10,10 +10,11 @@ from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 
 from .agent import run_turn, sse
+from .brief import run_brief
 from .config import Settings, load_settings
 from .llm import LLM, make_llm
 from .retrieval import BM25Retriever, Retriever, build_retriever, load_kb, load_markdown_kb
-from .schemas import AgentChatRequest, ChatRequest, ChatResponse, Source
+from .schemas import AgentChatRequest, BriefRequest, ChatRequest, ChatResponse, Source
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")
 DATA = Path(os.getenv("DATA_DIR") or (Path(__file__).resolve().parents[3] / "data"))
@@ -46,6 +47,14 @@ def create_app(settings: Settings | None = None, retriever: Retriever | None = N
             return ChatResponse(answer=NO_ANSWER, sources=[])
         d = hits[0].doc
         return ChatResponse(answer=d.text, sources=[Source(id=d.id, title=d.title, url=d.url)])
+
+    @app.post("/v1/brief/stream")
+    async def brief_stream(body: BriefRequest):
+        async def frames() -> AsyncIterator[str]:
+            async for event, data in run_brief(body, retriever, llm, settings):
+                yield sse(event, data)
+        return StreamingResponse(frames(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     @app.post("/v1/chat/stream")
     async def chat_stream(body: AgentChatRequest):
