@@ -195,6 +195,7 @@ def report(outs: list[Outcome], settings: Any, retr: dict[str, Any], dataset: st
     ttft = [o.ttft for o in outs if o.ttft is not None]
     lat = [o.latency for o in outs]
     tin = sum(o.usage.get("input_tokens", 0) for o in outs)
+    tcached = sum(o.usage.get("cached_input_tokens", 0) for o in outs)
     tout = sum(o.usage.get("output_tokens", 0) for o in outs)
     lines = [
         "# Eval report", "",
@@ -212,6 +213,7 @@ def report(outs: list[Outcome], settings: Any, retr: dict[str, Any], dataset: st
         f"| time to first token p50 / p95 | {quantile(ttft, .5):.1f} s / {quantile(ttft, .95):.1f} s | p95 ≤ 3 s |",
         f"| full turn latency p50 / p95 | {quantile(lat, .5):.1f} s / {quantile(lat, .95):.1f} s | — |",
         f"| tokens in / out (total) | {tin} / {tout} | — |",
+        f"| input tokens served from prompt cache | {tcached} ({100 * tcached / max(tin, 1):.0f}%) | — |",
         "", "## By category", "", "| Category | Passed |", "|---|---|",
         *[f"| {cat} | {pct([o.passed for o in os_])} |" for cat, os_ in sorted(by_cat.items())],
         f"| **total** | **{pct([o.passed for o in outs])}** |",

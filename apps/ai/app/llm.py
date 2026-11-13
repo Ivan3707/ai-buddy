@@ -34,6 +34,7 @@ class ToolCall:
 class Usage:
     input_tokens: int = 0
     output_tokens: int = 0
+    cached_input_tokens: int = 0  # prompt prefix served from the provider's cache (cheaper, faster)
 
 
 LLMEvent = TextDelta | ToolCall | Usage
@@ -104,7 +105,8 @@ class OpenAICompatibleLLM:
                             raise LLMError("llm_unavailable", "provider error in stream")
                         if chunk.get("usage"):
                             u = chunk["usage"]
-                            yield Usage(u.get("prompt_tokens", 0), u.get("completion_tokens", 0))
+                            cached = (u.get("prompt_tokens_details") or {}).get("cached_tokens") or 0
+                            yield Usage(u.get("prompt_tokens", 0), u.get("completion_tokens", 0), cached)
                         for choice in chunk.get("choices") or []:
                             delta = choice.get("delta") or {}
                             if delta.get("content"):

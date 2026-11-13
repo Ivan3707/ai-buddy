@@ -168,7 +168,8 @@ SHARED = {
             "mode": ref("AiMode"),
             "latency_ms": {"type": "integer"},
             "usage": {"type": "object", "properties": {"input_tokens": {"type": "integer"},
-                                                         "output_tokens": {"type": "integer"}}},
+                                                         "output_tokens": {"type": "integer"},
+                                                         "cached_input_tokens": {"type": "integer"}}},
         },
     },
     "ErrorEvent": {

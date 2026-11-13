@@ -193,11 +193,12 @@ async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
         finish = "answered"  # grounded in KB or in the user's own context (possibly + escalation offer)
     latency_ms = int((time.monotonic() - t0) * 1000)
     # metadata only: no message text or PII in logs
-    log.info("turn finish=%s hits=%d tool_calls=%d action=%s latency_ms=%d in=%d out=%d pii_masked=%d",
+    log.info("turn finish=%s hits=%d tool_calls=%d action=%s latency_ms=%d in=%d cached=%d out=%d pii_masked=%d",
              finish, len(hits), len(calls), proposal.type if proposal else "-", latency_ms,
-             usage.input_tokens, usage.output_tokens, sum(masked.values()))
+             usage.input_tokens, usage.cached_input_tokens, usage.output_tokens, sum(masked.values()))
     yield "done", {"finish_reason": finish, "mode": settings.mode, "latency_ms": latency_ms,
-                   "usage": {"input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens}}
+                   "usage": {"input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens,
+                             "cached_input_tokens": usage.cached_input_tokens}}
 
 
 def sse(event: str, data: dict[str, Any]) -> str:

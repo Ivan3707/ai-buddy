@@ -43,11 +43,11 @@ def test_streams_text_tool_call_fragments_and_usage():
             {"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"name": "propose_mentor_question",
                                                                               "arguments": '{"quest'}}]}}]},
             {"choices": [{"delta": {"tool_calls": [{"index": 0, "function": {"arguments": 'ion":"Q"}'}}]}}]},
-            {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 3}},
+            {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 3, "prompt_tokens_details": {"cached_tokens": 8}}},
             "[DONE]"))
 
     events = run(handler)
-    assert events == [TextDelta("При"), TextDelta("вет"), Usage(10, 3),
+    assert events == [TextDelta("При"), TextDelta("вет"), Usage(10, 3, 8),
                       ToolCall("propose_mentor_question", '{"question":"Q"}')]
     assert seen["url"] == "https://llm.test/v1/chat/completions" and seen["auth"] == "Bearer k"
     body = seen["body"]

@@ -118,7 +118,7 @@ def test_invalid_tool_call_is_dropped_and_usage_reported(chat_body):
     events = dict(parse_sse(scripted_client(llm).post("/v1/chat/stream", json=chat_body("Как оформить отпуск?")).text))
     assert "action" not in events
     assert events["delta"]["text"].startswith("Не получилось")
-    assert events["done"]["usage"] == {"input_tokens": 120, "output_tokens": 7}
+    assert events["done"]["usage"] == {"input_tokens": 120, "output_tokens": 7, "cached_input_tokens": 0}
 
 
 def test_llm_sees_kb_in_user_turn_and_only_allowed_tools(chat_body):

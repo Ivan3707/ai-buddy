@@ -792,6 +792,9 @@
               },
               "output_tokens": {
                 "type": "integer"
+              },
+              "cached_input_tokens": {
+                "type": "integer"
               }
             }
           }
