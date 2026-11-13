@@ -18,6 +18,7 @@ from pydantic import BaseModel, ValidationError
 from .config import Settings
 from .llm import LLM, LLMError, TextDelta, ToolCall, Turn, Usage
 from . import metrics
+from .cache import AnswerCache, CachedAnswer
 from .limits import Limiter
 from .pii import mask
 from .prompts import ACCESS_LEVELS_BY_ROLE, FALLBACK_TEXT, TOOL_TO_ACTION, build_messages, build_tools
@@ -173,7 +174,7 @@ def retrieve(req: AgentChatRequest, retriever: Retriever, k: int, min_score: flo
 
 async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
                    settings: Settings, query: str | None = None,
-                   limiter: Limiter | None = None) -> AsyncIterator[Event]:
+                   limiter: Limiter | None = None, cache: AnswerCache | None = None) -> AsyncIterator[Event]:
     """query overrides what is searched in the KB (used by the brief, whose message is an instruction)."""
     t0 = time.monotonic()
     exceeded = limiter.check(req.user_context.user_id) if limiter else None
@@ -185,6 +186,17 @@ async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
     req, masked = mask_request(req)
     for kind, n in masked.items():
         metrics.PII_MASKED.labels(kind).inc(n)
+    cache_key = cache.key(req, id(retriever)) if cache and query is None and not masked else None
+    if cache_key:
+        cached = cache.get(cache_key)
+        metrics.CACHE.labels("hit" if cached else "miss").inc()
+        if cached:
+            yield "delta", {"text": cached.text}
+            yield "sources", {"sources": cached.sources}
+            yield "done", {"finish_reason": "answered", "mode": settings.mode, "cached": True,
+                           "latency_ms": int((time.monotonic() - t0) * 1000),
+                           "usage": {"input_tokens": 0, "output_tokens": 0, "cached_input_tokens": 0}}
+            return
     yield "status", {"stage": "retrieving"}
     search_req = req if query is None else req.model_copy(update={"message": query, "history": []})
     hits = retrieve(search_req, retriever, settings.top_k, settings.min_score)
@@ -239,6 +251,8 @@ async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
         finish = "answered"  # grounded in KB or in the user's own context (possibly + escalation offer)
     latency_ms = int((time.monotonic() - t0) * 1000)
     metrics.TURNS.labels(finish).inc()
+    if cache_key and finish == "answered" and not proposal:
+        cache.put(cache_key, req, CachedAnswer(text, [s.model_dump(exclude_none=True) for s in sources]))
     if limiter:
         limiter.spend(usage.input_tokens + usage.output_tokens)
     metrics.LATENCY.observe(latency_ms / 1000)

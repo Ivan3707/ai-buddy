@@ -15,6 +15,7 @@ from . import metrics
 from .agent import run_turn, sse
 from .brief import run_brief
 from .config import Settings, load_settings
+from .cache import AnswerCache
 from .limits import Limiter
 from .llm import LLM, make_llm
 from .retrieval import BM25Retriever, Retriever, build_retriever, load_kb
@@ -36,6 +37,7 @@ def create_app(settings: Settings | None = None, retriever: Retriever | None = N
     app = FastAPI(title="AI-buddy AI", version="0.2.0")
     app.state.settings, app.state.retriever, app.state.llm = settings, retriever, llm
     limiter = Limiter(settings.rate_limit_per_minute, settings.daily_token_budget)
+    cache = AnswerCache(settings.answer_cache_ttl_s) if settings.answer_cache_ttl_s > 0 else None
     app.state.kb_source = source
     app.include_router(mentor.router)
     app.include_router(gaps.router)
@@ -75,7 +77,8 @@ def create_app(settings: Settings | None = None, retriever: Retriever | None = N
     @app.post("/v1/chat/stream")
     async def chat_stream(body: AgentChatRequest):
         async def frames() -> AsyncIterator[str]:
-            async for event, data in run_turn(body, app.state.retriever, llm, settings, limiter=limiter):
+            async for event, data in run_turn(body, app.state.retriever, llm, settings, limiter=limiter,
+                                              cache=cache):
                 yield sse(event, data)
         return StreamingResponse(frames(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

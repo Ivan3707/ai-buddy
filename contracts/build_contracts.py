@@ -166,6 +166,7 @@ SHARED = {
             "finish_reason": {"type": "string", "enum": ["answered", "no_answer", "action_proposed"],
                               "description": "no_answer = KB has no grounded answer (bot offered escalation)"},
             "mode": ref("AiMode"),
+            "cached": {"type": "boolean", "description": "Served from the answer cache of frequent KB questions"},
             "latency_ms": {"type": "integer"},
             "usage": {"type": "object", "properties": {"input_tokens": {"type": "integer"},
                                                          "output_tokens": {"type": "integer"},

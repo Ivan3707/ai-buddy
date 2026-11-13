@@ -802,6 +802,10 @@
           "mode": {
             "$ref": "#/components/schemas/AiMode"
           },
+          "cached": {
+            "type": "boolean",
+            "description": "Served from the answer cache of frequent KB questions"
+          },
           "latency_ms": {
             "type": "integer"
           },
