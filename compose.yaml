@@ -25,6 +25,11 @@ services:
       KB_STALE_DAYS: ${KB_STALE_DAYS:-365}
       KB_TODAY: ${KB_TODAY:-}
       KB_LINT_MAX_LLM_CALLS: ${KB_LINT_MAX_LLM_CALLS:-15}
+      KB_SOURCE: ${KB_SOURCE:-markdown}
+      CONFLUENCE_URL: ${CONFLUENCE_URL:-}
+      CONFLUENCE_TOKEN: ${CONFLUENCE_TOKEN:-}
+      CONFLUENCE_SPACE: ${CONFLUENCE_SPACE:-}
+      KB_RELOAD_SECONDS: ${KB_RELOAD_SECONDS:-0}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')"]
       interval: 5s

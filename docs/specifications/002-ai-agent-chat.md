@@ -161,3 +161,14 @@ UI ──POST /api/actions/{id}/confirm──> Backend ──> mock-адапте
 - Отчёт кешируется в `app.state` для текущего индекса. После `POST /v1/kb/reload` индекс другой, и следующий запрос пересчитывает отчёт. Параллельные первые запросы делят одно вычисление (lock).
 - CLI: `python -m app.kb_lint [--kb-dir DIR]` печатает отчёт в Markdown, например для CI или ревью KB.
 - Результат на нашей KB (`openai/gpt-6.1-terra`, `hybrid`, `KB_TODAY=2026-11-13`): найдены 2 противоречия (`code-review` / `git-workflow` — 1 vs 2 аппрува; `first-week` / `leave` — 3 vs 2 рабочих дня) и 3 устаревших документа (`wiki-faq`, `git-workflow`, `first-week`). Ложных срабатываний на 15 проверенных парах нет.
+
+### 10.4. Источник KB и перезагрузка — `POST /v1/kb/reload` (C1, `apps/ai/app/sources.py`)
+
+- `KB_SOURCE=markdown` (по умолчанию) — `data/kb/*.md`, как раньше.
+- `KB_SOURCE=confluence` — страницы одного пространства через Confluence REST API v1 (Server / Data Center). Запрос: `GET {CONFLUENCE_URL}/rest/api/content?spaceKey=…&type=page&expand=body.storage,version&limit=50`, пагинация по `_links.next`, токен — `Authorization: Bearer {CONFLUENCE_TOKEN}` (personal access token). Для Confluence Cloud нужен Basic-auth `email:api_token`, это следующий шаг.
+- Страница в формате storage (XHTML) переводится в текст стандартным `html.parser` и режется на фрагменты по `<h2>`, как Markdown по `## `. Параметры макросов отбрасываются, CDATA из блоков кода остаётся. `id` документа — `confluence-{page id}`, `updated` — `version.when`, `url` — `_links.webui`. Ретривер, промпты и eval от источника не зависят.
+- `POST /v1/kb/reload` перечитывает источник и пересобирает индекс в фоне (`asyncio.to_thread`), затем атомарно подменяет `app.state.retriever`. Чат, черновики и lint берут ретривер из `app.state`, поэтому сразу видят новую базу. В `hybrid` модель эмбеддингов не загружается заново: пересчитываются только векторы фрагментов. Ответ: `{documents, chunks, source}`.
+- Сбой источника или пустой результат → `502 {"error": "kb_source_unavailable"}`, старый индекс остаётся. Пустое пространство или ошибка в фильтре не должны «обнулить» рабочего бота.
+- `KB_RELOAD_SECONDS > 0` включает периодическую перезагрузку (фоновая задача в lifespan). Ошибки только логируются, следующая попытка — через тот же интервал. `0` — выключено.
+- При старте сервиса источник читается один раз. Если Confluence недоступен, сервис не стартует (fail fast). Молча подставлять демо-базу вместо корпоративной нельзя.
+- Защиту `reload` обеспечивает backend: AI доступен только внутри сети, а вызывать перезагрузку должен только администратор KB.

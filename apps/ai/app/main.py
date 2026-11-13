@@ -9,12 +9,12 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 
-from . import gaps, kb_lint, mentor
+from . import gaps, kb_lint, mentor, sources
 from .agent import run_turn, sse
 from .brief import run_brief
 from .config import Settings, load_settings
 from .llm import LLM, make_llm
-from .retrieval import BM25Retriever, Retriever, build_retriever, load_kb, load_markdown_kb
+from .retrieval import BM25Retriever, Retriever, build_retriever, load_kb
 from .schemas import AgentChatRequest, BriefRequest, ChatRequest, ChatResponse, Source
 
 logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -25,15 +25,18 @@ NO_ANSWER = "В демо-базе нет ответа. Попробуйте сп
 def create_app(settings: Settings | None = None, retriever: Retriever | None = None,
                llm: LLM | None = None) -> FastAPI:
     settings = settings or load_settings()
-    retriever = retriever or build_retriever(load_markdown_kb(DATA / "kb"), settings.rag_mode, settings.embedding_model)
+    source = sources.make_source(os.environ, DATA / "kb")
+    retriever = retriever or build_retriever(source.load(), settings.rag_mode, settings.embedding_model)
     # Legacy /chat keeps the old two-document KB: current web/extension e2e tests assert on it.
     legacy = BM25Retriever(load_kb(DATA / "kb.json"))
     llm = llm or make_llm(settings)
     app = FastAPI(title="AI-buddy AI", version="0.2.0")
     app.state.settings, app.state.retriever, app.state.llm = settings, retriever, llm
+    app.state.kb_source = source
     app.include_router(mentor.router)
     app.include_router(gaps.router)
     app.include_router(kb_lint.router)
+    app.include_router(sources.router)
 
     @app.get("/health")
     def health():
@@ -56,7 +59,7 @@ def create_app(settings: Settings | None = None, retriever: Retriever | None = N
     @app.post("/v1/brief/stream")
     async def brief_stream(body: BriefRequest):
         async def frames() -> AsyncIterator[str]:
-            async for event, data in run_brief(body, retriever, llm, settings):
+            async for event, data in run_brief(body, app.state.retriever, llm, settings):
                 yield sse(event, data)
         return StreamingResponse(frames(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
@@ -64,7 +67,7 @@ def create_app(settings: Settings | None = None, retriever: Retriever | None = N
     @app.post("/v1/chat/stream")
     async def chat_stream(body: AgentChatRequest):
         async def frames() -> AsyncIterator[str]:
-            async for event, data in run_turn(body, retriever, llm, settings):
+            async for event, data in run_turn(body, app.state.retriever, llm, settings):
                 yield sse(event, data)
         return StreamingResponse(frames(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
