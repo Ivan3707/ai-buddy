@@ -7,9 +7,11 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
+from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from . import gaps, kb_lint, mentor, sources
+from . import metrics
 from .agent import run_turn, sse
 from .brief import run_brief
 from .config import Settings, load_settings
@@ -37,6 +39,10 @@ def create_app(settings: Settings | None = None, retriever: Retriever | None = N
     app.include_router(gaps.router)
     app.include_router(kb_lint.router)
     app.include_router(sources.router)
+
+    @app.get("/metrics")
+    def prometheus_metrics() -> Response:
+        return Response(generate_latest(metrics.REGISTRY), media_type=CONTENT_TYPE_LATEST)
 
     @app.get("/health")
     def health():

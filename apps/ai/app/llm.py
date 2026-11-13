@@ -18,6 +18,7 @@ import httpx
 log = logging.getLogger("ai.llm")
 
 from .config import Settings
+from .metrics import FALLBACK
 from .retrieval import Hit
 from .schemas import AgentChatRequest
 
@@ -189,6 +190,7 @@ class FallbackLLM:
             if started:
                 raise
             log.warning("primary LLM failed (%s), using fallback model=%s", e.code, self.fallback_name)
+            FALLBACK.inc()
         async for ev in self.fallback.stream(turn):
             yield ev
 

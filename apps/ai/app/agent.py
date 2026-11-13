@@ -17,6 +17,7 @@ from pydantic import BaseModel, ValidationError
 
 from .config import Settings
 from .llm import LLM, LLMError, TextDelta, ToolCall, Turn, Usage
+from . import metrics
 from .pii import mask
 from .prompts import ACCESS_LEVELS_BY_ROLE, FALLBACK_TEXT, TOOL_TO_ACTION, build_messages, build_tools
 from .retrieval import Hit, Retriever, fuse, tokenize
@@ -59,14 +60,17 @@ def to_proposal(call: ToolCall, allowed: set[str], role: str = "intern") -> Acti
     action = TOOL_TO_ACTION.get(call.name)
     if action is None or action not in allowed:
         log.warning("dropped tool call: unknown or not allowed tool=%s", call.name)
+        metrics.DROPPED_TOOL_CALLS.labels("not_allowed").inc()
         return None
     try:
         params = PARAMS[action].model_validate(json.loads(call.arguments or "{}"))
     except (ValueError, ValidationError):  # bad JSON or schema violation
         log.warning("dropped tool call: invalid arguments tool=%s", call.name)
+        metrics.DROPPED_TOOL_CALLS.labels("invalid_arguments").inc()
         return None
     if isinstance(params, AccessRequestParams) and params.access_level not in ACCESS_LEVELS_BY_ROLE.get(role, ["read"]):
         log.warning("dropped tool call: access level not allowed for role=%s", role)
+        metrics.DROPPED_TOOL_CALLS.labels("access_level_policy").inc()
         return None
     return ActionProposal(type=action, params=params.model_dump(mode="json", exclude_none=True),
                           summary=summarize(action, params))
@@ -169,6 +173,8 @@ async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
     """query overrides what is searched in the KB (used by the brief, whose message is an instruction)."""
     t0 = time.monotonic()
     req, masked = mask_request(req)
+    for kind, n in masked.items():
+        metrics.PII_MASKED.labels(kind).inc(n)
     yield "status", {"stage": "retrieving"}
     search_req = req if query is None else req.model_copy(update={"message": query, "history": []})
     hits = retrieve(search_req, retriever, settings.top_k, settings.min_score)
@@ -182,6 +188,8 @@ async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
     try:
         async for ev in llm.stream(turn):
             if isinstance(ev, TextDelta):
+                if not parts:
+                    metrics.TTFT.observe(time.monotonic() - t0)
                 parts.append(ev.text)
                 yield "delta", {"text": ev.text}
             elif isinstance(ev, ToolCall):
@@ -190,10 +198,12 @@ async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
                 usage = ev
     except LLMError as e:
         log.warning("llm error code=%s detail=%s latency_ms=%d", e.code, e, (time.monotonic() - t0) * 1000)
+        metrics.ERRORS.labels(e.code).inc()
         yield "error", {"code": e.code, "message": ERROR_MESSAGES[e.code]}
         return
     except Exception:  # never leak internals into the stream
         log.exception("agent turn failed")
+        metrics.ERRORS.labels("internal").inc()
         yield "error", {"code": "internal", "message": ERROR_MESSAGES["internal"]}
         return
 
@@ -218,6 +228,13 @@ async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
     else:
         finish = "answered"  # grounded in KB or in the user's own context (possibly + escalation offer)
     latency_ms = int((time.monotonic() - t0) * 1000)
+    metrics.TURNS.labels(finish).inc()
+    metrics.LATENCY.observe(latency_ms / 1000)
+    for kind, n in (("input", usage.input_tokens), ("output", usage.output_tokens),
+                    ("cached_input", usage.cached_input_tokens)):
+        metrics.TOKENS.labels(kind).inc(n)
+    if proposal:
+        metrics.ACTIONS.labels(proposal.type).inc()
     # metadata only: no message text or PII in logs
     log.info("turn finish=%s hits=%d tool_calls=%d action=%s latency_ms=%d in=%d cached=%d out=%d pii_masked=%d",
              finish, len(hits), len(calls), proposal.type if proposal else "-", latency_ms,
