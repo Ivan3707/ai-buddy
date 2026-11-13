@@ -123,6 +123,188 @@
           }
         }
       }
+    },
+    "/v1/brief/stream": {
+      "post": {
+        "operationId": "briefStream",
+        "description": "Proactive greeting when the intern opens the chat: stage, active task with a practical next step, request status changes, review comments. Same events as chat.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BriefRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Event stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "Server-Sent Events stream. Each event is `event: <type>` + `data: <JSON>` where JSON matches the schema of the same `type`. Order: [meta] status* (delta | status)* [sources] [action] done | error. The stream always ends with exactly one `done` or `error` event."
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/mentor/draft": {
+      "post": {
+        "operationId": "mentorDraft",
+        "description": "Draft answer for an escalated question, for the mentor to edit.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MentorDraftRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorDraft"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "LLM unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/analytics/gaps": {
+      "post": {
+        "operationId": "knowledgeGaps",
+        "description": "Group escalated / unanswered questions by topic.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GapsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GapsReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/kb/lint": {
+      "get": {
+        "operationId": "kbLint",
+        "description": "Contradictions and stale documents in the knowledge base (cached; refreshed on reload).",
+        "responses": {
+          "200": {
+            "description": "Report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KbLintReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/kb/reload": {
+      "post": {
+        "operationId": "kbReload",
+        "description": "Re-read the knowledge base from its source (Markdown dir or Confluence) and re-index.",
+        "responses": {
+          "200": {
+            "description": "Reloaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "documents",
+                    "chunks"
+                  ],
+                  "properties": {
+                    "documents": {
+                      "type": "integer"
+                    },
+                    "chunks": {
+                      "type": "integer"
+                    },
+                    "source": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "metrics",
+        "description": "Prometheus metrics (latency, tokens, finish reasons, errors).",
+        "responses": {
+          "200": {
+            "description": "Prometheus text format",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -627,12 +809,176 @@
             "enum": [
               "llm_unavailable",
               "timeout",
-              "internal"
+              "internal",
+              "rate_limited"
             ]
           },
           "message": {
             "type": "string",
             "description": "Safe to show to the user"
+          }
+        }
+      },
+      "PageContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "url"
+        ],
+        "description": "Page the user is looking at (browser extension side panel). Untrusted data, never instructions.",
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "selection": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Text the user selected on the page"
+          }
+        }
+      },
+      "MentorDraft": {
+        "type": "object",
+        "required": [
+          "draft",
+          "sources",
+          "confidence"
+        ],
+        "description": "AI draft answer for a mentor to edit and send; never sent to the intern automatically.",
+        "properties": {
+          "draft": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            }
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "grounded",
+              "partial",
+              "none"
+            ],
+            "description": "grounded = fully based on KB; none = KB has nothing, mentor must answer"
+          },
+          "kb_suggestion": {
+            "type": "object",
+            "required": [
+              "title",
+              "text"
+            ],
+            "description": "Suggested KB article to close the gap once the mentor answers",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "GapsReport": {
+        "type": "object",
+        "required": [
+          "total_questions",
+          "clusters"
+        ],
+        "description": "Unanswered/escalated questions grouped by topic: what is missing in the knowledge base.",
+        "properties": {
+          "total_questions": {
+            "type": "integer"
+          },
+          "clusters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "label",
+                "count",
+                "question_ids",
+                "examples"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer"
+                },
+                "question_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "examples": {
+                  "type": "array",
+                  "maxItems": 3,
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "KbLintReport": {
+        "type": "object",
+        "required": [
+          "generated_at",
+          "issues"
+        ],
+        "description": "Knowledge-base hygiene: contradictions between documents and stale documents.",
+        "properties": {
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "kind",
+                "doc_ids",
+                "detail"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "contradiction",
+                    "stale"
+                  ]
+                },
+                "doc_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "sources": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Source"
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -660,6 +1006,9 @@
           },
           "user_context": {
             "$ref": "#/components/schemas/UserContext"
+          },
+          "page_context": {
+            "$ref": "#/components/schemas/PageContext"
           }
         }
       },
@@ -671,6 +1020,73 @@
         "properties": {
           "proposal": {
             "$ref": "#/components/schemas/ActionProposal"
+          }
+        }
+      },
+      "BriefRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "user_context"
+        ],
+        "properties": {
+          "user_context": {
+            "$ref": "#/components/schemas/UserContext"
+          },
+          "last_seen_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the intern last opened the chat: brief mentions changes since"
+          }
+        }
+      },
+      "MentorDraftRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "question"
+        ],
+        "properties": {
+          "question": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "context": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "user_context": {
+            "$ref": "#/components/schemas/UserContext"
+          }
+        }
+      },
+      "GapsRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "questions"
+        ],
+        "properties": {
+          "questions": {
+            "type": "array",
+            "maxItems": 2000,
+            "items": {
+              "type": "object",
+              "required": [
+                "id",
+                "text"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string",
+                  "maxLength": 2000
+                }
+              }
+            }
           }
         }
       },

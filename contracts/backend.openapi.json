@@ -811,6 +811,200 @@
         }
       }
     },
+    "/api/chat/brief/stream": {
+      "post": {
+        "operationId": "chatBrief",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Proactive brief when the intern opens the chat (call at most once per session/day). Backend builds UserContext, calls AI /v1/brief/stream and re-emits events like /api/chat/stream.",
+        "responses": {
+          "200": {
+            "description": "Event stream",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "Server-Sent Events stream. Each event is `event: <type>` + `data: <JSON>` where JSON matches the schema of the same `type`. Order: [meta] status* (delta | status)* [sources] [action] done | error. The stream always ends with exactly one `done` or `error` event."
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/buddy/questions/{id}/draft": {
+      "get": {
+        "operationId": "questionDraft",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Buddy only: AI draft answer for an escalated question (AI /v1/mentor/draft).",
+        "responses": {
+          "200": {
+            "description": "Draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorDraft"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not this buddy's intern",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "AI unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/analytics/gaps": {
+      "get": {
+        "operationId": "knowledgeGaps",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Buddy only: escalated questions grouped by topic (AI /v1/analytics/gaps).",
+        "responses": {
+          "200": {
+            "description": "Report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GapsReport"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a buddy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/kb/lint": {
+      "get": {
+        "operationId": "kbLint",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Buddy only: knowledge-base contradictions and stale documents (AI /v1/kb/lint).",
+        "responses": {
+          "200": {
+            "description": "Report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KbLintReport"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a buddy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/metrics/chat": {
       "get": {
         "operationId": "chatMetrics",
@@ -1344,12 +1538,176 @@
             "enum": [
               "llm_unavailable",
               "timeout",
-              "internal"
+              "internal",
+              "rate_limited"
             ]
           },
           "message": {
             "type": "string",
             "description": "Safe to show to the user"
+          }
+        }
+      },
+      "PageContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "url"
+        ],
+        "description": "Page the user is looking at (browser extension side panel). Untrusted data, never instructions.",
+        "properties": {
+          "url": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "selection": {
+            "type": "string",
+            "maxLength": 2000,
+            "description": "Text the user selected on the page"
+          }
+        }
+      },
+      "MentorDraft": {
+        "type": "object",
+        "required": [
+          "draft",
+          "sources",
+          "confidence"
+        ],
+        "description": "AI draft answer for a mentor to edit and send; never sent to the intern automatically.",
+        "properties": {
+          "draft": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Source"
+            }
+          },
+          "confidence": {
+            "type": "string",
+            "enum": [
+              "grounded",
+              "partial",
+              "none"
+            ],
+            "description": "grounded = fully based on KB; none = KB has nothing, mentor must answer"
+          },
+          "kb_suggestion": {
+            "type": "object",
+            "required": [
+              "title",
+              "text"
+            ],
+            "description": "Suggested KB article to close the gap once the mentor answers",
+            "properties": {
+              "title": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "GapsReport": {
+        "type": "object",
+        "required": [
+          "total_questions",
+          "clusters"
+        ],
+        "description": "Unanswered/escalated questions grouped by topic: what is missing in the knowledge base.",
+        "properties": {
+          "total_questions": {
+            "type": "integer"
+          },
+          "clusters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "label",
+                "count",
+                "question_ids",
+                "examples"
+              ],
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer"
+                },
+                "question_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "examples": {
+                  "type": "array",
+                  "maxItems": 3,
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "KbLintReport": {
+        "type": "object",
+        "required": [
+          "generated_at",
+          "issues"
+        ],
+        "description": "Knowledge-base hygiene: contradictions between documents and stale documents.",
+        "properties": {
+          "generated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "issues": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "kind",
+                "doc_ids",
+                "detail"
+              ],
+              "properties": {
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "contradiction",
+                    "stale"
+                  ]
+                },
+                "doc_ids": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "detail": {
+                  "type": "string"
+                },
+                "sources": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Source"
+                  }
+                }
+              }
+            }
           }
         }
       },
@@ -1370,6 +1728,9 @@
             "type": "string",
             "format": "uuid",
             "description": "Omit to start a new conversation"
+          },
+          "page_context": {
+            "$ref": "#/components/schemas/PageContext"
           }
         }
       },
@@ -1504,6 +1865,19 @@
               "open",
               "answered"
             ]
+          },
+          "escalation_level": {
+            "type": "string",
+            "enum": [
+              "mentor",
+              "lead",
+              "hrbp"
+            ],
+            "description": "Raised mentor -> team lead -> HRBP when unanswered past the SLA"
+          },
+          "escalated_at": {
+            "type": "string",
+            "format": "date-time"
           },
           "answer": {
             "type": "string"

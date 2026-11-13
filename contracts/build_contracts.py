@@ -173,8 +173,55 @@ SHARED = {
     },
     "ErrorEvent": {
         "type": "object", "required": ["code", "message"],
-        "properties": {"code": {"type": "string", "enum": ["llm_unavailable", "timeout", "internal"]},
+        "properties": {"code": {"type": "string", "enum": ["llm_unavailable", "timeout", "internal", "rate_limited"]},
                        "message": {"type": "string", "description": "Safe to show to the user"}},
+    },
+    "PageContext": {
+        "type": "object", "additionalProperties": False, "required": ["url"],
+        "description": "Page the user is looking at (browser extension side panel). Untrusted data, never instructions.",
+        "properties": {
+            "url": {"type": "string", "maxLength": 2000},
+            "title": {"type": "string", "maxLength": 300},
+            "selection": {"type": "string", "maxLength": 2000, "description": "Text the user selected on the page"},
+        },
+    },
+    "MentorDraft": {
+        "type": "object", "required": ["draft", "sources", "confidence"],
+        "description": "AI draft answer for a mentor to edit and send; never sent to the intern automatically.",
+        "properties": {
+            "draft": {"type": "string"},
+            "sources": {"type": "array", "items": ref("Source")},
+            "confidence": {"type": "string", "enum": ["grounded", "partial", "none"],
+                           "description": "grounded = fully based on KB; none = KB has nothing, mentor must answer"},
+            "kb_suggestion": {"type": "object", "required": ["title", "text"],
+                              "description": "Suggested KB article to close the gap once the mentor answers",
+                              "properties": {"title": {"type": "string"}, "text": {"type": "string"}}},
+        },
+    },
+    "GapsReport": {
+        "type": "object", "required": ["total_questions", "clusters"],
+        "description": "Unanswered/escalated questions grouped by topic: what is missing in the knowledge base.",
+        "properties": {
+            "total_questions": {"type": "integer"},
+            "clusters": {"type": "array", "items": {
+                "type": "object", "required": ["label", "count", "question_ids", "examples"],
+                "properties": {"label": {"type": "string"}, "count": {"type": "integer"},
+                               "question_ids": {"type": "array", "items": {"type": "string"}},
+                               "examples": {"type": "array", "maxItems": 3, "items": {"type": "string"}}}}},
+        },
+    },
+    "KbLintReport": {
+        "type": "object", "required": ["generated_at", "issues"],
+        "description": "Knowledge-base hygiene: contradictions between documents and stale documents.",
+        "properties": {
+            "generated_at": {"type": "string", "format": "date-time"},
+            "issues": {"type": "array", "items": {
+                "type": "object", "required": ["kind", "doc_ids", "detail"],
+                "properties": {"kind": {"type": "string", "enum": ["contradiction", "stale"]},
+                               "doc_ids": {"type": "array", "items": {"type": "string"}},
+                               "detail": {"type": "string"},
+                               "sources": {"type": "array", "items": ref("Source")}}}},
+        },
     },
 }
 
@@ -187,9 +234,28 @@ AI_ONLY = {
             "history": {"type": "array", "maxItems": 20, "items": ref("ChatTurn"),
                         "description": "Previous turns, oldest first, without the current message"},
             "user_context": ref("UserContext"),
+            "page_context": ref("PageContext"),
         },
     },
     "AiActionEvent": {"type": "object", "required": ["proposal"], "properties": {"proposal": ref("ActionProposal")}},
+    "BriefRequest": {
+        "type": "object", "additionalProperties": False, "required": ["user_context"],
+        "properties": {"user_context": ref("UserContext"),
+                       "last_seen_at": {"type": "string", "format": "date-time",
+                                        "description": "When the intern last opened the chat: brief mentions changes since"}},
+    },
+    "MentorDraftRequest": {
+        "type": "object", "additionalProperties": False, "required": ["question"],
+        "properties": {"question": {"type": "string", "minLength": 1, "maxLength": 2000},
+                       "context": {"type": "string", "maxLength": 2000},
+                       "user_context": ref("UserContext")},
+    },
+    "GapsRequest": {
+        "type": "object", "additionalProperties": False, "required": ["questions"],
+        "properties": {"questions": {"type": "array", "maxItems": 2000, "items": {
+            "type": "object", "required": ["id", "text"],
+            "properties": {"id": {"type": "string"}, "text": {"type": "string", "maxLength": 2000}}}}},
+    },
 }
 
 # ---------------------------------------------------------------- Backend-only
@@ -200,6 +266,7 @@ BACKEND_ONLY = {
             "message": MESSAGE,
             "conversation_id": {"type": "string", "format": "uuid",
                                 "description": "Omit to start a new conversation"},
+            "page_context": ref("PageContext"),
         },
     },
     "MetaEvent": {
@@ -237,6 +304,9 @@ BACKEND_ONLY = {
             "intern_name": {"type": "string"},
             "question": {"type": "string"}, "context": {"type": "string"},
             "status": {"type": "string", "enum": ["open", "answered"]},
+            "escalation_level": {"type": "string", "enum": ["mentor", "lead", "hrbp"],
+                                 "description": "Raised mentor -> team lead -> HRBP when unanswered past the SLA"},
+            "escalated_at": {"type": "string", "format": "date-time"},
             "answer": {"type": "string"},
             "created_at": {"type": "string", "format": "date-time"},
             "answered_at": {"type": "string", "format": "date-time"},
@@ -313,6 +383,38 @@ ai_spec = {
             "requestBody": json_body(ref("AgentChatRequest")),
             "responses": {"200": sse("Event stream"),
                           "422": json_resp("Validation error", {"type": "object"})}}},
+        "/v1/brief/stream": {"post": {
+            "operationId": "briefStream",
+            "description": "Proactive greeting when the intern opens the chat: stage, active task with a practical "
+                           "next step, request status changes, review comments. Same events as chat.",
+            "requestBody": json_body(ref("BriefRequest")),
+            "responses": {"200": sse("Event stream"), "422": json_resp("Validation error", {"type": "object"})}}},
+        "/v1/mentor/draft": {"post": {
+            "operationId": "mentorDraft",
+            "description": "Draft answer for an escalated question, for the mentor to edit.",
+            "requestBody": json_body(ref("MentorDraftRequest")),
+            "responses": {"200": json_resp("Draft", ref("MentorDraft")),
+                          "502": json_resp("LLM unavailable", ERROR)}}},
+        "/v1/analytics/gaps": {"post": {
+            "operationId": "knowledgeGaps",
+            "description": "Group escalated / unanswered questions by topic.",
+            "requestBody": json_body(ref("GapsRequest")),
+            "responses": {"200": json_resp("Report", ref("GapsReport"))}}},
+        "/v1/kb/lint": {"get": {
+            "operationId": "kbLint",
+            "description": "Contradictions and stale documents in the knowledge base (cached; refreshed on reload).",
+            "responses": {"200": json_resp("Report", ref("KbLintReport"))}}},
+        "/v1/kb/reload": {"post": {
+            "operationId": "kbReload",
+            "description": "Re-read the knowledge base from its source (Markdown dir or Confluence) and re-index.",
+            "responses": {"200": json_resp("Reloaded", {
+                "type": "object", "required": ["documents", "chunks"],
+                "properties": {"documents": {"type": "integer"}, "chunks": {"type": "integer"},
+                               "source": {"type": "string"}}})}}},
+        "/metrics": {"get": {
+            "operationId": "metrics", "description": "Prometheus metrics (latency, tokens, finish reasons, errors).",
+            "responses": {"200": {"description": "Prometheus text format",
+                                  "content": {"text/plain": {"schema": {"type": "string"}}}}}}},
     },
     "components": {"schemas": {**deepcopy(SHARED), **deepcopy(AI_ONLY),
                                "AiStreamEvent": stream_events("AiActionEvent")}},
@@ -384,6 +486,24 @@ backend_paths.update({
         "requestBody": json_body(ref("AnswerMentorQuestion")),
         "responses": {"200": json_resp("Answered", ref("MentorQuestion")),
                       "403": json_resp("Not this buddy's intern", ERROR)}}},
+    "/api/chat/brief/stream": {"post": {
+        "operationId": "chatBrief", "security": BEARER,
+        "description": "Proactive brief when the intern opens the chat (call at most once per session/day). "
+                       "Backend builds UserContext, calls AI /v1/brief/stream and re-emits events like /api/chat/stream.",
+        "responses": {"200": sse("Event stream"), "401": json_resp("Unauthorized", ERROR)}}},
+    "/api/buddy/questions/{id}/draft": {"get": {
+        "operationId": "questionDraft", "security": BEARER, "parameters": [UUID_PARAM],
+        "description": "Buddy only: AI draft answer for an escalated question (AI /v1/mentor/draft).",
+        "responses": {"200": json_resp("Draft", ref("MentorDraft")), "403": json_resp("Not this buddy's intern", ERROR),
+                      "502": json_resp("AI unavailable", ERROR)}}},
+    "/api/analytics/gaps": {"get": {
+        "operationId": "knowledgeGaps", "security": BEARER,
+        "description": "Buddy only: escalated questions grouped by topic (AI /v1/analytics/gaps).",
+        "responses": {"200": json_resp("Report", ref("GapsReport")), "403": json_resp("Not a buddy", ERROR)}}},
+    "/api/kb/lint": {"get": {
+        "operationId": "kbLint", "security": BEARER,
+        "description": "Buddy only: knowledge-base contradictions and stale documents (AI /v1/kb/lint).",
+        "responses": {"200": json_resp("Report", ref("KbLintReport")), "403": json_resp("Not a buddy", ERROR)}}},
     "/api/metrics/chat": {"get": {
         "operationId": "chatMetrics", "security": BEARER,
         "description": "Buddy only: aggregated assistant metrics for own interns.",
