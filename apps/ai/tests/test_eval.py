@@ -73,3 +73,21 @@ def test_llm_judge_parses_verdict_and_sends_cited_docs():
     import pytest
     with pytest.raises(ValueError):
         asyncio.run(judge_faithfulness(FakeLLM("no json"), req, "x", [], kb))
+
+
+def test_feedback_becomes_eval_candidates(tmp_path):
+    import json as _json
+    from eval.from_feedback import candidates, known_questions, main
+    rows = [
+        {"question": "Как оформить отгул?", "answer": "a", "rating": "down"},          # already in dataset
+        {"question": "Где взять пропуск на парковку?", "answer": "b", "rating": "down", "sources": []},
+        {"question": "где взять пропуск на парковку", "answer": "b2", "rating": "down"},  # duplicate
+        {"question": "Во сколько обед?", "answer": "c", "rating": "up"},                # positive
+    ]
+    got = candidates(rows, known_questions())
+    assert [c["question"] for c in got] == ["Где взять пропуск на парковку?"]
+    assert got[0]["behavior"] == "TODO" and got[0]["_review"]["answer"] == "b"
+    src, out = tmp_path / "fb.jsonl", tmp_path / "cand.jsonl"
+    src.write_text("\n".join(_json.dumps(r, ensure_ascii=False) for r in rows), encoding="utf-8")
+    assert main([str(src), "--out", str(out)]) == 0
+    assert len(out.read_text(encoding="utf-8").splitlines()) == 1
