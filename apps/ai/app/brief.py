@@ -38,7 +38,7 @@ def active_tasks(ctx: UserContext) -> list:
 
 def brief_query(ctx: UserContext) -> str:
     """Retrieval query: what the KB should say something practical about."""
-    parts = [t.title for t in active_tasks(ctx)[:3]]
+    parts = [t.title for t in ctx.tasks if t.status in ACTIVE][:2]  # finished tasks with comments only dilute it
     if ctx.current_stage:
         parts.append(ctx.current_stage.title)
     return " ".join(parts) or "план стажировки что делать дальше"
