@@ -19,7 +19,7 @@ from .config import Settings
 from .llm import LLM, LLMError, TextDelta, ToolCall, Turn, Usage
 from .pii import mask
 from .prompts import ACCESS_LEVELS_BY_ROLE, FALLBACK_TEXT, TOOL_TO_ACTION, build_messages, build_tools
-from .retrieval import Hit, Retriever, fuse
+from .retrieval import Hit, Retriever, fuse, tokenize
 from .schemas import (AccessRequestParams, ActionProposal, AgentChatRequest, LeaveRequestParams,
                       MentorQuestionParams, Source)
 
@@ -88,8 +88,27 @@ def cited_sources(text: str, hits: list[Hit]) -> list[Source]:
     for n in seen:
         doc = hits[n - 1].doc
         if all(s.id != doc.id for s in sources):  # several chunks of one document -> one source
-            sources.append(Source(id=doc.id, title=doc.title, url=doc.url, snippet=doc.text[:200]))
+            sources.append(Source(id=doc.id, title=doc.title, url=doc.url, snippet=best_quote(doc.text, text, n)))
     return sources
+
+
+SENTENCE_END = re.compile(r"(?<=[.!?…])\s+")
+
+
+def best_quote(chunk: str, answer: str, n: int, limit: int = 300) -> str:
+    """The sentence of the chunk that the answer relies on, for "show the quote" in the UI.
+
+    Compare the answer sentences that cite [n] with each chunk sentence by shared stems; the best
+    match wins. Falls back to the chunk start when nothing overlaps.
+    """
+    cites_n = re.compile(rf"\[(?:[^\]]*,\s*)?{n}\s*(?:,[^\]]*)?\]")  # [n], [1, n], [n, note]; not [1n]
+    claims = [s for s in SENTENCE_END.split(answer) if cites_n.search(s)] or [answer]
+    claim_terms = set(tokenize(" ".join(claims)))
+    sentences = [s.strip() for s in SENTENCE_END.split(chunk) if s.strip()]
+    best = max(sentences, key=lambda s: len(claim_terms & set(tokenize(s))), default="")
+    if not best or not claim_terms & set(tokenize(best)):
+        best = chunk
+    return best if len(best) <= limit else best[: limit - 1] + "…"
 
 
 def mask_request(req: AgentChatRequest) -> tuple[AgentChatRequest, Counter[str]]:

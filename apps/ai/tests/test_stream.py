@@ -196,3 +196,12 @@ def test_markdown_kb_is_chunked_by_section(tmp_path):
     assert render_kb([Hit(Doc("x", "X", "u", "t"), 1.0)]) == "<kb>\n[1] «X» (демо)\nt\n</kb>"
 
 
+
+
+def test_best_quote_picks_the_sentence_behind_the_claim():
+    from app.agent import best_quote
+    chunk = "Отгул подают за 2 рабочих дня. Согласует руководитель команды. Замена не нужна."
+    assert best_quote(chunk, "Согласует отгул руководитель [1]. Про сроки см. [12].", 1) == "Согласует руководитель команды."
+    assert best_quote(chunk, "Подавай за два рабочих дня [2, обновлено 01.09.2026].", 2) == "Отгул подают за 2 рабочих дня."
+    assert best_quote(chunk, "ничего общего [1]", 1) == chunk
+    assert best_quote("а" * 400, "а [1]", 1).endswith("…")
