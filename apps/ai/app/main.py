@@ -1,43 +1,57 @@
-"""Deterministic retrieval placeholder; no external LLM or real integrations."""
-import json
+"""AI service: internal to the Docker network, called only by Backend."""
+from __future__ import annotations
+
+import logging
 import os
+from collections.abc import AsyncIterator
 from pathlib import Path
+
 from fastapi import FastAPI
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from fastapi.responses import StreamingResponse
 
-app = FastAPI(title="AI-buddy AI", version="0.1.0")
+from .agent import run_turn, sse
+from .config import Settings, load_settings
+from .llm import LLM, make_llm
+from .retrieval import BM25Retriever, load_kb
+from .schemas import AgentChatRequest, ChatRequest, ChatResponse, Source
+
+logging.basicConfig(level=os.getenv("LOG_LEVEL", "INFO"), format="%(asctime)s %(levelname)s %(name)s %(message)s")
 DATA = Path(os.getenv("DATA_DIR") or (Path(__file__).resolve().parents[3] / "data"))
-KB = json.loads((DATA / "kb.json").read_text(encoding="utf-8"))
+NO_ANSWER = "В демо-базе нет ответа. Попробуйте спросить про отпуск или доступ к сервисам."
 
-class ChatRequest(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    message: str = Field(min_length=1, max_length=2000)
 
-    @field_validator("message")
-    @classmethod
-    def nonblank(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("message must not be blank")
-        return value
+def create_app(settings: Settings | None = None, retriever: BM25Retriever | None = None,
+               llm: LLM | None = None) -> FastAPI:
+    settings = settings or load_settings()
+    retriever = retriever or BM25Retriever(load_kb(DATA / "kb.json"))
+    llm = llm or make_llm(settings)
+    app = FastAPI(title="AI-buddy AI", version="0.2.0")
 
-class Source(BaseModel):
-    id: str
-    title: str
-    url: str
+    @app.get("/health")
+    def health():
+        body = {"status": "ok", "mode": settings.mode}
+        if settings.mode == "llm":
+            body["model"] = settings.model
+        return body
 
-class ChatResponse(BaseModel):
-    answer: str
-    sources: list[Source]
-    mode: str = "mock"
+    @app.post("/chat", response_model=ChatResponse, deprecated=True)
+    def chat(body: ChatRequest):
+        """Legacy non-streaming endpoint: retrieval only, no LLM. Kept until clients move to /v1/chat/stream."""
+        hits = retriever.search(body.message, 1, settings.min_score)
+        if not hits:
+            return ChatResponse(answer=NO_ANSWER, sources=[])
+        d = hits[0].doc
+        return ChatResponse(answer=d.text, sources=[Source(id=d.id, title=d.title, url=d.url)])
 
-@app.get("/health")
-def health():
-    return {"status": "ok", "mode": "mock"}
+    @app.post("/v1/chat/stream")
+    async def chat_stream(body: AgentChatRequest):
+        async def frames() -> AsyncIterator[str]:
+            async for event, data in run_turn(body, retriever, llm, settings):
+                yield sse(event, data)
+        return StreamingResponse(frames(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
-@app.post("/chat", response_model=ChatResponse)
-def chat(body: ChatRequest):
-    query = body.message.casefold()
-    doc = next((item for item in KB if any(word in query for word in item["keywords"])), None)
-    if doc is None:
-        return ChatResponse(answer="В демо-базе нет ответа. Попробуйте спросить про отпуск или доступ к сервисам.", sources=[])
-    return ChatResponse(answer=doc["text"], sources=[Source(**{k: doc[k] for k in ("id", "title", "url")})])
+    return app
+
+
+app = create_app()

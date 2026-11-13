@@ -1,6 +1,6 @@
 # SDD-002: AI-buddy — агентный чат со стримингом, действиями и эскалацией
 
-Статус: черновик контракта согласован внутри команды, реализация в процессе. Владельцы: ML — Максим, Backend — Ваня, Web/Extension — Маша.
+Статус: контракт согласован. AI-часть `POST /v1/chat/stream` реализована (`mock` и `openai_compatible`, ретривер BM25 — baseline). Backend и клиенты — в процессе. Владельцы: ML — Максим, Backend — Ваня, Web/Extension — Маша.
 
 Нормативные схемы — `contracts/ai.openapi.json` и `contracts/backend.openapi.json`. Они генерируются скриптом `python contracts/build_contracts.py`. JSON руками не правим: правим скрипт.
 
@@ -80,7 +80,10 @@ UI ──POST /api/actions/{id}/confirm──> Backend ──> mock-адапте
 | `LLM_PROVIDER` | `mock` или `openai_compatible` |
 | `LLM_BASE_URL` | адрес API провайдера |
 | `LLM_API_KEY` | ключ |
-| `LLM_MODEL` | модель |
+| `LLM_MODEL` | модель (проверена `openai/gpt-6.1-terra` через OpenRouter) |
+| `LLM_TEMPERATURE` | опционально; пусто — значение провайдера (часть reasoning-моделей не принимает temperature) |
+| `LLM_TIMEOUT_SECONDS` / `LLM_FIRST_BYTE_TIMEOUT_SECONDS` | общий тайм-аут (60 с) / максимальная пауза в стриме (15 с) |
+| `RAG_TOP_K` / `RAG_MIN_SCORE` | число фрагментов для модели / порог релевантности BM25 |
 
 ## 7. Метрики
 
