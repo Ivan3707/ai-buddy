@@ -226,14 +226,14 @@ def build_retriever(docs: list[Doc], mode: str, embedding_model: str) -> Retriev
     return HybridRetriever(lexical, DenseRetriever(docs, FastEmbedder(embedding_model), *prefixes))
 
 
-def fuse(rankings: list[list[Hit]], k: int, rrf_k: int = 60) -> list[Hit]:
-    """Reciprocal Rank Fusion of several rankings of the same chunks; keeps the best lexical score."""
+def fuse(rankings: list[list[Hit]], k: int, rrf_k: int = 60, weights: list[float] | None = None) -> list[Hit]:
+    """Weighted Reciprocal Rank Fusion of several rankings of the same chunks; keeps the best lexical score."""
     fused: dict[int, float] = {}
     best: dict[int, Hit] = {}
-    for ranking in rankings:
+    for ranking, weight in zip(rankings, weights or [1.0] * len(rankings)):
         for rank, h in enumerate(ranking, 1):
             key = id(h.doc)
-            fused[key] = fused.get(key, 0.0) + 1.0 / (rrf_k + rank)
+            fused[key] = fused.get(key, 0.0) + weight / (rrf_k + rank)
             if key not in best or h.lexical > best[key].lexical:
                 best[key] = h
     hits = [Hit(best[key].doc, score, best[key].lexical) for key, score in fused.items()]

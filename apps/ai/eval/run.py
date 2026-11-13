@@ -48,7 +48,7 @@ def base_context(**overrides: Any) -> dict[str, Any]:
 
 def request_for(case: dict[str, Any]) -> AgentChatRequest:
     return AgentChatRequest(message=case["question"], history=case.get("history", []),
-                            user_context=base_context(**case.get("ctx", {})))
+                            user_context=base_context(**case.get("ctx", {})), page_context=case.get("page_context"))
 
 
 def retriever() -> Retriever:

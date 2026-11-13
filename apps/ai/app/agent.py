@@ -123,7 +123,19 @@ def mask_request(req: AgentChatRequest) -> tuple[AgentChatRequest, Counter[str]]
             total += found
             turn = turn.model_copy(update={"content": content})
         history.append(turn)
-    return req.model_copy(update={"message": message, "history": history}), total
+    page = req.page_context
+    if page and page.selection:
+        selection, found = mask(page.selection)
+        total += found
+        page = page.model_copy(update={"selection": selection})
+    return req.model_copy(update={"message": message, "history": history, "page_context": page}), total
+
+
+CANDIDATES = 20  # depth of each partial ranking before fusion
+# Questions that point at the open page ("что тут смотреть?", "это ещё актуально?", "как здесь
+# написано") make the page the topic. Without such words the page is only weak context, so
+# topic switches ("Как оформить отпуск?" while a Grafana tab is open) still find their documents.
+DEICTIC = re.compile(r"\b(тут|здесь|это|этом|этой|эту|этот|эти|этого|страниц\w*|выделен\w*|написан\w*)\b")
 
 
 def retrieve(req: AgentChatRequest, retriever: Retriever, k: int, min_score: float,
@@ -132,12 +144,24 @@ def retrieve(req: AgentChatRequest, retriever: Retriever, k: int, min_score: flo
     alone and the message together with the previous user turn - and fuse both rankings (RRF).
     The message-alone ranking keeps topic switches working ("Во сколько стендап?" after a VPN question).
     """
-    hits = retriever.search(req.message, k, min_score)
+    depth = max(k, CANDIDATES)  # each ranking contributes a deeper pool; the fused list is cut to k
+    alone = retriever.search(req.message, depth, min_score)
+    rankings: list[list[Hit]] = []
     previous = next((t.content for t in reversed(req.history) if t.role == "user"), "")
-    if not use_history or not previous:
-        return hits
-    with_context = retriever.search(f"{previous} {req.message}", k, min_score)
-    return fuse([hits, with_context], k)
+    if use_history and previous:
+        rankings.append(retriever.search(f"{previous} {req.message}", depth, min_score))
+    page = req.page_context
+    if page and (page.title or page.selection):
+        # "что тут смотреть?" on a Grafana dashboard: the page title / selection carries the topic
+        about = " ".join(x for x in (page.title, (page.selection or "")[:300]) if x)
+        rankings.append(retriever.search(f"{about} {req.message}", depth, min_score))
+        if DEICTIC.search(req.message.casefold()):
+            # the question is ABOUT the page: the page is the topic, the bare message is noise
+            rankings.append(retriever.search(about, depth, min_score))
+            alone = []
+    if alone:
+        rankings.insert(0, alone)
+    return rankings[0][:k] if len(rankings) == 1 else fuse(rankings, k)
 
 
 async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,

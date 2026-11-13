@@ -96,3 +96,34 @@ def test_follow_up_uses_previous_user_turn_and_topic_switch_still_works():
     assert retrieve(switch, r, 1, 0.1)[0].doc.id == "standup"
     alone = AgentChatRequest(message="стендап", user_context=user_context())
     assert retrieve(alone, r, 1, 0.1)[0].doc.id == "standup"
+
+
+def test_page_context_steers_retrieval_and_is_masked_and_rendered():
+    from app.agent import mask_request, retrieve
+    from app.prompts import build_messages
+    from app.schemas import AgentChatRequest
+    from conftest import user_context
+    r = BM25Retriever(DOCS)
+    page = {"url": "https://grafana.demo.local/d/1", "title": "Стендап команды", "selection": "тел 89123456789"}
+    req = AgentChatRequest(message="что тут смотреть?", user_context=user_context(), page_context=page)
+    assert retrieve(req, r, 1, 0.1)[0].doc.id == "standup"
+    masked, found = mask_request(req)
+    assert masked.page_context.selection == "тел [телефон скрыт]" and found["phone"] == 1
+    user_turn = build_messages(masked, [])[-1]["content"]
+    assert "<page>" in user_turn and "заголовок: Стендап команды" in user_turn and "8912" not in user_turn
+    assert "<page>" not in build_messages(AgentChatRequest(message="x", user_context=user_context()), [])[-1]["content"]
+    with pytest.raises(ValueError):
+        AgentChatRequest(message="x", user_context=user_context(), page_context={"url": "u", "html": "<b>"})
+
+
+def test_page_is_weak_context_without_pointing_words():
+    from app.agent import DEICTIC, retrieve
+    from app.schemas import AgentChatRequest
+    from conftest import user_context
+    r = BM25Retriever(DOCS)
+    page = {"url": "https://wiki/vpn", "title": "VPN из дома"}
+    switch = AgentChatRequest(message="во сколько стендап", user_context=user_context(), page_context=page)
+    assert retrieve(switch, r, 1, 0.1)[0].doc.id == "standup"
+    about_page = AgentChatRequest(message="что тут важно", user_context=user_context(), page_context=page)
+    assert retrieve(about_page, r, 1, 0.1)[0].doc.id == "vpn"
+    assert DEICTIC.search("это ещё актуально?") and not DEICTIC.search("этаж и этап")

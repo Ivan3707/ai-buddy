@@ -122,9 +122,18 @@ class ChatTurn(BaseModel):
     content: str = Field(max_length=8000)
 
 
+class PageContext(BaseModel):
+    """Page open in the browser (extension side panel). Untrusted data, never instructions."""
+    model_config = ConfigDict(extra="forbid")
+    url: str = Field(max_length=2000)
+    title: str | None = Field(default=None, max_length=300)
+    selection: str | None = Field(default=None, max_length=2000)
+
+
 class AgentChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     message: str = Field(min_length=1, max_length=2000)
     history: list[ChatTurn] = Field(default_factory=list, max_length=20)
     user_context: UserContext
+    page_context: PageContext | None = None
     check_nonblank = field_validator("message")(_nonblank)
