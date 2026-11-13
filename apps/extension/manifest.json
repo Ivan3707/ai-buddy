@@ -1,15 +1,19 @@
 {
   "manifest_version": 3,
-  "background": {"service_worker": "background.js"},
   "name": "AI-buddy Demo",
-  "version": "0.1.0",
-  "minimum_chrome_version": "102",
-  "description": "Демо-помощник онбординга. Работает только с локальным Backend.",
+  "version": "0.2.0",
+  "minimum_chrome_version": "116",
+  "description": "Демо-помощник онбординга в боковой панели. Работает только с локальным Backend.",
+  "background": {"service_worker": "background.js"},
   "permissions": [
+    "sidePanel",
     "storage"
   ],
   "action": {
-    "default_popup": "popup.html"
+    "default_title": "Открыть AI-buddy"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
   },
   "host_permissions": [
     "http://127.0.0.1:8080/*"

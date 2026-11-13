@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI-buddy</title>
+<link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+<header class="top">
+  <h1>AI-buddy <span class="badge" title="Синтетические данные. Это не регламенты Авито.">демо</span></h1>
+  <div id="account-actions" class="top-actions" hidden>
+    <button id="logout" type="button" class="ghost">Выйти</button>
+  </div>
+</header>
+
+<section id="session-section" class="pane" aria-live="polite">
+  <p id="session-message">Проверяем сессию…</p>
+  <button id="retry-session" type="button" class="secondary" hidden>Проверить снова</button>
+</section>
+
+<section id="login-section" class="pane" hidden>
+  <p>Войдите, чтобы использовать AI-помощника.</p>
+  <form id="login" class="stack">
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="email" required>
+    <label for="password">Пароль</label>
+    <input id="password" type="password" autocomplete="current-password" required>
+    <button>Войти</button>
+  </form>
+  <p id="login-error" class="error" role="alert" aria-live="polite"></p>
+</section>
+
+<section id="assistant-section" class="chat" hidden>
+  <p class="account"><span id="account-email"></span></p>
+  <div id="messages" class="messages" role="log" aria-live="polite" aria-label="Диалог с AI-buddy">
+    <p class="hint" id="empty-hint">Спросите про отпуск, доступы или следующий шаг онбординга.</p>
+  </div>
+  <form id="chat" class="composer">
+    <label for="message" class="visually-hidden">Ваш вопрос</label>
+    <textarea id="message" rows="2" maxlength="2000" required placeholder="Ваш вопрос… (Enter — отправить)"></textarea>
+    <button id="send">Отправить</button>
+  </form>
+</section>
+
+<p class="footnote">Данные синтетические · ответы со ссылками на демо-базу знаний</p>
+<script type="module" src="sidepanel.js"></script>
+</body>
+</html>

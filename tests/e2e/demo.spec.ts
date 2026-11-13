@@ -51,7 +51,7 @@ test('buddy creates an intern, intern opens checklists and uses AI assistant', a
   await expect(assistant.getByRole('link', { name: 'Заявление на отпуск' })).toHaveAttribute('href', 'https://hr.example.com/leave');
 });
 
-test('real MV3 popup logs in and calls authenticated chat', async () => {
+test('real MV3 side panel logs in and calls authenticated chat', async () => {
   const buddyEmail = requiredCredential('E2E_BUDDY_EMAIL');
   const buddyPassword = requiredCredential('E2E_BUDDY_PASSWORD');
   const extension = path.resolve('apps/extension/dist');
@@ -64,7 +64,7 @@ test('real MV3 popup logs in and calls authenticated chat', async () => {
     const worker = context.serviceWorkers()[0] || await context.waitForEvent('serviceworker');
     const id = worker.url().split('/')[2];
     let page = await context.newPage();
-    await page.goto(`chrome-extension://${id}/popup.html`);
+    await page.goto(`chrome-extension://${id}/sidepanel.html`);
 
     await page.getByLabel('Email').fill(buddyEmail);
     await page.getByLabel('Пароль').fill(buddyPassword);
@@ -73,7 +73,7 @@ test('real MV3 popup logs in and calls authenticated chat', async () => {
 
     await page.close();
     page = await context.newPage();
-    await page.goto(`chrome-extension://${id}/popup.html`);
+    await page.goto(`chrome-extension://${id}/sidepanel.html`);
     await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible();
     await expect.poll(() => page.evaluate(async () => (await chrome.storage.session.get('accessToken')).accessToken)).not.toBe('');
 
