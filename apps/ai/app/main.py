@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 
+from . import mentor
 from .agent import run_turn, sse
 from .brief import run_brief
 from .config import Settings, load_settings
@@ -29,6 +30,8 @@ def create_app(settings: Settings | None = None, retriever: Retriever | None = N
     legacy = BM25Retriever(load_kb(DATA / "kb.json"))
     llm = llm or make_llm(settings)
     app = FastAPI(title="AI-buddy AI", version="0.2.0")
+    app.state.settings, app.state.retriever, app.state.llm = settings, retriever, llm
+    app.include_router(mentor.router)
 
     @app.get("/health")
     def health():
