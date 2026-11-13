@@ -22,6 +22,9 @@ services:
       RAG_MODE: ${RAG_MODE:-hybrid}
       RAG_TOP_K: ${RAG_TOP_K:-4}
       RAG_MIN_SCORE: ${RAG_MIN_SCORE:-0.2}
+      KB_STALE_DAYS: ${KB_STALE_DAYS:-365}
+      KB_TODAY: ${KB_TODAY:-}
+      KB_LINT_MAX_LLM_CALLS: ${KB_LINT_MAX_LLM_CALLS:-15}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')"]
       interval: 5s

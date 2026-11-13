@@ -9,7 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 
-from . import gaps, mentor
+from . import gaps, kb_lint, mentor
 from .agent import run_turn, sse
 from .brief import run_brief
 from .config import Settings, load_settings
@@ -33,6 +33,7 @@ def create_app(settings: Settings | None = None, retriever: Retriever | None = N
     app.state.settings, app.state.retriever, app.state.llm = settings, retriever, llm
     app.include_router(mentor.router)
     app.include_router(gaps.router)
+    app.include_router(kb_lint.router)
 
     @app.get("/health")
     def health():
