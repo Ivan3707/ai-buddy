@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from app.agent import run_turn
+from app.agent import retrieve, run_turn
 from app.config import load_settings
 from app.llm import make_llm
 from app.retrieval import Retriever, build_retriever, load_markdown_kb
@@ -45,6 +45,11 @@ def base_context(**overrides: Any) -> dict[str, Any]:
     return ctx
 
 
+def request_for(case: dict[str, Any]) -> AgentChatRequest:
+    return AgentChatRequest(message=case["question"], history=case.get("history", []),
+                            user_context=base_context(**case.get("ctx", {})))
+
+
 def retriever() -> Retriever:
     s = load_settings()
     return build_retriever(load_markdown_kb(DATA / "kb"), s.rag_mode, s.embedding_model)
@@ -52,12 +57,12 @@ def retriever() -> Retriever:
 
 # ------------------------------------------------------------------ retrieval
 
-def eval_retrieval(cases: list[dict[str, Any]], k: int, r: Any = None) -> dict[str, Any]:
+def eval_retrieval(cases: list[dict[str, Any]], k: int, r: Any = None, use_history: bool = True) -> dict[str, Any]:
     r = r or retriever()
     recalls, rr, misses = [], [], []
     in_kb_top, out_kb_top = [], []
     for c in cases:
-        hits = r.search(c["question"], k=50, min_score=0.0)
+        hits = retrieve(request_for(c), r, 50, 0.0, use_history)
         top = max((h.lexical for h in hits), default=0.0)
         if c["behavior"] == "no_answer":
             out_kb_top.append(top)
@@ -105,7 +110,7 @@ class Outcome:
 
 
 async def run_case(case: dict[str, Any], r: Retriever, llm: Any, settings: Any) -> Outcome:
-    req = AgentChatRequest(message=case["question"], user_context=base_context(**case.get("ctx", {})))
+    req = request_for(case)
     out, t0 = Outcome(case), time.monotonic()
     async for event, data in run_turn(req, r, llm, settings):
         if event == "delta":

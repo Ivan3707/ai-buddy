@@ -17,7 +17,7 @@ from pydantic import BaseModel, ValidationError
 from .config import Settings
 from .llm import LLM, LLMError, TextDelta, ToolCall, Turn, Usage
 from .prompts import ACCESS_LEVELS_BY_ROLE, FALLBACK_TEXT, TOOL_TO_ACTION, build_messages, build_tools
-from .retrieval import Hit, Retriever
+from .retrieval import Hit, Retriever, fuse
 from .schemas import (AccessRequestParams, ActionProposal, AgentChatRequest, LeaveRequestParams,
                       MentorQuestionParams, Source)
 
@@ -90,11 +90,25 @@ def cited_sources(text: str, hits: list[Hit]) -> list[Source]:
     return sources
 
 
+def retrieve(req: AgentChatRequest, retriever: Retriever, k: int, min_score: float,
+             use_history: bool = True) -> list[Hit]:
+    """Follow-ups like "а за сколько дней?" carry no topic on their own. We search twice - the message
+    alone and the message together with the previous user turn - and fuse both rankings (RRF).
+    The message-alone ranking keeps topic switches working ("Во сколько стендап?" after a VPN question).
+    """
+    hits = retriever.search(req.message, k, min_score)
+    previous = next((t.content for t in reversed(req.history) if t.role == "user"), "")
+    if not use_history or not previous:
+        return hits
+    with_context = retriever.search(f"{previous} {req.message}", k, min_score)
+    return fuse([hits, with_context], k)
+
+
 async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
                    settings: Settings) -> AsyncIterator[Event]:
     t0 = time.monotonic()
     yield "status", {"stage": "retrieving"}
-    hits = retriever.search(req.message, settings.top_k, settings.min_score)
+    hits = retrieve(req, retriever, settings.top_k, settings.min_score)
     allowed = set(req.user_context.allowed_actions)
     turn = Turn(req, hits, build_messages(req, hits), build_tools(sorted(allowed), req.user_context.role))
 

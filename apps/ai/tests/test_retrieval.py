@@ -81,3 +81,18 @@ def test_rag_settings():
     assert load_settings({}).rag_mode == "hybrid"
     with pytest.raises(ValueError, match="RAG_MODE"):
         load_settings({"RAG_MODE": "magic"})
+
+
+def test_follow_up_uses_previous_user_turn_and_topic_switch_still_works():
+    from app.agent import retrieve
+    from app.schemas import AgentChatRequest
+    from conftest import user_context
+    r = BM25Retriever(DOCS)
+    history = [{"role": "user", "content": "Как оформить отпуск?"}, {"role": "assistant", "content": "Заявлением."}]
+    follow_up = AgentChatRequest(message="а за сколько дней подают", history=history, user_context=user_context())
+    assert retrieve(follow_up, r, 2, 0.1)[0].doc.id == "leave"
+    assert retrieve(follow_up, r, 2, 0.1, use_history=False) == r.search("а за сколько дней подают", 2, 0.1)
+    switch = AgentChatRequest(message="во сколько стендап", history=history, user_context=user_context())
+    assert retrieve(switch, r, 1, 0.1)[0].doc.id == "standup"
+    alone = AgentChatRequest(message="стендап", user_context=user_context())
+    assert retrieve(alone, r, 1, 0.1)[0].doc.id == "standup"
