@@ -74,6 +74,7 @@ button:disabled { opacity: .6; cursor: default; }
 .msg-user { align-self: flex-end; background: var(--user-bg); color: #fff; border-bottom-right-radius: 2px; white-space: pre-wrap; }
 .msg-assistant { align-self: flex-start; background: var(--bot-bg); border-bottom-left-radius: 2px; }
 .msg-text { white-space: pre-wrap; }
+.msg-brief { border-left: 3px solid var(--accent); }
 .msg-text:empty { display: none; }
 
 .status { color: var(--muted); font-size: 12px; font-style: italic; }

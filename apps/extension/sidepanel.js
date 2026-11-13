@@ -3,7 +3,8 @@ import { BACKEND_ORIGIN as backend } from './config.js';
 import {
   actionTitle, describeActionError, describeActionStatus, describeParams, describeResult,
 } from './lib/actions.js';
-import { cancelAction, confirmAction, sendFeedback, streamChat } from './lib/api.js';
+import { cancelAction, confirmAction, sendFeedback, streamBrief, streamChat } from './lib/api.js';
+import { briefStorageKey, shouldRequestBrief, todayKey } from './lib/brief.js';
 import {
   applyStreamEvent, createAssistantState, failureCode, finalizeStream, statusLabel,
 } from './lib/stream-events.js';
@@ -56,12 +57,13 @@ function showLogin(message = '') {
   showOnly(loginSection);
 }
 
-function showAssistant(email) {
-  accountEmail.textContent = email;
+function showAssistant(user) {
+  accountEmail.textContent = user.email;
   loginError.textContent = '';
   showOnly(assistantSection);
   messageInput.focus();
   void refreshPageStatus();
+  void maybeShowBrief(user.id);
 }
 
 function showSessionCheck(message = 'Проверяем сессию…', canRetry = false) {
@@ -82,7 +84,7 @@ async function verifyStoredSession() {
   const restored = await restoreSession(storage, token => getMe(backend, token));
   if (restored.status === 'authenticated') {
     accessToken = restored.token;
-    showAssistant(restored.user.email);
+    showAssistant(restored.user);
     return;
   }
   if (restored.status === 'unavailable') {
@@ -407,6 +409,56 @@ async function ask(message, view, userNode) {
   view.render(state);
 }
 
+// Proactive greeting with the next onboarding step, once per user per day.
+async function maybeShowBrief(userId) {
+  if (busy || !accessToken) return;
+  const today = todayKey();
+  const key = briefStorageKey(userId);
+  let lastBriefDate;
+  try { lastBriefDate = (await chrome.storage.local.get(key))[key]; } catch { /* treat as never shown */ }
+  const hasConversation = Boolean(await readConversationId()) || Boolean(messages.querySelector('.msg'));
+  if (!shouldRequestBrief({userId, lastBriefDate, today, hasConversation})) return;
+
+  setBusy(true);
+  const generation = dialogGeneration;
+  const controller = new AbortController();
+  currentRequest = controller;
+  const view = createAssistantView();
+  let state = createAssistantState();
+  let shown = false;
+  try {
+    const result = await streamBrief({
+      baseUrl: backend,
+      token: accessToken,
+      signal: controller.signal,
+      onEvent: event => {
+        if (generation !== dialogGeneration) return;
+        if (!shown) {
+          shown = true;
+          view.root.classList.add('msg-brief');
+          appendMessage(view.root);
+        }
+        state = applyStreamEvent(state, event);
+        view.render(state);
+      },
+    });
+    if (result.transport === 'unsupported') return; // backend without the brief yet
+    state = finalizeStream(state);
+  } catch (error) {
+    state = finalizeStream(state, controller.signal.aborted ? 'interrupted' : failureCode(error));
+  } finally {
+    if (currentRequest === controller) currentRequest = null;
+    if (generation === dialogGeneration) setBusy(false);
+    else busy = false;
+  }
+  if (generation !== dialogGeneration) return;
+  if (shown) view.render(state);
+  if (!state.error) {
+    await chrome.storage.local.set({[key]: today}).catch(() => {});
+    if (state.conversationId) await storage.set({[conversationKey]: state.conversationId});
+  }
+}
+
 function startQuestion(message) {
   const userNode = appendMessage(element('div', 'msg msg-user', message));
   const view = createAssistantView({onRetry: () => void ask(message, view, userNode)});
@@ -425,7 +477,7 @@ loginForm.addEventListener('submit', async event => {
     const result = await login(backend, $('#email').value.trim(), passwordInput.value);
     accessToken = result.access_token;
     await Promise.all([saveToken(storage, accessToken), storage.remove(conversationKey)]);
-    showAssistant(result.user.email);
+    showAssistant(result.user);
   } catch (error) {
     loginError.textContent = isUnauthorized(error)
       ? 'Неверный email или пароль.'

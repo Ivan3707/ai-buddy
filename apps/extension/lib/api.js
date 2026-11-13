@@ -105,6 +105,23 @@ async function consume(response, onEvent, idleTimeoutMs) {
 }
 
 /**
+ * Proactive brief. Resolves {transport: 'stream'} or {transport: 'unsupported'} when the
+ * backend has no brief endpoint yet (404/405/501) — the caller then shows nothing.
+ */
+export async function streamBrief({
+  baseUrl, token, onEvent, fetchImpl = globalThis.fetch, signal, idleTimeoutMs = 60000,
+}) {
+  const response = await postStream(fetchImpl, `${baseUrl}/api/chat/brief/stream`, token, undefined, signal);
+  if (response.ok) {
+    await consume(response, onEvent, idleTimeoutMs);
+    return {transport: 'stream'};
+  }
+  if (decideStreamFallback({status: response.status}) === 'legacy') return {transport: 'unsupported'};
+  if (response.status === 401) notifyUnauthorized();
+  throw new HttpError(response.status, await errorMessage(response));
+}
+
+/**
  * Streams an answer. Resolves with {transport: 'stream' | 'legacy', conversationReset}.
  * onEvent receives {type, data} SSE events (legacy answers are converted to events).
  * Throws HttpError for HTTP failures and StreamIdleTimeoutError for a stalled stream.
