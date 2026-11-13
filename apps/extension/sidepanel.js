@@ -1,6 +1,9 @@
 import { chat, getMe, login } from './client.js';
 import { BACKEND_ORIGIN as backend } from './config.js';
-import { streamChat } from './lib/api.js';
+import {
+  actionTitle, describeActionError, describeActionStatus, describeParams, describeResult,
+} from './lib/actions.js';
+import { cancelAction, confirmAction, streamChat } from './lib/api.js';
 import {
   applyStreamEvent, createAssistantState, failureCode, finalizeStream, statusLabel,
 } from './lib/stream-events.js';
@@ -128,6 +131,71 @@ function renderSources(sources) {
   return list.childElementCount ? list : null;
 }
 
+// Card for a PendingAction: nothing is executed until the user clicks "Подтвердить".
+function renderActionCard(action) {
+  const title = actionTitle(action.type);
+  const card = element('section', 'action-card');
+  card.setAttribute('aria-label', title);
+  card.append(element('h2', 'action-title', title));
+  if (action.summary) card.append(element('p', 'action-summary', action.summary));
+  const rows = describeParams(action.type, action.params);
+  if (rows.length) {
+    const list = element('dl', 'action-params');
+    for (const {label, value} of rows) list.append(element('dt', '', label), element('dd', '', value));
+    card.append(list);
+  }
+  const result = element('p', 'action-result');
+  result.setAttribute('role', 'status');
+  result.hidden = true;
+  const showResult = (message, tone) => {
+    result.textContent = message;
+    result.dataset.tone = tone;
+    result.hidden = !message;
+  };
+
+  if (action.status !== 'pending') {
+    showResult(describeActionStatus(action), action.status === 'failed' ? 'error' : 'muted');
+    card.append(result);
+    return card;
+  }
+
+  const buttons = element('div', 'action-buttons');
+  const confirm = element('button', '', 'Подтвердить');
+  const cancel = element('button', 'secondary', 'Отменить');
+  confirm.type = cancel.type = 'button';
+  buttons.append(confirm, cancel);
+  card.append(buttons, result);
+
+  async function run(operation) {
+    confirm.disabled = cancel.disabled = true;
+    card.setAttribute('aria-busy', 'true');
+    showResult(operation === 'confirm' ? 'Отправляю заявку…' : 'Отменяю…', 'muted');
+    const options = {baseUrl: backend, token: accessToken};
+    try {
+      if (operation === 'confirm') {
+        const outcome = describeResult(await confirmAction(options, action.id));
+        showResult(outcome.text, outcome.tone);
+      } else {
+        await cancelAction(options, action.id);
+        showResult('Отменено. Заявка не отправлена.', 'muted');
+      }
+      buttons.remove();
+    } catch (error) {
+      if (isUnauthorized(error)) return;
+      const {text, retryable} = describeActionError(error?.status, operation);
+      showResult(text, 'error');
+      if (retryable) confirm.disabled = cancel.disabled = false;
+      else buttons.remove();
+    } finally {
+      card.removeAttribute('aria-busy');
+    }
+  }
+
+  confirm.addEventListener('click', () => void run('confirm'));
+  cancel.addEventListener('click', () => void run('cancel'));
+  return card;
+}
+
 // One assistant bubble. render(state) is idempotent and cheap enough per delta.
 function createAssistantView({onRetry} = {}) {
   const root = element('div', 'msg msg-assistant');
@@ -137,6 +205,8 @@ function createAssistantView({onRetry} = {}) {
   let sourcesNode = null;
   let renderedSources = null;
   let errorNode = null;
+  let actionNode = null;
+  let renderedActionId = null;
 
   function render(state) {
     const stick = nearBottom();
@@ -151,6 +221,13 @@ function createAssistantView({onRetry} = {}) {
       sourcesNode?.remove();
       sourcesNode = renderSources(state.sources);
       if (sourcesNode) text.after(sourcesNode);
+    }
+
+    if ((state.action?.id ?? null) !== renderedActionId) {
+      renderedActionId = state.action?.id ?? null;
+      actionNode?.remove();
+      actionNode = state.action ? renderActionCard(state.action) : null;
+      if (actionNode) (sourcesNode || text).after(actionNode);
     }
 
     errorNode?.remove();

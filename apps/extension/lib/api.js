@@ -42,6 +42,34 @@ async function errorMessage(response) {
   return `Backend: HTTP ${response.status}`;
 }
 
+// JSON POST with bearer auth. Resolves with the parsed body (undefined for 204).
+export async function postJson({baseUrl, path, token, body, fetchImpl = globalThis.fetch, timeoutMs = 15000}) {
+  const response = await fetchImpl(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(body === undefined ? {} : {'Content-Type': 'application/json'}),
+    },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!response.ok) {
+    if (response.status === 401) notifyUnauthorized();
+    throw new HttpError(response.status, await errorMessage(response));
+  }
+  if (response.status === 204) return undefined;
+  const raw = await response.text();
+  return raw ? JSON.parse(raw) : undefined;
+}
+
+export function confirmAction(options, actionId) {
+  return postJson({...options, path: `/api/actions/${encodeURIComponent(actionId)}/confirm`});
+}
+
+export function cancelAction(options, actionId) {
+  return postJson({...options, path: `/api/actions/${encodeURIComponent(actionId)}/cancel`});
+}
+
 function postStream(fetchImpl, url, token, body, signal) {
   return fetchImpl(url, {
     method: 'POST',
