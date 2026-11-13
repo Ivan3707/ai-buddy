@@ -3,7 +3,7 @@ import { BACKEND_ORIGIN as backend } from './config.js';
 import {
   actionTitle, describeActionError, describeActionStatus, describeParams, describeResult,
 } from './lib/actions.js';
-import { cancelAction, confirmAction, streamChat } from './lib/api.js';
+import { cancelAction, confirmAction, sendFeedback, streamChat } from './lib/api.js';
 import {
   applyStreamEvent, createAssistantState, failureCode, finalizeStream, statusLabel,
 } from './lib/stream-events.js';
@@ -196,6 +196,38 @@ function renderActionCard(action) {
   return card;
 }
 
+// 👍/👎 under an answer; shown only when the backend sent meta.message_id.
+function renderFeedback(messageId) {
+  const row = element('div', 'feedback');
+  row.setAttribute('role', 'group');
+  row.setAttribute('aria-label', 'Оцените ответ');
+  const note = element('span', 'feedback-note');
+  note.setAttribute('aria-live', 'polite');
+  const buttons = [['up', '👍', 'Полезный ответ'], ['down', '👎', 'Бесполезный ответ']].map(([rating, icon, label]) => {
+    const button = element('button', 'feedback-button', icon);
+    button.type = 'button';
+    button.setAttribute('aria-label', label);
+    button.title = label;
+    button.setAttribute('aria-pressed', 'false');
+    button.addEventListener('click', async () => {
+      for (const other of buttons) other.disabled = true;
+      button.setAttribute('aria-pressed', 'true');
+      try {
+        await sendFeedback({baseUrl: backend, token: accessToken}, messageId, rating);
+        note.textContent = 'Спасибо за оценку';
+      } catch (error) {
+        if (isUnauthorized(error)) return;
+        button.setAttribute('aria-pressed', 'false');
+        for (const other of buttons) other.disabled = false;
+        note.textContent = 'Не удалось сохранить оценку';
+      }
+    });
+    return button;
+  });
+  row.append(...buttons, note);
+  return row;
+}
+
 // One assistant bubble. render(state) is idempotent and cheap enough per delta.
 function createAssistantView({onRetry} = {}) {
   const root = element('div', 'msg msg-assistant');
@@ -207,6 +239,7 @@ function createAssistantView({onRetry} = {}) {
   let errorNode = null;
   let actionNode = null;
   let renderedActionId = null;
+  let feedbackNode = null;
 
   function render(state) {
     const stick = nearBottom();
@@ -228,6 +261,14 @@ function createAssistantView({onRetry} = {}) {
       actionNode?.remove();
       actionNode = state.action ? renderActionCard(state.action) : null;
       if (actionNode) (sourcesNode || text).after(actionNode);
+    }
+
+    const wantsFeedback = state.finished && !state.error && Boolean(state.messageId);
+    if (!wantsFeedback && feedbackNode) {
+      feedbackNode.remove();
+      feedbackNode = null;
+    } else if (wantsFeedback && !feedbackNode) {
+      feedbackNode = root.appendChild(renderFeedback(state.messageId));
     }
 
     errorNode?.remove();

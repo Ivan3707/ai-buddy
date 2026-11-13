@@ -70,6 +70,19 @@ export function cancelAction(options, actionId) {
   return postJson({...options, path: `/api/actions/${encodeURIComponent(actionId)}/cancel`});
 }
 
+// 👍/👎 for an assistant message. 404 (unknown message or endpoint not deployed yet)
+// is not an error for the user: resolves {saved: false}.
+export async function sendFeedback(options, messageId, rating) {
+  if (rating !== 'up' && rating !== 'down') throw new TypeError(`invalid rating: ${rating}`);
+  try {
+    await postJson({...options, path: `/api/chat/messages/${encodeURIComponent(messageId)}/feedback`, body: {rating}});
+    return {saved: true};
+  } catch (error) {
+    if (error?.status === 404 || error?.status === 405) return {saved: false};
+    throw error;
+  }
+}
+
 function postStream(fetchImpl, url, token, body, signal) {
   return fetchImpl(url, {
     method: 'POST',
