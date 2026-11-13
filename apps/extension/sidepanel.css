@@ -107,9 +107,17 @@ button:disabled { opacity: .6; cursor: default; }
 .feedback-button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); opacity: 1; }
 .feedback-note { margin-left: 6px; font-size: 11px; color: var(--muted); }
 
+.msg-context { display: block; margin-top: 4px; font-size: 11px; opacity: .85; white-space: normal; }
+
+.context-bar { padding: 6px 12px 0; border-top: 1px solid var(--border); font-size: 12px; }
+.toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.toggle input { width: auto; margin: 0; accent-color: var(--accent); }
+.page-status { margin: 2px 0 0; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.page-status:empty { display: none; }
+
 .mode-hint { margin: 0; padding: 4px 12px; font-size: 11px; color: var(--muted); background: var(--accent-soft); }
 
-.composer { display: flex; gap: 6px; align-items: flex-end; padding: 8px 12px; border-top: 1px solid var(--border); }
+.composer { display: flex; gap: 6px; align-items: flex-end; padding: 6px 12px 8px; }
 .composer textarea { resize: none; min-height: 40px; max-height: 140px; }
 
 .footnote { margin: 0; padding: 4px 12px 8px; color: var(--muted); font-size: 11px; }

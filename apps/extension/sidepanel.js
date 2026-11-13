@@ -7,6 +7,7 @@ import { cancelAction, confirmAction, sendFeedback, streamChat } from './lib/api
 import {
   applyStreamEvent, createAssistantState, failureCode, finalizeStream, statusLabel,
 } from './lib/stream-events.js';
+import { collectPageContext, contextLabel, describeActiveTab } from './lib/page-context.js';
 import { clearToken, isUnauthorized, restoreSession, saveToken } from './popup-session.js';
 
 const storage = chrome.storage.session;
@@ -27,6 +28,9 @@ const messageInput = $('#message');
 const sendButton = $('#send');
 const messages = $('#messages');
 const modeHint = $('#mode-hint');
+const usePageToggle = $('#use-page');
+const pageStatus = $('#page-status');
+const pagePreferenceKey = 'usePageContext';
 
 let accessToken = '';
 let busy = false;
@@ -57,6 +61,7 @@ function showAssistant(email) {
   loginError.textContent = '';
   showOnly(assistantSection);
   messageInput.focus();
+  void refreshPageStatus();
 }
 
 function showSessionCheck(message = 'Проверяем сессию…', canRetry = false) {
@@ -306,14 +311,51 @@ function abortCurrent() {
   currentRequest = null;
 }
 
-// ---------- chat ----------
-
 async function readConversationId() {
   const stored = await storage.get(conversationKey);
   return typeof stored[conversationKey] === 'string' ? stored[conversationKey] : '';
 }
 
-async function ask(message, view) {
+// ---------- page context ----------
+
+const PAGE_STATUS_TEXT = {
+  restricted: 'Служебная страница — её контекст не передаётся.',
+  'no-access': 'Нет доступа к этой вкладке. Нажмите на иконку AI-buddy на панели браузера, чтобы разрешить.',
+  'no-tab': '',
+};
+
+async function refreshPageStatus() {
+  if (!usePageToggle.checked) {
+    pageStatus.textContent = 'Контекст страницы не передаётся.';
+    return;
+  }
+  const preview = await describeActiveTab(chrome);
+  pageStatus.textContent = preview.state === 'ready' ? `Страница: ${preview.title}` : PAGE_STATUS_TEXT[preview.state];
+}
+
+async function loadPagePreference() {
+  try {
+    const stored = await chrome.storage.local.get(pagePreferenceKey);
+    usePageToggle.checked = stored[pagePreferenceKey] !== false; // default: on
+  } catch {
+    usePageToggle.checked = true;
+  }
+}
+
+async function pageContextForRequest(userNode) {
+  if (!usePageToggle.checked) return null;
+  const {context} = await collectPageContext(chrome);
+  if (context && userNode && !userNode.querySelector('.msg-context')) {
+    const chip = element('span', 'msg-context', `Страница: ${contextLabel(context)}`);
+    if (context.selection) chip.textContent += ' · с выделенным текстом';
+    userNode.append(chip);
+  }
+  return context;
+}
+
+// ---------- chat ----------
+
+async function ask(message, view, userNode) {
   if (busy || !accessToken) return;
   setBusy(true);
   const generation = dialogGeneration;
@@ -324,7 +366,12 @@ async function ask(message, view) {
 
   try {
     const conversationId = await readConversationId();
-    const request = {message, ...(conversationId ? {conversation_id: conversationId} : {})};
+    const pageContext = await pageContextForRequest(userNode);
+    const request = {
+      message,
+      ...(conversationId ? {conversation_id: conversationId} : {}),
+      ...(pageContext ? {page_context: pageContext} : {}),
+    };
     const result = await streamChat({
       baseUrl: backend,
       token: accessToken,
@@ -361,10 +408,10 @@ async function ask(message, view) {
 }
 
 function startQuestion(message) {
-  appendMessage(element('div', 'msg msg-user', message));
-  const view = createAssistantView({onRetry: () => void ask(message, view)});
+  const userNode = appendMessage(element('div', 'msg msg-user', message));
+  const view = createAssistantView({onRetry: () => void ask(message, view, userNode)});
   appendMessage(view.root);
-  void ask(message, view);
+  void ask(message, view, userNode);
 }
 
 // ---------- events ----------
@@ -419,4 +466,16 @@ chatForm.addEventListener('submit', event => {
   startQuestion(message);
 });
 
+usePageToggle.addEventListener('change', () => {
+  void chrome.storage.local.set({[pagePreferenceKey]: usePageToggle.checked}).catch(() => {});
+  void refreshPageStatus();
+});
+// The tabs API events need no permission; without access the url/title are just absent.
+chrome.tabs.onActivated.addListener(() => { void refreshPageStatus(); });
+chrome.tabs.onUpdated.addListener((_tabId, change) => {
+  if (change.status === 'complete' || change.title || change.url) void refreshPageStatus();
+});
+globalThis.addEventListener('focus', () => { void refreshPageStatus(); });
+
+await loadPagePreference();
 await verifyStoredSession();

@@ -38,6 +38,10 @@
     <p class="hint" id="empty-hint">Спросите про отпуск, доступы или следующий шаг онбординга.</p>
   </div>
   <p id="mode-hint" class="mode-hint" hidden>Потоковый режим пока недоступен на backend — ответы приходят целиком.</p>
+  <div class="context-bar">
+    <label class="toggle" for="use-page"><input id="use-page" type="checkbox" checked> Учитывать открытую страницу</label>
+    <p id="page-status" class="page-status"></p>
+  </div>
   <form id="chat" class="composer">
     <label for="message" class="visually-hidden">Ваш вопрос</label>
     <textarea id="message" rows="2" maxlength="2000" required placeholder="Ваш вопрос… (Enter — отправить)"></textarea>
