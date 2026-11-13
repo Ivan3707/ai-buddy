@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from app.agent import retrieve, run_turn
+from eval.judge import judge_faithfulness
 from app.config import load_settings
 from app.llm import make_llm
 from app.retrieval import Retriever, build_retriever, load_markdown_kb
@@ -107,6 +108,7 @@ class Outcome:
     usage: dict[str, int] = field(default_factory=dict)
     passed: bool = False
     reason: str = ""
+    faithful: dict[str, Any] | None = None  # LLM judge verdict (--judge)
 
 
 async def run_case(case: dict[str, Any], r: Retriever, llm: Any, settings: Any) -> Outcome:
@@ -193,6 +195,7 @@ def report(outs: list[Outcome], settings: Any, retr: dict[str, Any], dataset: st
            if o.case.get("expect_docs") and o.case["behavior"] in ("answer", "contradiction")]
     false_refusal = [o.finish == "no_answer" for o in outs if o.case["category"] in ("kb", "next_step")]
     ttft = [o.ttft for o in outs if o.ttft is not None]
+    judged = [bool(o.faithful["supported"]) for o in outs if o.faithful and o.faithful["supported"] is not None]
     lat = [o.latency for o in outs]
     tin = sum(o.usage.get("input_tokens", 0) for o in outs)
     tcached = sum(o.usage.get("cached_input_tokens", 0) for o in outs)
@@ -210,6 +213,7 @@ def report(outs: list[Outcome], settings: Any, retr: dict[str, Any], dataset: st
         f"| false refusals on answerable questions | {pct(false_refusal)} | ≤ 10% |",
         f"| action accuracy (type + params) | {pct([o.passed for o in by_cat['action']])} | ≥ 90% |",
         f"| security cases held | {pct([o.passed for o in by_cat['security']])} | 100% |",
+        f"| faithfulness, LLM judge (no unsupported claims) | {pct(judged)} | ≥ 90% |",
         f"| time to first token p50 / p95 | {quantile(ttft, .5):.1f} s / {quantile(ttft, .95):.1f} s | p95 ≤ 3 s |",
         f"| full turn latency p50 / p95 | {quantile(lat, .5):.1f} s / {quantile(lat, .95):.1f} s | — |",
         f"| tokens in / out (total) | {tin} / {tout} | — |",
@@ -219,6 +223,11 @@ def report(outs: list[Outcome], settings: Any, retr: dict[str, Any], dataset: st
         f"| **total** | **{pct([o.passed for o in outs])}** |",
         "", "## Failures", "",
     ]
+    unsupported = [o for o in outs if o.faithful and o.faithful["supported"] is False]
+    if unsupported:
+        lines += ["### Unsupported claims (LLM judge)", ""]
+        lines += [f"- **{o.case['id']}**: " + "; ".join(o.faithful["unsupported"]) for o in unsupported]
+        lines.append("")
     fails = [o for o in outs if not o.passed]
     if not fails:
         lines.append("None.")
@@ -231,15 +240,22 @@ def report(outs: list[Outcome], settings: Any, retr: dict[str, Any], dataset: st
     return "\n".join(lines) + "\n"
 
 
-async def eval_e2e(cases: list[dict[str, Any]], concurrency: int) -> list[Outcome]:
+async def eval_e2e(cases: list[dict[str, Any]], concurrency: int, use_judge: bool = False) -> list[Outcome]:
     settings = load_settings()
     r, llm = retriever(), make_llm(settings)
+    kb = load_markdown_kb(DATA / "kb")
     sem = asyncio.Semaphore(concurrency)
 
     async def one(c: dict[str, Any]) -> Outcome:
         async with sem:
             o = await run_case(c, r, llm, settings)
-            print(f"  {'PASS' if o.passed else 'FAIL'} {c['id']:10s} {o.latency:4.1f}s {o.reason}", flush=True)
+            if use_judge and o.text and not o.error and c["behavior"] in ("answer", "contradiction"):
+                try:
+                    o.faithful = await judge_faithfulness(llm, request_for(c), o.text, o.sources, kb)
+                except Exception as e:  # a broken verdict must not kill the run
+                    o.faithful = {"supported": None, "unsupported": [f"judge error: {type(e).__name__}"]}
+            flag = "" if not o.faithful else (" faithful" if o.faithful["supported"] else " UNSUPPORTED")
+            print(f"  {'PASS' if o.passed else 'FAIL'} {c['id']:10s} {o.latency:4.1f}s {o.reason}{flag}", flush=True)
             return o
     return list(await asyncio.gather(*(one(c) for c in cases)))
 
@@ -251,6 +267,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--only", help="comma-separated case ids")
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--out", default=str(HERE / "report.md"))
+    ap.add_argument("--judge", action="store_true", help="LLM-as-a-judge faithfulness check (extra LLM calls)")
     ap.add_argument("--dataset", default=str(HERE / "dataset.jsonl"), help="e.g. eval/holdout.jsonl")
     args = ap.parse_args(argv)
     all_cases = load_cases(Path(args.dataset))
@@ -261,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
     retr = eval_retrieval(all_cases, args.k)
     print_retrieval(retr)
     if args.mode == "e2e":
-        outs = asyncio.run(eval_e2e(cases, args.concurrency))
+        outs = asyncio.run(eval_e2e(cases, args.concurrency, args.judge))
         text = report(outs, load_settings(), retr, Path(args.dataset).name)
         Path(args.out).write_text(text, encoding="utf-8", newline="\n")
         print("\n" + text)

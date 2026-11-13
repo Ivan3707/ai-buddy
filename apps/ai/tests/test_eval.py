@@ -46,3 +46,30 @@ def test_judge_and_report():
     md = report([good, bad], Settings(), {"k": 4, "recall": 0.9, "mrr": 0.8})
     assert "| action | 1/2 (50%) |" in md and "**x**" in md
     json.dumps(md)
+
+
+def test_llm_judge_parses_verdict_and_sends_cited_docs():
+    import asyncio
+    from app.llm import TextDelta
+    from app.retrieval import Doc
+    from eval.judge import judge_faithfulness
+    from eval.run import request_for
+
+    class FakeLLM:
+        def __init__(self, reply):
+            self.reply, self.turns = reply, []
+
+        async def stream(self, turn):
+            self.turns.append(turn)
+            yield TextDelta(self.reply)
+
+    kb = [Doc("leave", "Отпуск", "u", "За 14 дней."), Doc("vpn", "VPN", "u", "DemoVPN")]
+    req = request_for({"question": "q"})
+    llm = FakeLLM('```json\n{"supported": false, "unsupported": ["за 30 дней"]}\n```')
+    verdict = asyncio.run(judge_faithfulness(llm, req, "Подавай за 30 дней [1].", ["leave"], kb))
+    assert verdict == {"supported": False, "unsupported": ["за 30 дней"]}
+    sent = llm.turns[0].messages[1]["content"]
+    assert "За 14 дней." in sent and "DemoVPN" not in sent
+    import pytest
+    with pytest.raises(ValueError):
+        asyncio.run(judge_faithfulness(FakeLLM("no json"), req, "x", [], kb))
