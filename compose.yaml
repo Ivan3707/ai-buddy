@@ -3,6 +3,8 @@ services:
     build:
       context: .
       dockerfile: apps/ai/Dockerfile
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       LLM_PROVIDER: ${LLM_PROVIDER:-mock}
       LLM_BASE_URL: ${LLM_BASE_URL:-}
@@ -10,6 +12,10 @@ services:
       LLM_MODEL: ${LLM_MODEL:-}
       LLM_TEMPERATURE: ${LLM_TEMPERATURE:-}
       LLM_EXTRA_BODY: ${LLM_EXTRA_BODY:-}
+      LLM_FALLBACK_BASE_URL: ${LLM_FALLBACK_BASE_URL:-}
+      LLM_FALLBACK_API_KEY: ${LLM_FALLBACK_API_KEY:-}
+      LLM_FALLBACK_MODEL: ${LLM_FALLBACK_MODEL:-}
+      LLM_FALLBACK_EXTRA_BODY: ${LLM_FALLBACK_EXTRA_BODY:-}
       LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-60}
       LLM_FIRST_BYTE_TIMEOUT_SECONDS: ${LLM_FIRST_BYTE_TIMEOUT_SECONDS:-15}
       LLM_MAX_OUTPUT_TOKENS: ${LLM_MAX_OUTPUT_TOKENS:-1024}

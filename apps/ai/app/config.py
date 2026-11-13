@@ -23,6 +23,12 @@ class Settings:
     extra_body: dict[str, Any] = field(default_factory=dict)
     rag_mode: str = "hybrid"
     embedding_model: str = "intfloat/multilingual-e5-small"
+    # Optional second OpenAI-compatible endpoint (e.g. local Ollama) used when the primary fails
+    # before producing any output.
+    fallback_base_url: str = ""
+    fallback_api_key: str = ""
+    fallback_model: str = ""
+    fallback_extra_body: dict[str, Any] = field(default_factory=dict)
     top_k: int = 4
     min_score: float = 0.2
 
@@ -50,6 +56,10 @@ def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
         max_output_tokens=int(get("LLM_MAX_OUTPUT_TOKENS", "1024")),
         temperature=float(temperature) if temperature else None,
         extra_body=json.loads(get("LLM_EXTRA_BODY") or "{}"),
+        fallback_base_url=get("LLM_FALLBACK_BASE_URL").rstrip("/"),
+        fallback_api_key=get("LLM_FALLBACK_API_KEY"),
+        fallback_model=get("LLM_FALLBACK_MODEL"),
+        fallback_extra_body=json.loads(get("LLM_FALLBACK_EXTRA_BODY") or "{}"),
         rag_mode=get("RAG_MODE", "hybrid"),
         embedding_model=get("RAG_EMBEDDING_MODEL", "intfloat/multilingual-e5-small"),
         top_k=int(get("RAG_TOP_K", "4")),

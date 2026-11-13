@@ -34,6 +34,8 @@ def create_app(settings: Settings | None = None, retriever: Retriever | None = N
         body = {"status": "ok", "mode": settings.mode}
         if settings.mode == "llm":
             body["model"] = settings.model
+            if settings.fallback_model:
+                body["fallback_model"] = settings.fallback_model
         return body
 
     @app.post("/chat", response_model=ChatResponse, deprecated=True)

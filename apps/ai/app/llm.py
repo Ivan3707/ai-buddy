@@ -8,11 +8,14 @@ from __future__ import annotations
 import json
 import time
 from collections.abc import AsyncIterator
-from dataclasses import dataclass, field
+import logging
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from typing import Any, Protocol
 
 import httpx
+
+log = logging.getLogger("ai.llm")
 
 from .config import Settings
 from .retrieval import Hit
@@ -165,5 +168,38 @@ class MockLLM:
         yield Usage()
 
 
+class FallbackLLM:
+    """Primary model, and a fallback (e.g. local Ollama) if the primary fails before saying anything.
+
+    A failure in the middle of an answer is not retried: gluing two different answers together would
+    be worse than an honest error the user can retry.
+    """
+
+    def __init__(self, primary: LLM, fallback: LLM, fallback_name: str):
+        self.primary, self.fallback, self.fallback_name = primary, fallback, fallback_name
+
+    async def stream(self, turn: Turn) -> AsyncIterator[LLMEvent]:
+        started = False
+        try:
+            async for ev in self.primary.stream(turn):
+                started = started or not isinstance(ev, Usage)
+                yield ev
+            return
+        except LLMError as e:
+            if started:
+                raise
+            log.warning("primary LLM failed (%s), using fallback model=%s", e.code, self.fallback_name)
+        async for ev in self.fallback.stream(turn):
+            yield ev
+
+
 def make_llm(settings: Settings) -> LLM:
-    return OpenAICompatibleLLM(settings) if settings.provider == "openai_compatible" else MockLLM()
+    if settings.provider != "openai_compatible":
+        return MockLLM()
+    primary = OpenAICompatibleLLM(settings)
+    if not (settings.fallback_base_url and settings.fallback_model):
+        return primary
+    fallback = OpenAICompatibleLLM(replace(settings, base_url=settings.fallback_base_url,
+                                           api_key=settings.fallback_api_key or "none",
+                                           model=settings.fallback_model, extra_body=settings.fallback_extra_body))
+    return FallbackLLM(primary, fallback, settings.fallback_model)

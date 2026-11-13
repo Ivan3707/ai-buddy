@@ -97,3 +97,39 @@ def test_load_settings():
         load_settings({"LLM_PROVIDER": "openai_compatible", "LLM_BASE_URL": "u", "LLM_MODEL": "m"})
     with pytest.raises(ValueError, match="LLM_PROVIDER"):
         load_settings({"LLM_PROVIDER": "gpt"})
+
+
+def test_fallback_llm_only_before_first_output():
+    from app.llm import FallbackLLM, make_llm
+
+    class Scripted:
+        def __init__(self, *events, error=None):
+            self.events, self.error, self.calls = events, error, 0
+
+        async def stream(self, turn):
+            self.calls += 1
+            for ev in self.events:
+                yield ev
+            if self.error:
+                raise self.error
+
+    def run_llm(llm):
+        async def collect():
+            return [ev async for ev in llm.stream(TURN)]
+        return asyncio.run(collect())
+
+    backup = Scripted(TextDelta("локально"))
+    assert run_llm(FallbackLLM(Scripted(Usage(1, 0), error=LLMError("llm_unavailable")), backup, "m")) == \
+        [Usage(1, 0), TextDelta("локально")]
+    with pytest.raises(LLMError):  # already answered something: do not glue two answers
+        run_llm(FallbackLLM(Scripted(TextDelta("Нача"), error=LLMError("timeout")), Scripted(), "m"))
+    unused = Scripted()
+    assert run_llm(FallbackLLM(Scripted(TextDelta("ok")), unused, "m")) == [TextDelta("ok")] and unused.calls == 0
+
+    env = {"LLM_PROVIDER": "openai_compatible", "LLM_BASE_URL": "https://x/v1", "LLM_API_KEY": "k", "LLM_MODEL": "m",
+           "LLM_FALLBACK_BASE_URL": "http://ollama:11434/v1/", "LLM_FALLBACK_MODEL": "qwen3.5:4b",
+           "LLM_FALLBACK_EXTRA_BODY": '{"reasoning_effort": "none"}'}
+    llm = make_llm(load_settings(env))
+    assert isinstance(llm, FallbackLLM) and llm.fallback.s.base_url == "http://ollama:11434/v1"
+    assert llm.fallback.s.api_key == "none" and llm.fallback.s.extra_body == {"reasoning_effort": "none"}
+    assert isinstance(make_llm(load_settings({k: v for k, v in env.items() if "FALLBACK" not in k})), OpenAICompatibleLLM)

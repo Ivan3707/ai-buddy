@@ -174,6 +174,9 @@ def test_health_reports_mode():
     assert client.get("/health").json() == {"status": "ok", "mode": "mock"}
     llm_app = TestClient(create_app(Settings(provider="openai_compatible", model="m", rag_mode="bm25"), llm=ScriptedLLM()))
     assert llm_app.get("/health").json() == {"status": "ok", "mode": "llm", "model": "m"}
+    fb = TestClient(create_app(Settings(provider="openai_compatible", model="m", fallback_model="qwen3.5:4b",
+                                        rag_mode="bm25"), llm=ScriptedLLM()))
+    assert fb.get("/health").json()["fallback_model"] == "qwen3.5:4b"
 
 
 def test_retriever_ranks_and_thresholds():

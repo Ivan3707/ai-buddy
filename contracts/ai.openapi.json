@@ -37,6 +37,9 @@
                     },
                     "model": {
                       "type": "string"
+                    },
+                    "fallback_model": {
+                      "type": "string"
                     }
                   }
                 }

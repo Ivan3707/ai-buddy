@@ -369,7 +369,7 @@ ai_spec = {
         "/health": {"get": {"operationId": "health", "responses": {"200": json_resp("Success", {
             "type": "object", "required": ["status", "mode"],
             "properties": {"status": {"type": "string", "enum": ["ok"]}, "mode": ref("AiMode"),
-                           "model": {"type": "string"}}})}}},
+                           "model": {"type": "string"}, "fallback_model": {"type": "string"}}})}}},
         "/chat": {"post": {
             "operationId": "chat", "deprecated": True,
             "description": "Legacy non-streaming chat without user context. Use /v1/chat/stream.",
