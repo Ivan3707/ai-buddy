@@ -10,6 +10,7 @@
 <header class="top">
   <h1>AI-buddy <span class="badge" title="Синтетические данные. Это не регламенты Авито.">демо</span></h1>
   <div id="account-actions" class="top-actions" hidden>
+    <button id="new-chat" type="button" class="ghost" title="Начать новый диалог">Новый диалог</button>
     <button id="logout" type="button" class="ghost">Выйти</button>
   </div>
 </header>
@@ -36,6 +37,7 @@
   <div id="messages" class="messages" role="log" aria-live="polite" aria-label="Диалог с AI-buddy">
     <p class="hint" id="empty-hint">Спросите про отпуск, доступы или следующий шаг онбординга.</p>
   </div>
+  <p id="mode-hint" class="mode-hint" hidden>Потоковый режим пока недоступен на backend — ответы приходят целиком.</p>
   <form id="chat" class="composer">
     <label for="message" class="visually-hidden">Ваш вопрос</label>
     <textarea id="message" rows="2" maxlength="2000" required placeholder="Ваш вопрос… (Enter — отправить)"></textarea>

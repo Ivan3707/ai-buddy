@@ -1,8 +1,13 @@
-import { ApiError, chat, getMe, login } from './client.js';
+import { chat, getMe, login } from './client.js';
 import { BACKEND_ORIGIN as backend } from './config.js';
+import { streamChat } from './lib/api.js';
+import {
+  applyStreamEvent, createAssistantState, failureCode, finalizeStream, statusLabel,
+} from './lib/stream-events.js';
 import { clearToken, isUnauthorized, restoreSession, saveToken } from './popup-session.js';
 
 const storage = chrome.storage.session;
+const conversationKey = 'conversationId';
 const $ = selector => document.querySelector(selector);
 const sessionSection = $('#session-section');
 const sessionMessage = $('#session-message');
@@ -18,7 +23,16 @@ const chatForm = $('#chat');
 const messageInput = $('#message');
 const sendButton = $('#send');
 const messages = $('#messages');
+const modeHint = $('#mode-hint');
+
 let accessToken = '';
+let busy = false;
+let currentRequest = null; // AbortController of the running stream
+let dialogGeneration = 0; // bumps on "new dialog"/logout so late results are dropped
+// Learned once per panel lifetime: the current backend has no /api/chat/stream yet.
+let streamingSupported = true;
+
+// ---------- session ----------
 
 function showOnly(section) {
   sessionSection.hidden = section !== sessionSection;
@@ -27,17 +41,10 @@ function showOnly(section) {
   accountActions.hidden = section !== assistantSection;
 }
 
-function clearMessages() {
-  messages.replaceChildren(Object.assign(document.createElement('p'), {
-    className: 'hint',
-    textContent: 'Спросите про отпуск, доступы или следующий шаг онбординга.',
-  }));
-}
-
 function showLogin(message = '') {
   accessToken = '';
   passwordInput.value = '';
-  clearMessages();
+  resetDialogView();
   loginError.textContent = message;
   showOnly(loginSection);
 }
@@ -57,7 +64,8 @@ function showSessionCheck(message = 'Проверяем сессию…', canRet
 
 async function logout(message = '') {
   accessToken = '';
-  await clearToken(storage);
+  abortCurrent();
+  await Promise.all([clearToken(storage), storage.remove(conversationKey)]);
   showLogin(message);
 }
 
@@ -77,11 +85,17 @@ async function verifyStoredSession() {
   showLogin(restored.status === 'unauthorized' ? 'Сессия истекла. Войдите снова.' : '');
 }
 
+// ---------- rendering ----------
+
 function element(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
   return node;
+}
+
+function nearBottom() {
+  return messages.scrollHeight - messages.scrollTop - messages.clientHeight < 48;
 }
 
 function appendMessage(node) {
@@ -91,13 +105,17 @@ function appendMessage(node) {
   return node;
 }
 
+function resetDialogView() {
+  messages.replaceChildren(element('p', 'hint', 'Спросите про отпуск, доступы или следующий шаг онбординга.'));
+}
+
 function renderSources(sources) {
   const list = element('ul', 'sources');
   list.setAttribute('aria-label', 'Источники');
   for (const source of sources) {
     let url;
     try { url = new URL(source.url); } catch { continue; }
-    if (url.protocol !== 'https:') continue;
+    if (url.protocol !== 'https:') continue; // never render javascript:/data: links
     const link = element('a', '', `${source.title} (демо)`);
     link.href = url.href;
     link.target = '_blank';
@@ -110,6 +128,129 @@ function renderSources(sources) {
   return list.childElementCount ? list : null;
 }
 
+// One assistant bubble. render(state) is idempotent and cheap enough per delta.
+function createAssistantView({onRetry} = {}) {
+  const root = element('div', 'msg msg-assistant');
+  const status = root.appendChild(element('p', 'status'));
+  status.setAttribute('role', 'status');
+  const text = root.appendChild(element('div', 'msg-text'));
+  let sourcesNode = null;
+  let renderedSources = null;
+  let errorNode = null;
+
+  function render(state) {
+    const stick = nearBottom();
+    const label = statusLabel(state);
+    status.hidden = !label;
+    status.textContent = label;
+    text.textContent = state.text || (state.finished && !state.error && !state.action ? 'Ответ пуст.' : '');
+    root.setAttribute('aria-busy', String(!state.finished));
+
+    if (state.sources !== renderedSources) {
+      renderedSources = state.sources;
+      sourcesNode?.remove();
+      sourcesNode = renderSources(state.sources);
+      if (sourcesNode) text.after(sourcesNode);
+    }
+
+    errorNode?.remove();
+    errorNode = null;
+    if (state.error) {
+      errorNode = element('div', 'msg-error');
+      errorNode.setAttribute('role', 'alert');
+      errorNode.append(element('span', '', state.error.message));
+      if (onRetry) {
+        const retry = element('button', '', 'Повторить');
+        retry.type = 'button';
+        retry.disabled = busy;
+        retry.addEventListener('click', () => onRetry());
+        errorNode.append(retry);
+      }
+      root.append(errorNode);
+    }
+    if (stick) messages.scrollTop = messages.scrollHeight;
+  }
+
+  return {root, render};
+}
+
+function setBusy(value) {
+  busy = value;
+  messageInput.disabled = value;
+  sendButton.disabled = value;
+  for (const retry of messages.querySelectorAll('.msg-error button')) retry.disabled = value;
+  if (!value) messageInput.focus();
+}
+
+function abortCurrent() {
+  dialogGeneration += 1;
+  currentRequest?.abort();
+  currentRequest = null;
+}
+
+// ---------- chat ----------
+
+async function readConversationId() {
+  const stored = await storage.get(conversationKey);
+  return typeof stored[conversationKey] === 'string' ? stored[conversationKey] : '';
+}
+
+async function ask(message, view) {
+  if (busy || !accessToken) return;
+  setBusy(true);
+  const generation = dialogGeneration;
+  const controller = new AbortController();
+  currentRequest = controller;
+  let state = createAssistantState();
+  view.render(state);
+
+  try {
+    const conversationId = await readConversationId();
+    const request = {message, ...(conversationId ? {conversation_id: conversationId} : {})};
+    const result = await streamChat({
+      baseUrl: backend,
+      token: accessToken,
+      request,
+      signal: controller.signal,
+      preferLegacy: !streamingSupported,
+      legacyChat: text => chat(backend, text, accessToken),
+      onEvent: event => {
+        if (generation !== dialogGeneration) return;
+        state = applyStreamEvent(state, event);
+        view.render(state);
+      },
+    });
+    if (result.transport === 'legacy' && streamingSupported) {
+      streamingSupported = false;
+      modeHint.hidden = false;
+    }
+    if (result.conversationReset && generation === dialogGeneration && !state.conversationId) {
+      await storage.remove(conversationKey);
+    }
+    state = finalizeStream(state);
+  } catch (error) {
+    if (isUnauthorized(error)) return; // the unauthorized event already logs out
+    state = controller.signal.aborted ? finalizeStream(state, 'interrupted') : finalizeStream(state, failureCode(error));
+  } finally {
+    if (currentRequest === controller) currentRequest = null;
+    if (generation === dialogGeneration) setBusy(false);
+    else busy = false;
+  }
+
+  if (generation !== dialogGeneration) return;
+  if (state.conversationId) await storage.set({[conversationKey]: state.conversationId});
+  view.render(state);
+}
+
+function startQuestion(message) {
+  appendMessage(element('div', 'msg msg-user', message));
+  const view = createAssistantView({onRetry: () => void ask(message, view)});
+  appendMessage(view.root);
+  void ask(message, view);
+}
+
+// ---------- events ----------
+
 loginForm.addEventListener('submit', async event => {
   event.preventDefault();
   const button = loginForm.querySelector('button');
@@ -118,7 +259,7 @@ loginForm.addEventListener('submit', async event => {
   try {
     const result = await login(backend, $('#email').value.trim(), passwordInput.value);
     accessToken = result.access_token;
-    await saveToken(storage, accessToken);
+    await Promise.all([saveToken(storage, accessToken), storage.remove(conversationKey)]);
     showAssistant(result.user.email);
   } catch (error) {
     loginError.textContent = isUnauthorized(error)
@@ -136,6 +277,15 @@ globalThis.addEventListener('ai-buddy:unauthorized', () => {
   if (accessToken) void logout('Сессия истекла. Войдите снова.');
 });
 
+$('#new-chat').addEventListener('click', async () => {
+  abortCurrent();
+  setBusy(false);
+  await storage.remove(conversationKey);
+  resetDialogView();
+  messageInput.value = '';
+  messageInput.focus();
+});
+
 messageInput.addEventListener('keydown', event => {
   if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) {
     event.preventDefault();
@@ -143,31 +293,12 @@ messageInput.addEventListener('keydown', event => {
   }
 });
 
-chatForm.addEventListener('submit', async event => {
+chatForm.addEventListener('submit', event => {
   event.preventDefault();
-  const message = messageInput.value;
-  if (!message.trim() || !accessToken) return;
+  const message = messageInput.value.trim();
+  if (!message || busy || !accessToken) return;
   messageInput.value = '';
-  appendMessage(element('div', 'msg msg-user', message));
-  const bubble = appendMessage(element('div', 'msg msg-assistant'));
-  const status = bubble.appendChild(element('p', 'status', 'Ищу в базе знаний…'));
-  messageInput.disabled = sendButton.disabled = true;
-  try {
-    const result = await chat(backend, message, accessToken);
-    status.remove();
-    bubble.append(element('div', 'msg-text', result.answer));
-    const sources = renderSources(result.sources);
-    if (sources) bubble.append(sources);
-  } catch (error) {
-    status.remove();
-    if (!(error instanceof ApiError && error.status === 401)) {
-      bubble.append(element('div', 'msg-error', 'Backend временно недоступен. Повторите попытку позже.'));
-    }
-  } finally {
-    messageInput.disabled = sendButton.disabled = false;
-    messageInput.focus();
-    messages.scrollTop = messages.scrollHeight;
-  }
+  startQuestion(message);
 });
 
 await verifyStoredSession();

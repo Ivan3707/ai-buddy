@@ -88,6 +88,8 @@ button:disabled { opacity: .6; cursor: default; }
 .msg-error { margin-top: 6px; padding: 6px 8px; border-radius: 6px; background: var(--error-bg); color: var(--error); display: flex; gap: 8px; align-items: center; justify-content: space-between; }
 .msg-error button { padding: 4px 10px; background: var(--error); }
 
+.mode-hint { margin: 0; padding: 4px 12px; font-size: 11px; color: var(--muted); background: var(--accent-soft); }
+
 .composer { display: flex; gap: 6px; align-items: flex-end; padding: 8px 12px; border-top: 1px solid var(--border); }
 .composer textarea { resize: none; min-height: 40px; max-height: 140px; }
 
