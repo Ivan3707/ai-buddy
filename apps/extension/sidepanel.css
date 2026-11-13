@@ -87,7 +87,7 @@ button:disabled { opacity: .6; cursor: default; }
 .sources a { color: var(--accent); }
 
 .msg-error { margin-top: 6px; padding: 6px 8px; border-radius: 6px; background: var(--error-bg); color: var(--error); display: flex; gap: 8px; align-items: center; justify-content: space-between; }
-.msg-error button { padding: 4px 10px; background: var(--error); }
+.msg-error button { flex-shrink: 0; white-space: nowrap; padding: 4px 10px; background: var(--error); }
 
 .action-card { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: #fff; }
 .action-title { margin: 0 0 4px; font-size: 13px; }

@@ -126,7 +126,7 @@ function renderSources(sources) {
     let url;
     try { url = new URL(source.url); } catch { continue; }
     if (url.protocol !== 'https:') continue; // never render javascript:/data: links
-    const link = element('a', '', `${source.title} (демо)`);
+    const link = element('a', '', /демо/i.test(source.title) ? source.title : `${source.title} (демо)`);
     link.href = url.href;
     link.target = '_blank';
     link.rel = 'noreferrer';
