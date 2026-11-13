@@ -284,9 +284,11 @@ GOOSE_DBSTRING="$TEST_DATABASE_URL" goose -dir apps/backend/migrations up
 ```sh
 npm ci
 npm run build --workspace @ai-buddy/extension
+# если backend на 18080:
+BACKEND_ORIGIN=http://127.0.0.1:18080 npm run build --workspace @ai-buddy/extension
 ```
 
-В Chrome откройте `chrome://extensions`, включите режим разработчика → «Загрузить распакованное расширение» → выберите `apps/extension/dist`. Закрепите AI-buddy, нажмите иконку и отправьте вопрос. Backend должен быть запущен. Расширение не читает страницы, не запрашивает cookies, history или tabs. Только разрешение на локальный Backend. Popup и веб используют `packages/client`.
+В Chrome (116+) откройте `chrome://extensions`, включите режим разработчика → «Загрузить распакованное расширение» → выберите `apps/extension/dist`. Закрепите AI-buddy и нажмите иконку: чат откроется в боковой панели и останется открытым при переходах по вкладкам. Backend должен быть запущен. Расширение не запрашивает cookies, history или `tabs`. Контекст открытой страницы (URL, заголовок, выделенный текст) берётся только через `activeTab` после клика по иконке и только для http(s)-страниц. Его можно отключить переключателем. Пока backend не реализует `/api/chat/stream`, панель автоматически использует `POST /api/chat`. Подробности, разрешения и ручная проверка с мок-backend описаны в [apps/extension/README.md](apps/extension/README.md).
 
 ## Проверки
 
