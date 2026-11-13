@@ -287,6 +287,24 @@
                 }
               }
             }
+          },
+          "502": {
+            "description": "Source unavailable or empty; the previous index is kept",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
           }
         }
       }

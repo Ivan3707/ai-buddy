@@ -411,7 +411,8 @@ ai_spec = {
             "responses": {"200": json_resp("Reloaded", {
                 "type": "object", "required": ["documents", "chunks"],
                 "properties": {"documents": {"type": "integer"}, "chunks": {"type": "integer"},
-                               "source": {"type": "string"}}})}}},
+                               "source": {"type": "string"}}}),
+                          "502": json_resp("Source unavailable or empty; the previous index is kept", ERROR)}}},
         "/metrics": {"get": {
             "operationId": "metrics", "description": "Prometheus metrics (latency, tokens, finish reasons, errors).",
             "responses": {"200": {"description": "Prometheus text format",
