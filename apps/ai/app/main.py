@@ -15,6 +15,7 @@ from . import metrics
 from .agent import run_turn, sse
 from .brief import run_brief
 from .config import Settings, load_settings
+from .limits import Limiter
 from .llm import LLM, make_llm
 from .retrieval import BM25Retriever, Retriever, build_retriever, load_kb
 from .schemas import AgentChatRequest, BriefRequest, ChatRequest, ChatResponse, Source
@@ -34,6 +35,7 @@ def create_app(settings: Settings | None = None, retriever: Retriever | None = N
     llm = llm or make_llm(settings)
     app = FastAPI(title="AI-buddy AI", version="0.2.0")
     app.state.settings, app.state.retriever, app.state.llm = settings, retriever, llm
+    limiter = Limiter(settings.rate_limit_per_minute, settings.daily_token_budget)
     app.state.kb_source = source
     app.include_router(mentor.router)
     app.include_router(gaps.router)
@@ -65,7 +67,7 @@ def create_app(settings: Settings | None = None, retriever: Retriever | None = N
     @app.post("/v1/brief/stream")
     async def brief_stream(body: BriefRequest):
         async def frames() -> AsyncIterator[str]:
-            async for event, data in run_brief(body, app.state.retriever, llm, settings):
+            async for event, data in run_brief(body, app.state.retriever, llm, settings, limiter):
                 yield sse(event, data)
         return StreamingResponse(frames(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
@@ -73,7 +75,7 @@ def create_app(settings: Settings | None = None, retriever: Retriever | None = N
     @app.post("/v1/chat/stream")
     async def chat_stream(body: AgentChatRequest):
         async def frames() -> AsyncIterator[str]:
-            async for event, data in run_turn(body, app.state.retriever, llm, settings):
+            async for event, data in run_turn(body, app.state.retriever, llm, settings, limiter=limiter):
                 yield sse(event, data)
         return StreamingResponse(frames(), media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})

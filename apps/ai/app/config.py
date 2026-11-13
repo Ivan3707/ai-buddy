@@ -29,6 +29,8 @@ class Settings:
     fallback_api_key: str = ""
     fallback_model: str = ""
     fallback_extra_body: dict[str, Any] = field(default_factory=dict)
+    rate_limit_per_minute: int = 0  # per user; 0 = off
+    daily_token_budget: int = 0  # whole service, input + output tokens per UTC day; 0 = off
     top_k: int = 4
     min_score: float = 0.2
 
@@ -62,6 +64,8 @@ def load_settings(env: Mapping[str, str] = os.environ) -> Settings:
         fallback_extra_body=json.loads(get("LLM_FALLBACK_EXTRA_BODY") or "{}"),
         rag_mode=get("RAG_MODE", "hybrid"),
         embedding_model=get("RAG_EMBEDDING_MODEL", "intfloat/multilingual-e5-small"),
+        rate_limit_per_minute=int(get("RATE_LIMIT_PER_MINUTE", "20")),
+        daily_token_budget=int(get("LLM_DAILY_TOKEN_BUDGET", "0")),
         top_k=int(get("RAG_TOP_K", "4")),
         min_score=float(get("RAG_MIN_SCORE", "0.2")),
     )

@@ -18,6 +18,7 @@ from pydantic import BaseModel, ValidationError
 from .config import Settings
 from .llm import LLM, LLMError, TextDelta, ToolCall, Turn, Usage
 from . import metrics
+from .limits import Limiter
 from .pii import mask
 from .prompts import ACCESS_LEVELS_BY_ROLE, FALLBACK_TEXT, TOOL_TO_ACTION, build_messages, build_tools
 from .retrieval import Hit, Retriever, fuse, tokenize
@@ -35,7 +36,9 @@ ERROR_MESSAGES = {
     "llm_unavailable": "Модель сейчас недоступна. Попробуй ещё раз чуть позже.",
     "timeout": "Модель отвечает слишком долго. Попробуй ещё раз.",
     "internal": "Что-то пошло не так. Попробуй ещё раз.",
+    "rate_limited": "Слишком много запросов. Подожди минуту и попробуй снова.",
 }
+BUDGET_MESSAGE = "Дневной лимит ассистента исчерпан. Задай вопрос наставнику или попробуй завтра."
 EMPTY_ANSWER = "Не получилось сформулировать ответ. Переформулируй вопрос или спроси наставника."
 CITATION = re.compile(r"\[([^\[\]]{1,60})\]")
 Event = tuple[str, dict[str, Any]]
@@ -169,9 +172,16 @@ def retrieve(req: AgentChatRequest, retriever: Retriever, k: int, min_score: flo
 
 
 async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
-                   settings: Settings, query: str | None = None) -> AsyncIterator[Event]:
+                   settings: Settings, query: str | None = None,
+                   limiter: Limiter | None = None) -> AsyncIterator[Event]:
     """query overrides what is searched in the KB (used by the brief, whose message is an instruction)."""
     t0 = time.monotonic()
+    exceeded = limiter.check(req.user_context.user_id) if limiter else None
+    if exceeded:
+        metrics.RATE_LIMITED.labels(exceeded).inc()
+        message = BUDGET_MESSAGE if exceeded == "daily_tokens" else ERROR_MESSAGES["rate_limited"]
+        yield "error", {"code": "rate_limited", "message": message}
+        return
     req, masked = mask_request(req)
     for kind, n in masked.items():
         metrics.PII_MASKED.labels(kind).inc(n)
@@ -229,6 +239,8 @@ async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
         finish = "answered"  # grounded in KB or in the user's own context (possibly + escalation offer)
     latency_ms = int((time.monotonic() - t0) * 1000)
     metrics.TURNS.labels(finish).inc()
+    if limiter:
+        limiter.spend(usage.input_tokens + usage.output_tokens)
     metrics.LATENCY.observe(latency_ms / 1000)
     for kind, n in (("input", usage.input_tokens), ("output", usage.output_tokens),
                     ("cached_input", usage.cached_input_tokens)):

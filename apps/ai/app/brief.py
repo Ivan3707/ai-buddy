@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 
 from .agent import Event, run_turn
 from .config import Settings
+from .limits import Limiter
 from .llm import LLM, MockLLM
 from .retrieval import Retriever
 from .schemas import AgentChatRequest, BriefRequest, UserContext
@@ -70,7 +71,8 @@ def template_brief(ctx: UserContext, last_seen_at: datetime | None) -> str:
     return "\n".join(lines)
 
 
-async def run_brief(body: BriefRequest, retriever: Retriever, llm: LLM, settings: Settings) -> AsyncIterator[Event]:
+async def run_brief(body: BriefRequest, retriever: Retriever, llm: LLM, settings: Settings,
+                    limiter: Limiter | None = None) -> AsyncIterator[Event]:
     ctx = body.user_context
     if isinstance(llm, MockLLM):
         yield "status", {"stage": "generating"}
@@ -82,5 +84,5 @@ async def run_brief(body: BriefRequest, retriever: Retriever, llm: LLM, settings
     if body.last_seen_at:
         message += f"\nПрошлый визит: {body.last_seen_at.isoformat()}."
     req = AgentChatRequest(message=message, user_context=ctx.model_copy(update={"allowed_actions": []}))
-    async for event in run_turn(req, retriever, llm, settings, query=brief_query(ctx)):
+    async for event in run_turn(req, retriever, llm, settings, query=brief_query(ctx), limiter=limiter):
         yield event
