@@ -125,11 +125,17 @@ func NewRouter(
 			Interns: deps.Interns,
 		}.RegisterAssignmentRoutes(mux, authenticated)
 	}
+	if deps.Team != nil {
+		Dependencies{Team: deps.Team}.RegisterTeamRoutes(mux, authenticated)
+	}
 	Dependencies{
 		Checklists:  deps.Checklists,
 		Items:       deps.Items,
 		Submissions: deps.Submissions,
 	}.RegisterChecklistRoutes(mux, authenticated)
+	if deps.Feedback != nil {
+		Dependencies{Feedback: deps.Feedback}.RegisterFeedbackRoutes(mux, authenticated)
+	}
 
 	chatHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.Body = http.MaxBytesReader(w, r.Body, 16384)
@@ -175,9 +181,14 @@ func NewRouter(
 		}
 		defer res.Body.Close()
 
+		responseBody, readErr := io.ReadAll(io.LimitReader(res.Body, 65537))
 		var reply chatResponse
+		decoder = json.NewDecoder(bytes.NewReader(responseBody))
 		if res.StatusCode != http.StatusOK ||
-			json.NewDecoder(io.LimitReader(res.Body, 65536)).Decode(&reply) != nil ||
+			readErr != nil ||
+			len(responseBody) > 65536 ||
+			decoder.Decode(&reply) != nil ||
+			decoder.Decode(&struct{}{}) != io.EOF ||
 			reply.Answer == "" ||
 			reply.Mode != "mock" ||
 			reply.Sources == nil {
@@ -190,5 +201,5 @@ func NewRouter(
 
 	mux.Handle("POST /api/chat", authenticated(chatHandler))
 
-	return mux
+	return middleware.InstrumentHTTP(mux)
 }

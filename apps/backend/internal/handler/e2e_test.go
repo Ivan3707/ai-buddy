@@ -79,8 +79,8 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	`).Scan(&version); err != nil {
 		t.Fatalf("read goose version: %v", err)
 	}
-	if version != 7 {
-		t.Fatalf("test database must be at Goose v7, got v%d", version)
+	if version != 9 {
+		t.Fatalf("test database must be at Goose v9, got v%d", version)
 	}
 
 	// Only one common and one backend professional checklist are permitted.
@@ -175,11 +175,13 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	}
 	users := repository.NewUserRepository(db)
 	progress := service.NewProgressService(db)
+	userService := service.NewUserService(db)
 	server := httptest.NewServer(handler.NewRouter("", []byte(demo), handler.Dependencies{
 		Auth:          service.NewAuthService(users, jwtService),
 		Users:         users,
 		JWT:           jwtService,
-		Interns:       service.NewUserService(db),
+		Interns:       userService,
+		Team:          userService,
 		PersonalTasks: service.NewPersonalTaskService(db),
 		Checklists:    service.NewChecklistService(db),
 		Items:         progress,
@@ -270,30 +272,19 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	teamleadToken := login(teamleadEmail, buddyPassword, true)
 
 	internEmail := "intern-" + uuid.NewString() + "@example.com"
-	request(http.MethodPost, "/api/users", buddyToken, map[string]string{"email": internEmail, "password": internPassword, "profession": "backend"}, http.StatusBadRequest, nil)
-	var created publicUser
-	request(http.MethodPost, "/api/users", buddyToken, map[string]string{
-		"email": internEmail, "password": internPassword, "profession": "backend", "first_name": "Test", "last_name": "Intern", "department": "Engineering", "team": "Backend", "teamlead_id": teamleadID.String(), "birth_date": "2000-01-01", "employed_since": "2026-01-01",
-	}, http.StatusCreated, &created)
-	internID, err = uuid.Parse(created.ID)
-	if err != nil || internID == uuid.Nil || created.Role != model.RoleIntern {
-		t.Fatalf("invalid created intern response: %+v", created)
+	request(http.MethodPost, "/api/users", buddyToken, map[string]string{"email": internEmail}, http.StatusNotFound, nil)
+	request(http.MethodPost, "/api/users", teamleadToken, map[string]string{"email": internEmail}, http.StatusNotFound, nil)
+	internHash, err := security.HashPassword(internPassword)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if created.FirstName == nil || *created.FirstName != "Test" || created.LastName == nil || *created.LastName != "Intern" || created.Department == nil || *created.Department != "Engineering" || created.Team == nil || *created.Team != "Backend" {
-		t.Fatalf("created intern profile missing fields: %+v", created)
+	created, err := service.NewUserService(db).CreateInternWithAssignments(ctx, internEmail, internHash, model.ProfessionBackend, buddyID, teamleadID, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), "Test", "Intern", "", "Engineering", "Backend")
+	if err != nil {
+		t.Fatalf("create E2E intern fixture: %v", err)
 	}
-	var assignedBuddy uuid.UUID
-	if err := db.QueryRowContext(ctx, `SELECT buddy_id FROM users WHERE id = $1`, internID).Scan(&assignedBuddy); err != nil {
-		t.Fatalf("read assigned buddy: %v", err)
-	}
-	if assignedBuddy != buddyID {
-		t.Fatalf("created intern assigned to %s, want %s", assignedBuddy, buddyID)
-	}
+	internID = created.ID
 	request(http.MethodPut, "/api/buddy/interns/"+internID.String()+"/teamlead", otherBuddyToken, map[string]string{"teamlead_id": teamleadID.String()}, http.StatusNotFound, nil)
 	request(http.MethodPut, "/api/buddy/interns/"+internID.String()+"/teamlead", buddyToken, map[string]string{"teamlead_id": teamleadID.String()}, http.StatusNoContent, nil)
-	request(http.MethodPost, "/api/users", buddyToken, map[string]string{
-		"email": internEmail, "password": internPassword, "profession": "backend", "first_name": "Test", "last_name": "Intern", "department": "Engineering", "team": "Backend", "teamlead_id": teamleadID.String(), "birth_date": "2000-01-01", "employed_since": "2026-01-01",
-	}, http.StatusConflict, nil)
 
 	request(http.MethodPost, "/api/auth/login", "", map[string]string{
 		"email": internEmail, "password": "wrong-password",
@@ -321,6 +312,23 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	}
 	request(http.MethodGet, "/api/checklists", buddyToken, nil, http.StatusForbidden, nil)
 	request(http.MethodGet, "/api/buddy/submissions", internToken, nil, http.StatusForbidden, nil)
+	var buddyInterns []publicUser
+	request(http.MethodGet, "/api/staff/interns", buddyToken, nil, http.StatusOK, &buddyInterns)
+	if len(buddyInterns) != 1 || buddyInterns[0].ID != internID.String() {
+		t.Fatalf("buddy assigned intern list is not isolated: %+v", buddyInterns)
+	}
+	var leadInterns []publicUser
+	request(http.MethodGet, "/api/staff/interns", teamleadToken, nil, http.StatusOK, &leadInterns)
+	if len(leadInterns) != 1 || leadInterns[0].ID != internID.String() {
+		t.Fatalf("teamlead assigned intern list is not isolated: %+v", leadInterns)
+	}
+	var teamleads []publicUser
+	request(http.MethodGet, "/api/staff/teamleads", buddyToken, nil, http.StatusOK, &teamleads)
+	if len(teamleads) == 0 {
+		t.Fatal("buddy teamlead lookup returned no users")
+	}
+	request(http.MethodGet, "/api/staff/teamleads", teamleadToken, nil, http.StatusForbidden, nil)
+	request(http.MethodGet, "/api/staff/interns", internToken, nil, http.StatusForbidden, nil)
 
 	initial := getChecklists(internToken)
 	var ownProgress progressResponseDTO

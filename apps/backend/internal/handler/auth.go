@@ -67,6 +67,7 @@ type createInternRequest struct {
 	Department       string           `json:"department"`
 	Team             string           `json:"team"`
 	TeamleadID       string           `json:"teamlead_id"`
+	BuddyID          string           `json:"buddy_id"`
 	BirthDate        string           `json:"birth_date"`
 	EmployedSince    string           `json:"employed_since"`
 }
@@ -260,10 +261,10 @@ func (d Dependencies) createInternHandler() http.HandlerFunc {
 			return
 		}
 
-		body.Email = strings.TrimSpace(body.Email)
-		leadID, err := uuid.Parse(body.TeamleadID)
+		body.Email = strings.ToLower(strings.TrimSpace(body.Email))
+		buddyID, err := uuid.Parse(body.BuddyID)
 		if err != nil {
-			send(w, 400, map[string]string{"error": "invalid teamlead_id"})
+			send(w, 400, map[string]string{"error": "invalid buddy_id"})
 			return
 		}
 		birthDate, err := time.Parse("2006-01-02", body.BirthDate)
@@ -307,9 +308,9 @@ func (d Dependencies) createInternHandler() http.HandlerFunc {
 		}
 
 		currentUser, ok := middleware.CurrentUser(r.Context())
-		if !ok || currentUser.Role != model.RoleBuddy {
-			send(w, http.StatusUnauthorized, map[string]string{
-				"error": "unauthorized",
+		if !ok || currentUser.Role != model.RoleTeamlead {
+			send(w, http.StatusForbidden, map[string]string{
+				"error": "forbidden",
 			})
 			return
 		}
@@ -319,19 +320,10 @@ func (d Dependencies) createInternHandler() http.HandlerFunc {
 		if creator, ok := d.Interns.(interface {
 			CreateInternWithAssignments(context.Context, string, string, model.Profession, uuid.UUID, uuid.UUID, time.Time, time.Time, string, string, string, string, string) (*model.User, error)
 		}); ok {
-			user, errCreate = creator.CreateInternWithAssignments(r.Context(), body.Email, passwordHash, body.Profession, currentUser.ID, leadID, birthDate, employedSince, strings.TrimSpace(body.FirstName), strings.TrimSpace(body.LastName), strings.TrimSpace(body.TelegramUsername), strings.TrimSpace(body.Department), strings.TrimSpace(body.Team))
-		} else if creator, ok := d.Interns.(interface {
-			CreateInternWithProfile(context.Context, string, string, model.Profession, uuid.UUID, string, string, string, string, string) (*model.User, error)
-		}); ok {
-			user, errCreate = creator.CreateInternWithProfile(r.Context(), body.Email, passwordHash, body.Profession, currentUser.ID, strings.TrimSpace(body.FirstName), strings.TrimSpace(body.LastName), strings.TrimSpace(body.TelegramUsername), strings.TrimSpace(body.Department), strings.TrimSpace(body.Team))
+			user, errCreate = creator.CreateInternWithAssignments(r.Context(), body.Email, passwordHash, body.Profession, buddyID, currentUser.ID, birthDate, employedSince, strings.TrimSpace(body.FirstName), strings.TrimSpace(body.LastName), strings.TrimSpace(body.TelegramUsername), strings.TrimSpace(body.Department), strings.TrimSpace(body.Team))
 		} else {
-			user, errCreate = d.Interns.CreateIntern(
-				r.Context(),
-				body.Email,
-				passwordHash,
-				body.Profession,
-				currentUser.ID,
-			)
+			send(w, http.StatusInternalServerError, map[string]string{"error": "intern creation unavailable"})
+			return
 		}
 		err = errCreate
 

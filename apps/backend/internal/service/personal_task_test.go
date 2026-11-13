@@ -27,6 +27,7 @@ func TestPersonalTaskInsertAroundActiveAndCompleted(t *testing.T) {
 	if err = db.PingContext(ctx); err != nil {
 		t.Fatal(err)
 	}
+	requireIsolatedTestDatabase(t, db, ctx)
 	fixture := createChecklistTestFixture(t, db, ctx, model.ProfessionBackend, 1, 3)
 	buddy := &model.User{Email: "buddy-" + uuid.NewString() + "@example.com", PasswordHash: "hash", Role: model.RoleBuddy}
 	if err = repository.NewUserRepository(db).Create(ctx, buddy); err != nil {
@@ -63,9 +64,14 @@ func TestPersonalTaskInsertAroundActiveAndCompleted(t *testing.T) {
 		t.Fatal(err)
 	}
 	personal := NewPersonalTaskService(db)
-	first, err := personal.Create(ctx, teamlead.ID, interns[0].ID, 1, "Before completed", "", "Expected", 30, false)
+	deadline := time.Date(2026, 12, 1, 12, 0, 0, 0, time.UTC)
+	first, err := personal.Create(ctx, teamlead.ID, interns[0].ID, 1, "Before completed", "Details", "Expected", 30, false, &deadline)
 	if err != nil {
 		t.Fatal(err)
+	}
+	var storedDueAt sql.NullTime
+	if err := db.QueryRowContext(ctx, `SELECT due_at FROM checklist_items WHERE id=$1`, first).Scan(&storedDueAt); err != nil || !storedDueAt.Valid || !storedDueAt.Time.Equal(deadline) {
+		t.Fatalf("deadline was not stored: %v %v", storedDueAt, err)
 	}
 	second, err := personal.Create(ctx, teamlead.ID, interns[0].ID, 3, "Before active", "", "Expected", 30, true)
 	if err != nil {

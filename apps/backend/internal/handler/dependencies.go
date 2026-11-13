@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/model"
@@ -28,6 +29,12 @@ type InternCreator interface {
 	) (*model.User, error)
 }
 
+type TeamReader interface {
+	ListAssignedInterns(context.Context, uuid.UUID, model.UserRole) ([]model.User, error)
+	ListTeamleads(context.Context) ([]model.User, error)
+	ListBuddies(context.Context) ([]model.User, error)
+}
+
 type ChecklistReader interface {
 	GetByUserID(context.Context, uuid.UUID) (*service.UserChecklists, error)
 }
@@ -44,7 +51,7 @@ type BuddySubmissionService interface {
 }
 
 type PersonalTaskCreator interface {
-	Create(context.Context, uuid.UUID, uuid.UUID, int, string, string, string, int, bool) (uuid.UUID, error)
+	Create(context.Context, uuid.UUID, uuid.UUID, int, string, string, string, int, bool, ...*time.Time) (uuid.UUID, error)
 }
 
 type HintReader interface {
@@ -63,10 +70,12 @@ type SessionService interface {
 }
 
 type Dependencies struct {
+	Feedback     FeedbackManager
 	Auth          AuthService
 	Users         UserRepository
 	JWT           *security.JWTService
 	Interns       InternCreator
+	Team          TeamReader
 	Checklists    ChecklistReader
 	Items         ChecklistItemService
 	Submissions   BuddySubmissionService

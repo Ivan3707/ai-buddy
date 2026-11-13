@@ -3,4 +3,8 @@
 **/dist
 **/.venv
 .env
+.env.*
+**/.cache
+/load-results
+/backups
 **/__pycache__

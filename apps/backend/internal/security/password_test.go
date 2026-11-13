@@ -1,9 +1,32 @@
 package security
 
 import (
+	"context"
+	"errors"
 	"strings"
 	"testing"
 )
+
+func TestVerifyPasswordContextCanceledWhileSlotsBusy(t *testing.T) {
+	hash, err := HashPassword("correct-password-123")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for range maxConcurrentArgon {
+		argonSlots <- struct{}{}
+	}
+	defer func() {
+		for range maxConcurrentArgon {
+			<-argonSlots
+		}
+	}()
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	valid, err := VerifyPasswordContext(ctx, "correct-password-123", hash)
+	if valid || !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected canceled check, got valid=%v err=%v", valid, err)
+	}
+}
 
 func TestHashPassword(t *testing.T) {
 	password := "correct-password-123"

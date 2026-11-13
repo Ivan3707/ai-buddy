@@ -19,6 +19,8 @@ func (d Dependencies) RegisterCorporateRoutes(
 
 	mux.Handle("GET /api/corporate/tools/{tool}",
 		authenticated(d.corporateToolHandler()))
+	mux.Handle("GET /api/corporate/tools",
+		authenticated(middleware.RequireRole(model.RoleIntern)(d.corporateToolsHandler())))
 
 	mux.Handle("POST /api/corporate/access-requests",
 		authenticated(

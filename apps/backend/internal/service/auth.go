@@ -67,7 +67,8 @@ func (s *AuthService) Login(
 		return nil, errors.New("user repository returned nil user")
 	}
 
-	passwordValid, err := security.VerifyPassword(
+	passwordValid, err := security.VerifyPasswordContext(
+		ctx,
 		password,
 		user.PasswordHash,
 	)

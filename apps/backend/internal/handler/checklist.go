@@ -18,6 +18,7 @@ type checklistItemDTO struct {
 	ExpectedResult   *string               `json:"expected_result"`
 	RequiresReview   bool                  `json:"requires_review"`
 	EstimatedMinutes *int                  `json:"estimated_minutes"`
+	DueAt            *string               `json:"due_at"`
 	Position         int                   `json:"position"`
 	Status           model.ChecklistStatus `json:"status"`
 	CompletedAt      *string               `json:"completed_at"`
@@ -234,6 +235,7 @@ func toChecklistDTO(value service.ChecklistWithProgress) checklistDTO {
 				ExpectedResult:   item.Item.ExpectedResult,
 				RequiresReview:   item.Item.RequiresReview,
 				EstimatedMinutes: item.Item.EstimatedMinutes,
+				DueAt:            formatOptionalTime(item.Item.DueAt),
 				Position:         item.Item.Position,
 				Status:           item.Status,
 				CompletedAt:      formatOptionalTime(item.CompletedAt),

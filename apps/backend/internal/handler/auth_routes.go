@@ -2,9 +2,6 @@ package handler
 
 import (
 	"net/http"
-
-	"github.com/nvkmaksim/ai-buddy/backend/internal/middleware"
-	"github.com/nvkmaksim/ai-buddy/backend/internal/model"
 )
 
 func (d Dependencies) RegisterAuthRoutes(
@@ -31,12 +28,4 @@ func (d Dependencies) RegisterAuthRoutes(
 		authenticated(d.logoutHandler()),
 	)
 
-	mux.Handle(
-		"POST /api/users",
-		authenticated(
-			middleware.RequireRole(model.RoleBuddy)(
-				d.createInternHandler(),
-			),
-		),
-	)
 }

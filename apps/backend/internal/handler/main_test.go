@@ -210,6 +210,57 @@ func TestAIUnavailable(t *testing.T) {
 	}
 }
 
+func TestInvalidAIResponses(t *testing.T) {
+	tests := []struct {
+		name   string
+		status int
+		body   string
+	}{
+		{name: "malformed JSON", status: http.StatusOK, body: `{"answer":`},
+		{name: "trailing JSON", status: http.StatusOK, body: `{"answer":"ok","sources":[],"mode":"mock"}{}`},
+		{name: "wrong mode", status: http.StatusOK, body: `{"answer":"ok","sources":[],"mode":"live"}`},
+		{name: "missing sources", status: http.StatusOK, body: `{"answer":"ok","mode":"mock"}`},
+		{name: "oversized", status: http.StatusOK, body: `{"answer":"` + strings.Repeat("a", 65536) + `","sources":[],"mode":"mock"}`},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			ai := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer ai.Close()
+
+			handler, token, _ := newTestHandler(t, ai.URL)
+			w := httptest.NewRecorder()
+			handler.ServeHTTP(w, authorizedRequest(http.MethodPost, "/api/chat", `{"message":"hi"}`, token))
+			if w.Code != http.StatusBadGateway {
+				t.Fatalf("got %d, want %d", w.Code, http.StatusBadGateway)
+			}
+		})
+	}
+}
+
+func TestAITimeoutUsesRequestContext(t *testing.T) {
+	ai := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(500 * time.Millisecond):
+		}
+	}))
+	defer ai.Close()
+
+	handler, token, _ := newTestHandler(t, ai.URL)
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	req := authorizedRequest(http.MethodPost, "/api/chat", `{"message":"hi"}`, token).WithContext(ctx)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusBadGateway {
+		t.Fatalf("got %d, want %d", w.Code, http.StatusBadGateway)
+	}
+}
+
 func TestRoleFiltering(t *testing.T) {
 	handler, _, _ := newTestHandler(t, "")
 
@@ -381,6 +432,14 @@ func (s *testInternCreator) CreateIntern(
 	return user, nil
 }
 
+func (s *testInternCreator) CreateInternWithAssignments(ctx context.Context, email, passwordHash string, profession model.Profession, buddyID, teamleadID uuid.UUID, birthDate, employedSince time.Time, firstName, lastName, telegram, department, team string) (*model.User, error) {
+	user, err := s.CreateIntern(ctx, email, passwordHash, profession, buddyID)
+	if err == nil {
+		user.TeamleadID = &teamleadID
+	}
+	return user, err
+}
+
 func newTeamleadHandler(
 	t *testing.T,
 	interns handler.InternCreator,
@@ -390,7 +449,7 @@ func newTeamleadHandler(
 	user := &model.User{
 		ID:        uuid.New(),
 		Email:     "admin@example.com",
-		Role:      model.RoleBuddy,
+		Role:      model.RoleTeamlead,
 		CreatedAt: time.Now().UTC(),
 	}
 
@@ -424,170 +483,14 @@ func newTeamleadHandler(
 
 	return handler, token
 }
-func TestCreateIntern(t *testing.T) {
-	interns := &testInternCreator{}
-	handler, token := newTeamleadHandler(t, interns)
-
-	body := `{
-        "email": "new-intern@example.com",
-        "password": "strong-password-123",
-        "profession": "backend", "first_name":"Test", "last_name":"Intern", "department":"Engineering", "team":"Backend", "teamlead_id":"11111111-1111-4111-8111-111111111111", "birth_date":"2000-01-01", "employed_since":"2026-01-01"
-    }`
-
-	w := httptest.NewRecorder()
-	req := authorizedRequest(
-		http.MethodPost,
-		"/api/users",
-		body,
-		token,
-	)
-
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusCreated {
-		t.Fatalf("got %d: %s", w.Code, w.Body.String())
-	}
-
-	if !interns.called {
-		t.Fatal("expected CreateIntern to be called")
-	}
-
-	if interns.email != "new-intern@example.com" {
-		t.Errorf("unexpected email: %s", interns.email)
-	}
-
-	if interns.profession != model.ProfessionBackend {
-		t.Errorf("unexpected profession: %s", interns.profession)
-	}
-
-	if strings.Contains(w.Body.String(), "password") {
-		t.Fatal("response must not contain password or password hash")
-	}
-
-	if !strings.Contains(w.Body.String(), `"role":"intern"`) {
-		t.Fatal("response must contain intern role")
-	}
-	if interns.buddyID == uuid.Nil {
-		t.Fatal("expected authenticated buddy ID to be passed")
-	}
-}
-func TestCreateInternRequiresTeamlead(t *testing.T) {
-	handler, token, _ := newTestHandler(t, "")
-
-	w := httptest.NewRecorder()
-	req := authorizedRequest(
-		http.MethodPost,
-		"/api/users",
-		`{
-            "email":"new-intern@example.com",
-            "password":"strong-password-123",
-            "profession":"backend"
-        }`,
-		token,
-	)
-
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusForbidden {
-		t.Fatalf("got %d, want %d", w.Code, http.StatusForbidden)
-	}
-}
-func TestCreateInternRequiresAuthentication(t *testing.T) {
-	handler, _ := newTeamleadHandler(t, &testInternCreator{})
-
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/api/users",
-		strings.NewReader(`{}`),
-	)
-
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("got %d, want %d", w.Code, http.StatusUnauthorized)
-	}
-}
-func TestCreateInternRejectsDuplicateEmail(t *testing.T) {
-	interns := &testInternCreator{
-		err: repository.ErrEmailAlreadyExists,
-	}
-	handler, token := newTeamleadHandler(t, interns)
-
-	body := `{
-        "email":"existing@example.com",
-        "password":"strong-password-123",
-        "profession":"backend", "first_name":"Test", "last_name":"Intern", "department":"Engineering", "team":"Backend", "teamlead_id":"11111111-1111-4111-8111-111111111111", "birth_date":"2000-01-01", "employed_since":"2026-01-01"
-    }`
-
-	w := httptest.NewRecorder()
-	req := authorizedRequest(
-		http.MethodPost,
-		"/api/users",
-		body,
-		token,
-	)
-
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusConflict {
-		t.Fatalf("got %d, want %d", w.Code, http.StatusConflict)
-	}
-}
-
-func TestCreateInternRejectsInvalidProfession(t *testing.T) {
-	interns := &testInternCreator{}
-	handler, token := newTeamleadHandler(t, interns)
-
-	body := `{
-        "email": "new-intern@example.com",
-        "password": "strong-password-123",
-        "profession": "devops", "first_name":"Test", "last_name":"Intern", "department":"Engineering", "team":"Backend", "teamlead_id":"11111111-1111-4111-8111-111111111111", "birth_date":"2000-01-01", "employed_since":"2026-01-01"
-    }`
-
-	w := httptest.NewRecorder()
-	req := authorizedRequest(
-		http.MethodPost,
-		"/api/users",
-		body,
-		token,
-	)
-
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("got %d, want %d", w.Code, http.StatusBadRequest)
-	}
-	if !interns.called {
-		t.Fatal("expected CreateIntern to be called")
-	}
-}
-
-func TestCreateInternRejectsShortPassword(t *testing.T) {
-	interns := &testInternCreator{}
-	handler, token := newTeamleadHandler(t, interns)
-
-	body := `{
-        "email": "new-intern@example.com",
-        "password": "short",
-        "profession": "backend"
-    }`
-
-	w := httptest.NewRecorder()
-	req := authorizedRequest(
-		http.MethodPost,
-		"/api/users",
-		body,
-		token,
-	)
-
-	handler.ServeHTTP(w, req)
-
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("got %d, want %d", w.Code, http.StatusBadRequest)
-	}
-
-	if interns.called {
-		t.Fatal("service must not be called for invalid password")
+func TestCreateInternHTTPRemoved(t *testing.T) {
+	internCreator := &testInternCreator{}
+	router, token := newTeamleadHandler(t, internCreator)
+	for _, candidate := range []string{"", token} {
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, authorizedRequest(http.MethodPost, "/api/users", `{}`, candidate))
+		if w.Code != http.StatusNotFound || internCreator.called {
+			t.Fatalf("public creation: status=%d called=%v", w.Code, internCreator.called)
+		}
 	}
 }

@@ -126,7 +126,11 @@ func (s *ChecklistService) GetByUserID(
 
 	for _, itemProgress := range progress {
 		expectedChecklistID, ok := expectedItems[itemProgress.ChecklistItemID]
-		if !ok || itemProgress.ChecklistID != expectedChecklistID {
+		if !ok {
+			// HR can change profession; retain the previous track as history.
+			continue
+		}
+		if itemProgress.ChecklistID != expectedChecklistID {
 			return nil, fmt.Errorf(
 				"%w: unexpected progress record for item %s",
 				ErrProgressIncomplete,

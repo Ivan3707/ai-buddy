@@ -106,6 +106,7 @@ func TestCorporateHTTPE2E(t *testing.T) {
 	path := "/api/corporate/access-requests"
 	key := "request-" + uuid.NewString()
 	request("POST", path, own, map[string]any{"tool": "ml-platform", "idempotency_key": key, "confirm": false}, 400)
+	request("POST", path, own, map[string]any{"tool": "ml-platform", "idempotency_key": key, "confirm": true, "user_id": other.ID.String()}, 400)
 	raw := request("POST", path, own, map[string]any{"tool": "ml-platform", "idempotency_key": key, "confirm": true}, 201)
 	var created service.AccessRequest
 	if err = json.Unmarshal(raw, &created); err != nil || created.ID == uuid.Nil || created.TicketNumber == "" {

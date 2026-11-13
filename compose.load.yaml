@@ -1,0 +1,166 @@
+name: ai-buddy-load
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: load_user
+      POSTGRES_PASSWORD: ${LOAD_DB_PASSWORD:?Set LOAD_DB_PASSWORD in .env.load}
+      POSTGRES_DB: ai_buddy_load
+    volumes:
+      - load_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U load_user -d ai_buddy_load"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    build:
+      context: .
+      dockerfile: ops/load/migrate.Dockerfile
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGUSER: load_user
+      PGPASSWORD: ${LOAD_DB_PASSWORD:?Set LOAD_DB_PASSWORD in .env.load}
+      PGDATABASE: ai_buddy_load
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  ai:
+    build:
+      context: .
+      dockerfile: apps/ai/Dockerfile
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+    ports:
+      - "127.0.0.1:${LOAD_BACKEND_PORT:-18080}:8080"
+    environment:
+      AI_URL: http://ai:8001
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: load_user
+      DB_PASSWORD: ${LOAD_DB_PASSWORD:?Set LOAD_DB_PASSWORD in .env.load}
+      DB_NAME: ai_buddy_load
+      DB_SSLMODE: disable
+      JWT_SECRET: ${LOAD_JWT_SECRET:?Set LOAD_JWT_SECRET in .env.load}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      ai:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  prometheus:
+    image: prom/prometheus:v3.13.3
+    ports:
+      - "127.0.0.1:${LOAD_PROMETHEUS_PORT:-19090}:9090"
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --web.enable-lifecycle
+    volumes:
+      - ./ops/load/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - load_prometheus_data:/prometheus
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  grafana:
+    image: grafana/grafana:12.3.10
+    ports:
+      - "127.0.0.1:${LOAD_GRAFANA_PORT:-13000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${LOAD_GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${LOAD_GRAFANA_ADMIN_PASSWORD:?Set LOAD_GRAFANA_ADMIN_PASSWORD in .env.load}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - load_grafana_data:/var/lib/grafana
+      - ./ops/load/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/load/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      prometheus:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  seed-load:
+    profiles: ["load-tools"]
+    build:
+      context: .
+      dockerfile: ops/load/seed.Dockerfile
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: load_user
+      DB_PASSWORD: ${LOAD_DB_PASSWORD:?Set LOAD_DB_PASSWORD in .env.load}
+      DB_NAME: ai_buddy_load
+      DB_SSLMODE: disable
+      LOAD_USER_PASSWORD: ${LOAD_USER_PASSWORD:-}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: "no"
+
+  cleanup-load:
+    profiles: ["load-tools"]
+    build:
+      context: .
+      dockerfile: ops/load/seed.Dockerfile
+    entrypoint: ["/usr/local/bin/cleanup-load"]
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: load_user
+      DB_PASSWORD: ${LOAD_DB_PASSWORD:?Set LOAD_DB_PASSWORD in .env.load}
+      DB_NAME: ai_buddy_load
+      DB_SSLMODE: disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  k6:
+    profiles: ["load-tools"]
+    image: grafana/k6:1.8.2
+    entrypoint: ["k6"]
+    environment:
+      BASE_URL: http://backend:8080
+      LOAD_USER_PASSWORD: ${LOAD_USER_PASSWORD:-}
+      K6_RUN_ID: ${K6_RUN_ID:-local}
+      K6_PAUSE_SECONDS: ${K6_PAUSE_SECONDS:-0.2}
+    volumes:
+      - ./ops/load/k6:/scripts:ro
+      - ./load-results:/results
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  load_postgres_data:
+  load_prometheus_data:
+  load_grafana_data:

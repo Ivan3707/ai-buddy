@@ -16,7 +16,7 @@ import (
 type sessionStore interface {
 	Create(context.Context, uuid.UUID, string, time.Time) (uuid.UUID, error)
 	Rotate(context.Context, uuid.UUID, string, string, time.Time) (uuid.UUID, error)
-	Revoke(context.Context, uuid.UUID, uuid.UUID) error
+	Revoke(context.Context, uuid.UUID, uuid.UUID, string) error
 	IsActive(context.Context, uuid.UUID, uuid.UUID) (bool, error)
 }
 
@@ -85,9 +85,13 @@ func (s *AuthService) Logout(ctx context.Context, userID uuid.UUID, token string
 	if s.sessions == nil {
 		return ErrInvalidRefresh
 	}
-	id, _, err := parseRefresh(token)
+	id, secret, err := parseRefresh(token)
 	if err != nil {
 		return err
 	}
-	return s.sessions.Revoke(ctx, id, userID)
+	if err := s.sessions.Revoke(ctx, id, userID, secret); errors.Is(err, repository.ErrNotFound) {
+		return ErrInvalidRefresh
+	} else {
+		return err
+	}
 }

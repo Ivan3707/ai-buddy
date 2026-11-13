@@ -72,9 +72,22 @@ func equalHash(a, b []byte) bool {
 	}
 	return diff == 0
 }
-func (r *SessionRepository) Revoke(ctx context.Context, id, userID uuid.UUID) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE auth_sessions SET revoked_at=now() WHERE id=$1 AND user_id=$2`, id, userID)
-	return err
+func (r *SessionRepository) Revoke(ctx context.Context, id, userID uuid.UUID, secret string) error {
+	hash := sha256.Sum256([]byte(secret))
+	result, err := r.db.ExecContext(ctx, `UPDATE auth_sessions SET revoked_at=now()
+		WHERE id=$1 AND user_id=$2 AND token_hash=$3
+		AND revoked_at IS NULL AND expires_at>now()`, id, userID, hash[:])
+	if err != nil {
+		return err
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if affected != 1 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *SessionRepository) IsActive(ctx context.Context, id, userID uuid.UUID) (bool, error) {

@@ -4,18 +4,20 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/nvkmaksim/ai-buddy/backend/internal/middleware"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/service"
 )
 
 type personalTaskRequest struct {
-	Position         int    `json:"position"`
-	Title            string `json:"title"`
-	Description      string `json:"description"`
-	ExpectedResult   string `json:"expected_result"`
-	EstimatedMinutes int    `json:"estimated_minutes"`
-	RequiresReview   bool   `json:"requires_review"`
+	Position         int     `json:"position"`
+	Title            string  `json:"title"`
+	Description      string  `json:"description"`
+	ExpectedResult   string  `json:"expected_result"`
+	EstimatedMinutes int     `json:"estimated_minutes"`
+	RequiresReview   bool    `json:"requires_review"`
+	DueAt            *string `json:"due_at"`
 }
 
 func (d Dependencies) createPersonalTaskHandler() http.HandlerFunc {
@@ -39,6 +41,15 @@ func (d Dependencies) createPersonalTaskHandler() http.HandlerFunc {
 		}
 
 		user, _ := middleware.CurrentUser(r.Context())
+		var dueAt *time.Time
+		if body.DueAt != nil {
+			parsed, err := time.Parse(time.RFC3339, *body.DueAt)
+			if err != nil {
+				send(w, 400, map[string]string{"error": "invalid due_at"})
+				return
+			}
+			dueAt = &parsed
+		}
 
 		taskID, err := d.PersonalTasks.Create(
 			r.Context(),
@@ -50,6 +61,7 @@ func (d Dependencies) createPersonalTaskHandler() http.HandlerFunc {
 			body.ExpectedResult,
 			body.EstimatedMinutes,
 			body.RequiresReview,
+			dueAt,
 		)
 
 		switch {

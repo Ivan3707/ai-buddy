@@ -1,6 +1,7 @@
 .env
 .env.*
 !.env.example
+!.env.load.example
 node_modules/
 dist/
 .venv/
@@ -14,3 +15,7 @@ test-results/
 .vscode
 # Local Go binaries
 /apps/backend/*.exe
+/backups/
+/load-results/
+apps/backend/.cache/
+/load-results-archive-20261114/

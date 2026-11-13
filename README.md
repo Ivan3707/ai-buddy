@@ -6,6 +6,16 @@
 
 ## Технологии
 
+### Backend API для следующего этапа Web
+
+- `POST /api/users` — только Teamlead. Передать `email`, `password`, `profession` (`backend|frontend|ml`), `buddy_id`, `first_name`, `last_name`, `department`, `team`, `birth_date`, `employed_since`; `telegram_username` необязателен. Teamlead определяется по JWT. Ошибки: `400` некорректное поле, `403` роль/Buddy, `409` повтор email. Все ошибки — JSON `{"error":"..."}`.
+- `GET /api/staff/buddies` — Teamlead получает публичный список Buddy. `GET /api/staff/interns` возвращает только назначенных текущему сотруднику стажёров.
+- `POST /api/teamlead/interns/{internID}/checklist-items` — `position` с 1, `title`, `description`, `expected_result`, `estimated_minutes`, `requires_review`, необязательный `due_at` в RFC3339. Ответ `201` с `id`; `400` неверные данные/позиция, `404` чужой стажёр. `GET /api/checklists` и progress содержат `due_at` у задания.
+- `GET /api/auth/me` — публичный профиль с `profession`, назначениями, `age_years` и `tenure_months` при наличии исходных дат. Стаж рассчитывается от `employed_since`.
+- `GET /api/corporate/tools` — каталог `{tool,allowed}` для стажёра; `POST /api/corporate/access-requests` принимает `tool`, `idempotency_key` и `confirm: true` и повторно проверяет разрешение. `GET /api/corporate/access-requests` и `GET /api/corporate/access-requests/{id}` возвращают только заявки текущего пользователя.
+
+Для новой версии Backend требуется Goose `00008` после `00007`. `app` не обновлена в рамках этапа 1: перед применением миграций нужно отдельно подтвердить цель, резервную копию и окно работ.
+
 | Компонент | Стек |
 |---|---|
 | Backend | Go 1.26, стандартный `net/http`, `pgx`, JWT |
@@ -408,3 +418,52 @@ ai-buddy/
 - [Backend: роли, прогресс, корпоративный mock и AI-контракт](docs/backend-corporate-integration.md)
 
 ---
+## Актуальный demo-стенд (Goose v7)
+
+Основная локальная БД `app` должна иметь версию Goose `7`. Перед обновлением существующего стенда обязательно сделайте `pg_dump` и проверьте восстановление в отдельную временную БД. Не применяйте команды к БД, имя которой не проверено явно.
+
+Для наполнения демонстрационного стенда после миграций используются идемпотентные seed-файлы:
+
+- `apps/backend/scripts/seed_demo_frontend_checklist_v1.sql`;
+- `apps/backend/scripts/seed_demo_ml_checklist_v1.sql`;
+- `go run ./cmd/seed-demo` из `apps/backend` с `DB_NAME=app` и секретом `DEMO_PASSWORD` в окружении.
+
+Команда `seed-demo` отказывается работать не с `app` и не с Goose v7. Повторный запуск проверяет существующие назначения и не перезаписывает несовпадающие данные. Пароль demo-аккаунтов в репозиторий не записывается.
+
+Demo email:
+
+- `buddy@demo.example`;
+- `teamlead@demo.example`;
+- `backend.intern@demo.example`;
+- `frontend.intern@demo.example`;
+- `ml.intern@demo.example`.
+
+Web доступен на `http://127.0.0.1:5173`. Реализованы отдельные экраны dashboard, чек-листов, команды, календаря, заметок, корпоративных заявок, профиля и mock AI-чата. Web хранит access/refresh-сессию в `sessionStorage`, обновляет JWT и вызывает серверный logout. Nginx проксирует `/api` в Backend и явно отдаёт UTF-8.
+
+Для проверки:
+
+```bash
+cd apps/backend
+TEST_DATABASE_URL=postgres://.../ai_buddy_test?sslmode=disable RUN_E2E=1 go test -count=1 -p 1 ./...
+go vet ./...
+go build ./...
+
+cd ../..
+npm test
+npm run build --workspace @ai-buddy/web
+npx playwright test
+```
+
+Web Playwright требует `E2E_DEMO_PASSWORD`. MV3-сценарий дополнительно использует `E2E_BUDDY_EMAIL` и `E2E_BUDDY_PASSWORD` и требует браузер с поддержкой headless extensions.
+# Этап 3: HR и обратная связь
+
+Начиная с миграции `00009` аккаунты создаёт внутренняя HR-синхронизация; `POST /api/users` удалён. После применения миграции к отдельной тестовой БД команду запускают из `apps/backend` с явно заданными `DB_NAME=ai_buddy_test` и остальными `DB_*` переменными:
+
+```powershell
+go run ./cmd/sync-hr -snapshot ../../data/corporate_employees.json -credentials C:\private\new-hr-credentials.json
+go run ./cmd/retry-feedback
+```
+
+Файл учётных данных должен находиться вне репозитория и отсутствовать до запуска. Команда создаёт по одному случайному паролю для каждого нового аккаунта и сохраняет их в этом файле; HR snapshot паролей не содержит. На Windows ограничение доступа к файлу нужно дополнительно задать средствами ACL. Существующие Argon2id-хеши не меняются. Повторная синхронизация сохраняет локальные ID и прогресс; записи, исчезнувшие из HR snapshot, остаются в AI-Buddy. Backend загружает JSON справочника при старте, поэтому после замены snapshot его нужно перезапустить. Рабочую `app` сначала нужно отдельно мигрировать до `00009`, затем перезапустить Backend с актуальным HR snapshot. Здесь команда для `app` не запускалась.
+
+После завершения каждого чек-листа стажёр может отправить один отзыв через Web или `POST /api/checklists/{checklist_id}/feedback`. `GET` того же пути возвращает собственный отзыв либо `{"feedback":null}`. Отзыв сохраняется до доставки в mock аналитику. `cmd/retry-feedback` повторяет доставку `pending` и `failed`; `feedback_id` исключает дубли в mock. `ANALYTICS_MOCK_UNAVAILABLE=1` позволяет проверить отказ доставки. Полноценный корпоративный SSO/OIDC не входит в этот этап.

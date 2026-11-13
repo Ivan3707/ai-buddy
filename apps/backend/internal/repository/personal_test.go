@@ -27,6 +27,7 @@ func TestPersonalRecordsOwnerIsolation(t *testing.T) {
 	if err = db.PingContext(ctx); err != nil {
 		t.Fatal(err)
 	}
+	requireIsolatedTestDatabase(t, db, ctx)
 	users := NewUserRepository(db)
 	ids := make([]uuid.UUID, 2)
 	for i := range ids {

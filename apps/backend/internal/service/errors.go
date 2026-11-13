@@ -10,6 +10,7 @@ var (
 	ErrUserNotIntern             = errors.New("user is not an intern")
 	ErrUserNotBuddy              = errors.New("user is not a buddy")
 	ErrUserNotTeamlead           = errors.New("user is not a teamlead")
+	ErrUserNotStaff              = errors.New("user is not staff")
 	ErrInternNotAssigned         = errors.New("intern is not assigned to this buddy")
 	ErrCannotReviewSelf          = errors.New("buddy cannot review their own checklist")
 	ErrReviewNotPending          = errors.New("checklist item is not awaiting review")

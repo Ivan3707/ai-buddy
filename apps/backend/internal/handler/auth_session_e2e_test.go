@@ -39,8 +39,8 @@ func TestAuthSessionsHTTPIntegration(t *testing.T) {
 	if dbName != "ai_buddy_test" {
 		t.Fatalf("unsafe DB %q", dbName)
 	}
-	if err = db.QueryRowContext(ctx, `SELECT max(version_id) FROM goose_db_version WHERE is_applied`).Scan(&version); err != nil || version != 7 {
-		t.Fatalf("expected Goose v7: %d %v", version, err)
+	if err = db.QueryRowContext(ctx, `SELECT max(version_id) FROM goose_db_version WHERE is_applied`).Scan(&version); err != nil || version != 9 {
+		t.Fatalf("expected Goose v9: %d %v", version, err)
 	}
 	hash, err := security.HashPassword("strong-password-123")
 	if err != nil {
@@ -118,6 +118,14 @@ func TestAuthSessionsHTTPIntegration(t *testing.T) {
 		t.Fatalf("replay must revoke access, got %d", code)
 	}
 	access, refresh = login()
+	parts := strings.Split(refresh, ".")
+	invalidRefresh := parts[0] + "." + strings.Repeat("x", 43)
+	if code, _ := call("POST", "/api/auth/logout", `{"refresh_token":"`+invalidRefresh+`"}`, access); code != 400 {
+		t.Fatalf("logout with invalid refresh secret: %d", code)
+	}
+	if code, _ := call("GET", "/api/auth/me", "", access); code != 200 {
+		t.Fatalf("invalid logout must not revoke access, got %d", code)
+	}
 	if code, _ := call("POST", "/api/auth/logout", `{"refresh_token":"`+refresh+`"}`, access); code != 204 {
 		t.Fatalf("logout status %d", code)
 	}

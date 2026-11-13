@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/model"
+	"time"
 )
 
 var ErrInvalidPosition = errors.New("invalid position")
@@ -23,7 +24,7 @@ func (r *PersonalTaskRepository) LockUser(ctx context.Context, id uuid.UUID) err
 	}
 	return err
 }
-func (r *PersonalTaskRepository) Insert(ctx context.Context, userID, checklistID uuid.UUID, position int, title, description, expected string, minutes int, review bool) (uuid.UUID, error) {
+func (r *PersonalTaskRepository) Insert(ctx context.Context, userID, checklistID uuid.UUID, position int, title, description, expected string, minutes int, review bool, dueAt *time.Time) (uuid.UUID, error) {
 	var locked uuid.UUID
 	if err := r.tx.QueryRowContext(ctx, `SELECT id FROM checklists WHERE id=$1 FOR UPDATE`, checklistID).Scan(&locked); err != nil {
 		return uuid.Nil, err
@@ -63,8 +64,8 @@ func (r *PersonalTaskRepository) Insert(ctx context.Context, userID, checklistID
 		return uuid.Nil, err
 	}
 	var itemID uuid.UUID
-	err = r.tx.QueryRowContext(ctx, `INSERT INTO checklist_items(checklist_id,stage_id,title,description,expected_result,estimated_minutes,requires_review,position,assigned_user_id)
- VALUES($1,$2,$3,$4,$5,$6,$7,(SELECT COALESCE(MAX(position),0)+1 FROM checklist_items WHERE checklist_id=$1),$8) RETURNING id`, checklistID, stage, title, description, expected, minutes, review, userID).Scan(&itemID)
+	err = r.tx.QueryRowContext(ctx, `INSERT INTO checklist_items(checklist_id,stage_id,title,description,expected_result,estimated_minutes,requires_review,position,assigned_user_id,due_at)
+ VALUES($1,$2,$3,$4,$5,$6,$7,(SELECT COALESCE(MAX(position),0)+1 FROM checklist_items WHERE checklist_id=$1),$8,$9) RETURNING id`, checklistID, stage, title, description, expected, minutes, review, userID, dueAt).Scan(&itemID)
 	if err != nil {
 		return uuid.Nil, err
 	}

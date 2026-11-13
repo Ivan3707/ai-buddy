@@ -29,6 +29,7 @@ func TestProgressRepository(t *testing.T) {
 		_ = db.Close()
 		t.Fatalf("ping database: %v", err)
 	}
+	requireIsolatedTestDatabase(t, db, ctx)
 
 	t.Cleanup(func() {
 		_ = db.Close()

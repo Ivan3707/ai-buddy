@@ -48,18 +48,7 @@ func openChecklistTestDB(t *testing.T) (*sql.DB, context.Context) {
 	if err := db.PingContext(ctx); err != nil {
 		t.Fatalf("ping database: %v", err)
 	}
-
-	var gooseVersion int
-	if err := db.QueryRowContext(ctx, `
-		SELECT COALESCE(MAX(version_id), 0)
-		FROM goose_db_version
-		WHERE is_applied
-	`).Scan(&gooseVersion); err != nil {
-		t.Fatalf("read Goose version: %v", err)
-	}
-	if gooseVersion != 7 {
-		t.Fatalf("TEST_DATABASE_URL must use Goose version 7, got %d", gooseVersion)
-	}
+	requireIsolatedTestDatabase(t, db, ctx)
 
 	return db, ctx
 }
@@ -478,7 +467,7 @@ func TestChecklistService_GetByUserID_MissingProgress(t *testing.T) {
 	}
 }
 
-func TestChecklistService_GetByUserID_UnexpectedProgress(t *testing.T) {
+func TestChecklistService_GetByUserID_PreviousProfessionProgress(t *testing.T) {
 	db, ctx := openChecklistTestDB(t)
 
 	fixture := createChecklistTestFixture(
@@ -544,12 +533,13 @@ func TestChecklistService_GetByUserID_UnexpectedProgress(t *testing.T) {
 		t.Fatalf("create unexpected progress record: %v", err)
 	}
 
-	_, err = NewChecklistService(db).GetByUserID(ctx, user.ID)
-	if !errors.Is(err, ErrProgressIncomplete) {
-		t.Errorf("expected ErrProgressIncomplete, got %v", err)
+	result, err := NewChecklistService(db).GetByUserID(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("previous profession progress must remain as history: %v", err)
 	}
-
-	_ = fixture
+	if result.Professional.Checklist.ID != fixture.professionalID || result.Professional.TotalItems != 2 {
+		t.Fatalf("current profession checklist changed: %+v", result.Professional)
+	}
 }
 
 func TestChecklistService_GetByUserID_EmptyChecklists(t *testing.T) {

@@ -73,7 +73,7 @@ func (r *UserRepository) GetByID(
 	id uuid.UUID,
 ) (*model.User, error) {
 	query := `
-		SELECT id, email, password_hash, role, profession, buddy_id, created_at,
+		SELECT id, email, password_hash, role, profession, buddy_id, created_at, corporate_id,
 			last_login_at, first_name, last_name, telegram_username, department, team,
 			teamlead_id,birth_date,employed_since
 		FROM users
@@ -88,7 +88,7 @@ func (r *UserRepository) GetByEmail(
 	email string,
 ) (*model.User, error) {
 	query := `
-		SELECT id, email, password_hash, role, profession, buddy_id, created_at,
+		SELECT id, email, password_hash, role, profession, buddy_id, created_at, corporate_id,
 			last_login_at, first_name, last_name, telegram_username, department, team,
 			teamlead_id,birth_date,employed_since
 		FROM users
@@ -138,6 +138,60 @@ func (r *UserRepository) AssignTeamlead(ctx context.Context, internID, buddyID, 
 	return err
 }
 
+func (r *UserRepository) ListAssignedInterns(ctx context.Context, actorID uuid.UUID, role model.UserRole) ([]model.User, error) {
+	column := "buddy_id"
+	if role == model.RoleTeamlead {
+		column = "teamlead_id"
+	} else if role != model.RoleBuddy {
+		return []model.User{}, nil
+	}
+	query := `SELECT id, email, password_hash, role, profession, buddy_id, created_at, corporate_id,
+		last_login_at, first_name, last_name, telegram_username, department, team,
+		teamlead_id, birth_date, employed_since
+		FROM users WHERE role='intern' AND ` + column + `=$1
+		ORDER BY last_name NULLS LAST, first_name NULLS LAST, email`
+	return r.listUsers(ctx, query, actorID)
+}
+
+func (r *UserRepository) ListByRole(ctx context.Context, role model.UserRole) ([]model.User, error) {
+	query := `SELECT id, email, password_hash, role, profession, buddy_id, created_at, corporate_id,
+		last_login_at, first_name, last_name, telegram_username, department, team,
+		teamlead_id, birth_date, employed_since
+		FROM users WHERE role=$1
+		ORDER BY last_name NULLS LAST, first_name NULLS LAST, email`
+	return r.listUsers(ctx, query, role)
+}
+
+func (r *UserRepository) listUsers(ctx context.Context, query string, arg any) ([]model.User, error) {
+	rows, err := r.db.QueryContext(ctx, query, arg)
+	if err != nil {
+		return nil, fmt.Errorf("list users: %w", err)
+	}
+	defer rows.Close()
+	users := make([]model.User, 0)
+	for rows.Next() {
+		var user model.User
+		var profession, firstName, lastName, telegram, department, team sql.NullString
+		var buddyID, teamleadID uuid.NullUUID
+		var lastLoginAt, birthDate, employedSince sql.NullTime
+		var corporateID sql.NullString
+		if err := rows.Scan(&user.ID, &user.Email, &user.PasswordHash, &user.Role, &profession,
+			&buddyID, &user.CreatedAt, &corporateID, &lastLoginAt, &firstName, &lastName, &telegram,
+			&department, &team, &teamleadID, &birthDate, &employedSince); err != nil {
+			return nil, fmt.Errorf("scan user list: %w", err)
+		}
+		if corporateID.Valid {
+			user.CorporateID = &corporateID.String
+		}
+		applyNullableUserFields(&user, profession, buddyID, lastLoginAt, firstName, lastName, telegram, department, team, teamleadID, birthDate, employedSince)
+		users = append(users, user)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list users rows: %w", err)
+	}
+	return users, nil
+}
+
 func (r *UserRepository) getUser(
 	ctx context.Context,
 	query string,
@@ -147,6 +201,7 @@ func (r *UserRepository) getUser(
 	var profession sql.NullString
 	var buddyID uuid.NullUUID
 	var lastLoginAt sql.NullTime
+	var corporateID sql.NullString
 	var firstName, lastName, telegram, department, team sql.NullString
 	var teamleadID uuid.NullUUID
 	var birthDate, employedSince sql.NullTime
@@ -159,6 +214,7 @@ func (r *UserRepository) getUser(
 		&profession,
 		&buddyID,
 		&user.CreatedAt,
+		&corporateID,
 		&lastLoginAt,
 		&firstName, &lastName, &telegram, &department, &team,
 		&teamleadID, &birthDate, &employedSince,
@@ -172,6 +228,14 @@ func (r *UserRepository) getUser(
 		return nil, fmt.Errorf("get user: %w", err)
 	}
 
+	if corporateID.Valid {
+		user.CorporateID = &corporateID.String
+	}
+	applyNullableUserFields(user, profession, buddyID, lastLoginAt, firstName, lastName, telegram, department, team, teamleadID, birthDate, employedSince)
+	return user, nil
+}
+
+func applyNullableUserFields(user *model.User, profession sql.NullString, buddyID uuid.NullUUID, lastLoginAt sql.NullTime, firstName, lastName, telegram, department, team sql.NullString, teamleadID uuid.NullUUID, birthDate, employedSince sql.NullTime) {
 	if profession.Valid {
 		value := model.Profession(profession.String)
 		user.Profession = &value
@@ -208,6 +272,4 @@ func (r *UserRepository) getUser(
 	if employedSince.Valid {
 		user.EmployedSince = &employedSince.Time
 	}
-
-	return user, nil
 }

@@ -26,6 +26,7 @@ func TestSessionRotationReplayRevokes(t *testing.T) {
 	if err = db.PingContext(ctx); err != nil {
 		t.Fatal(err)
 	}
+	requireIsolatedTestDatabase(t, db, ctx)
 	user := &model.User{Email: "session-" + uuid.NewString() + "@example.com", PasswordHash: "hash", Role: model.RoleBuddy}
 	if err = NewUserRepository(db).Create(ctx, user); err != nil {
 		t.Fatal(err)
@@ -40,10 +41,17 @@ func TestSessionRotationReplayRevokes(t *testing.T) {
 	if err != nil || owner != user.ID {
 		t.Fatalf("rotate: %s %v", owner, err)
 	}
+	if err = repo.Revoke(ctx, id, user.ID, "wrong"); err != ErrNotFound {
+		t.Fatalf("invalid logout secret should be rejected: %v", err)
+	}
+	active, err := repo.IsActive(ctx, id, user.ID)
+	if err != nil || !active {
+		t.Fatalf("invalid logout secret revoked session: active=%v err=%v", active, err)
+	}
 	if _, err = repo.Rotate(ctx, id, "original", "third", time.Now().Add(time.Hour)); err != ErrNotFound {
 		t.Fatalf("replay should be rejected: %v", err)
 	}
-	active, err := repo.IsActive(ctx, id, user.ID)
+	active, err = repo.IsActive(ctx, id, user.ID)
 	if err != nil || active {
 		t.Fatalf("replay should revoke session: active=%v err=%v", active, err)
 	}

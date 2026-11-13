@@ -59,7 +59,9 @@ func Run() error {
 	hints := service.NewHintService(repository.NewHintRepository(db), env("AI_URL", "http://127.0.0.1:8001"))
 
 	progress := service.NewProgressService(db)
+	userService := service.NewUserService(db)
 	deps := handler.Dependencies{
+		Feedback:     service.NewFeedbackService(db, service.MockAnalytics{DB: db, Unavailable: os.Getenv("ANALYTICS_MOCK_UNAVAILABLE") == "1"}),
 		Auth:          auth,
 		Sessions:      auth,
 		SessionCheck:  sessionRepo,
@@ -69,7 +71,8 @@ func Run() error {
 		Corporate:     service.NewCorporateService(db, directory),
 		Users:         users,
 		JWT:           jwtService,
-		Interns:       service.NewUserService(db),
+		Interns:       userService,
+		Team:          userService,
 		Checklists:    service.NewChecklistService(db),
 		Items:         progress,
 		Submissions:   progress,

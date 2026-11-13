@@ -28,6 +28,7 @@ func TestHintEnqueueAndClaimOnlyOnceIntegration(t *testing.T) {
 	if err = db.PingContext(ctx); err != nil {
 		t.Fatal(err)
 	}
+	requireIsolatedTestDatabase(t, db, ctx)
 	fixture := createChecklistTestFixture(t, db, ctx, model.ProfessionBackend, 1, 1)
 	buddy := &model.User{Email: "buddy-" + uuid.NewString() + "@example.com", PasswordHash: "hash", Role: model.RoleBuddy}
 	if err = repository.NewUserRepository(db).Create(ctx, buddy); err != nil {

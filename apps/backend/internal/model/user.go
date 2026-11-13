@@ -24,6 +24,7 @@ const (
 
 type User struct {
 	ID               uuid.UUID
+	CorporateID      *string
 	Email            string
 	PasswordHash     string
 	Role             UserRole

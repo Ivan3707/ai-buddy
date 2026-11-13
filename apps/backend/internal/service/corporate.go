@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/google/uuid"
@@ -21,15 +22,20 @@ var (
 )
 
 type CorporateEmployee struct {
-	ID           string            `json:"id"`
-	Email        string            `json:"email"`
-	Role         model.UserRole    `json:"role"`
-	Profession   *model.Profession `json:"profession,omitempty"`
-	Department   string            `json:"department"`
-	Team         string            `json:"team"`
-	ManagerID    string            `json:"manager_id,omitempty"`
-	BuddyID      string            `json:"buddy_id,omitempty"`
-	AllowedTools []string          `json:"allowed_tools"`
+	ID            string            `json:"id"`
+	Email         string            `json:"email"`
+	Role          model.UserRole    `json:"role"`
+	Profession    *model.Profession `json:"profession,omitempty"`
+	FirstName     *string           `json:"first_name,omitempty"`
+	LastName      *string           `json:"last_name,omitempty"`
+	Telegram      *string           `json:"telegram_username,omitempty"`
+	BirthDate     *string           `json:"birth_date,omitempty"`
+	EmployedSince *string           `json:"employed_since,omitempty"`
+	Department    string            `json:"department"`
+	Team          string            `json:"team"`
+	ManagerID     string            `json:"manager_id,omitempty"`
+	BuddyID       string            `json:"buddy_id,omitempty"`
+	AllowedTools  []string          `json:"allowed_tools"`
 }
 type CorporateDirectory struct {
 	byEmail map[string]CorporateEmployee
@@ -56,7 +62,13 @@ func (d *CorporateDirectory) ForUser(user *model.User) (CorporateEmployee, error
 	if d == nil {
 		return CorporateEmployee{}, ErrCorporateUnavailable
 	}
-	e, ok := d.byEmail[strings.ToLower(user.Email)]
+	var e CorporateEmployee
+	var ok bool
+	if user.CorporateID != nil {
+		e, ok = d.byID[*user.CorporateID]
+	} else {
+		e, ok = d.byEmail[strings.ToLower(user.Email)]
+	}
 	if !ok {
 		return CorporateEmployee{}, ErrCorporateNotFound
 	}
@@ -91,6 +103,34 @@ func (s *CorporateService) identity(user *model.User) (CorporateEmployee, error)
 }
 func (s *CorporateService) Profile(user *model.User) (CorporateEmployee, error) {
 	return s.identity(user)
+}
+
+type CorporateTool struct {
+	Tool    string `json:"tool"`
+	Allowed bool   `json:"allowed"`
+}
+
+func (s *CorporateService) ToolsForUser(user *model.User) ([]CorporateTool, error) {
+	employee, err := s.identity(user)
+	if err != nil {
+		return nil, err
+	}
+	allowed := make(map[string]bool, len(employee.AllowedTools))
+	for _, tool := range employee.AllowedTools {
+		allowed[tool] = true
+	}
+	catalog := make(map[string]bool)
+	for _, entry := range s.Directory.byID {
+		for _, tool := range entry.AllowedTools {
+			catalog[tool] = true
+		}
+	}
+	result := make([]CorporateTool, 0, len(catalog))
+	for tool := range catalog {
+		result = append(result, CorporateTool{Tool: tool, Allowed: allowed[tool]})
+	}
+	sort.Slice(result, func(i, j int) bool { return result[i].Tool < result[j].Tool })
+	return result, nil
 }
 func (s *CorporateService) ToolInfo(user *model.User, tool string) (map[string]string, error) {
 	e, err := s.identity(user)

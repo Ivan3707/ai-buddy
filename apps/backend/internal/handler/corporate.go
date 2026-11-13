@@ -154,3 +154,15 @@ func (d Dependencies) corporateToolHandler() http.HandlerFunc {
 		send(w, 200, result)
 	}
 }
+
+func (d Dependencies) corporateToolsHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		user, _ := middleware.CurrentUser(r.Context())
+		result, err := d.Corporate.ToolsForUser(user)
+		if err != nil {
+			corporateError(w, err)
+			return
+		}
+		send(w, http.StatusOK, result)
+	}
+}

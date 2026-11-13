@@ -35,18 +35,7 @@ func TestSubmissionRepository(t *testing.T) {
 	if err := db.PingContext(ctx); err != nil {
 		t.Fatalf("ping database: %v", err)
 	}
-
-	var migrationVersion int64
-	if err := db.QueryRowContext(ctx, `
-		SELECT COALESCE(MAX(version_id), 0)
-		FROM goose_db_version
-		WHERE is_applied
-	`).Scan(&migrationVersion); err != nil {
-		t.Fatalf("get Goose version: %v", err)
-	}
-	if migrationVersion != 7 {
-		t.Fatalf("expected Goose version 7, got %d", migrationVersion)
-	}
+	requireIsolatedTestDatabase(t, db, ctx)
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {

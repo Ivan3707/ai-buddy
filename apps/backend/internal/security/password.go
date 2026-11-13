@@ -1,6 +1,7 @@
 package security
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/subtle"
 	"encoding/base64"
@@ -13,12 +14,17 @@ import (
 )
 
 const (
-	argonMemory      uint32 = 64 * 1024
-	argonIterations  uint32 = 3
-	argonParallelism uint8  = 2
-	saltLength              = 16
-	keyLength               = 32
+	argonMemory        uint32 = 64 * 1024
+	argonIterations    uint32 = 3
+	argonParallelism   uint8  = 2
+	saltLength                = 16
+	keyLength                 = 32
+	maxConcurrentArgon        = 4
 )
+
+// Each Argon2id operation needs 64 MiB. Bound simultaneous operations so a
+// burst of logins cannot consume the entire container/host memory budget.
+var argonSlots = make(chan struct{}, maxConcurrentArgon)
 
 var ErrInvalidPasswordHash = errors.New("invalid password hash")
 
@@ -30,6 +36,7 @@ func HashPassword(password string) (string, error) {
 		return "", fmt.Errorf("generate password salt: %w", err)
 	}
 
+	argonSlots <- struct{}{}
 	hash := argon2.IDKey(
 		[]byte(password),
 		salt,
@@ -38,6 +45,7 @@ func HashPassword(password string) (string, error) {
 		argonParallelism,
 		keyLength,
 	)
+	<-argonSlots
 
 	encodedSalt := base64.RawStdEncoding.EncodeToString(salt)
 	encodedHash := base64.RawStdEncoding.EncodeToString(hash)
@@ -54,6 +62,12 @@ func HashPassword(password string) (string, error) {
 
 // VerifyPassword сравнивает пароль с сохранённым Argon2id-хешем.
 func VerifyPassword(password, encodedHash string) (bool, error) {
+	return VerifyPasswordContext(context.Background(), password, encodedHash)
+}
+
+// VerifyPasswordContext allows queued password checks to stop when the HTTP
+// request is canceled while waiting for an Argon2 slot.
+func VerifyPasswordContext(ctx context.Context, password, encodedHash string) (bool, error) {
 	parts := strings.Split(encodedHash, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" || parts[2] != "v=19" {
 		return false, ErrInvalidPasswordHash
@@ -108,6 +122,15 @@ func VerifyPassword(password, encodedHash string) (bool, error) {
 		return false, ErrInvalidPasswordHash
 	}
 
+	select {
+	case argonSlots <- struct{}{}:
+	case <-ctx.Done():
+		return false, ctx.Err()
+	}
+	defer func() { <-argonSlots }()
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	actualHash := argon2.IDKey(
 		[]byte(password),
 		salt,

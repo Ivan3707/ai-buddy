@@ -35,10 +35,21 @@ func TestCorporateAccessRequestIntegration(t *testing.T) {
 	if profile, err := svc.Profile(first); err != nil || profile.ID != "corp-one" {
 		t.Fatalf("profile=%+v err=%v", profile, err)
 	}
+	missing := *first
+	missing.Email = "missing-" + uuid.NewString() + "@example.com"
+	if _, err := svc.Profile(&missing); !errors.Is(err, ErrCorporateNotFound) {
+		t.Fatalf("missing corporate employee: %v", err)
+	}
 	forged := *first
 	forged.Role = model.RoleBuddy
 	if _, err := svc.Profile(&forged); !errors.Is(err, ErrCorporateForbidden) {
 		t.Fatalf("mismatched corporate role: %v", err)
+	}
+	otherProfession := model.ProfessionBackend
+	forged = *first
+	forged.Profession = &otherProfession
+	if _, err := svc.Profile(&forged); !errors.Is(err, ErrCorporateForbidden) {
+		t.Fatalf("mismatched corporate profession: %v", err)
 	}
 	if _, err := svc.ToolInfo(first, "ml-platform"); err != nil {
 		t.Fatal(err)

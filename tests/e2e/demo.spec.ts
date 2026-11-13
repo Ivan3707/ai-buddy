@@ -1,54 +1,81 @@
 import { test, expect, chromium, type Page } from '@playwright/test';
-import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 
-function requiredCredential(name: 'E2E_BUDDY_EMAIL' | 'E2E_BUDDY_PASSWORD') {
+function requiredCredential(name: string) {
   const value = process.env[name];
   if (!value) throw new Error(`${name} must be set for authenticated E2E tests`);
   return value;
 }
 
-async function login(page: Page, email: string, password: string) {
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Пароль').fill(password);
-  await page.getByRole('button', { name: 'Войти' }).click();
+async function loginWeb(page: Page, email: string, password: string) {
+  await page.getByTestId('email').fill(email);
+  await page.getByTestId('password').fill(password);
+  await page.getByTestId('login').click();
 }
 
-test('buddy creates an intern, intern opens checklists and uses AI assistant', async ({ page }) => {
-  const buddyEmail = requiredCredential('E2E_BUDDY_EMAIL');
-  const buddyPassword = requiredCredential('E2E_BUDDY_PASSWORD');
-  const unique = randomUUID();
-  const internEmail = `e2e-intern-${unique}@example.com`;
-  const internPassword = `E2e-${unique}-password!`;
+test('role-oriented Web works for intern, buddy and teamlead', async ({ page }) => {
+  const password = requiredCredential('E2E_DEMO_PASSWORD');
+  const cases = [
+    { email: 'backend.intern@demo.example', heading: 'Мои чек-листы', route: 'checklists' },
+    { email: 'buddy@demo.example', heading: 'Команда', route: 'team' },
+    { email: 'teamlead@demo.example', heading: 'Команда', route: 'team' },
+  ];
+  for (const item of cases) {
+    await page.goto('/');
+    await loginWeb(page, item.email, password);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await page.getByTestId(`nav-${item.route}`).click();
+    await expect(page.getByRole('heading', { name: item.heading, level: 1 })).toBeVisible();
+    await page.getByTestId('nav-profile').click();
+    await expect(page.getByText('Сопоставление подтверждено')).toBeVisible();
+    await page.getByTitle('Выйти').click();
+    await expect(page.getByTestId('login')).toBeVisible();
+  }
+});
 
+test('intern opens calendar, notes, requests and mock AI', async ({ page }) => {
   await page.goto('/');
-  await login(page, buddyEmail, buddyPassword);
+  await loginWeb(page, 'ml.intern@demo.example', requiredCredential('E2E_DEMO_PASSWORD'));
+  for (const [route, heading] of [['calendar', 'Календарь'], ['notes', 'Заметки'], ['requests', 'Корпоративные инструменты'], ['chat', 'AI-помощник']]) {
+    await page.getByTestId(`nav-${route}`).click();
+    await expect(page.getByRole('heading', { name: heading, level: 1 })).toBeVisible();
+  }
+  await page.getByPlaceholder('Напишите вопрос…').fill('Что важно сделать в первую неделю?');
+  await page.getByRole('button', { name: 'Отправить' }).click();
+  await expect(page.getByText('AI-Buddy', { exact: true })).toBeVisible();
+});
 
-  const createIntern = page.getByRole('region', { name: 'Создать стажёра' });
-  await expect(createIntern).toBeVisible();
-  await createIntern.getByLabel('Email').fill(internEmail);
-  await createIntern.getByLabel('Временный пароль').fill(internPassword);
-  await createIntern.getByRole('button', { name: 'Создать стажёра' }).click();
-  await expect(createIntern.getByText(internEmail, { exact: false })).toBeVisible();
-
-  await page.getByRole('button', { name: 'Выйти' }).click();
-  await expect(page.getByRole('button', { name: 'Войти' })).toBeVisible();
-  await login(page, internEmail, internPassword);
-
-  const commonChecklist = page.getByRole('region', { name: 'Общий чек-лист' });
-  const professionalChecklist = page.getByRole('region', { name: 'Профессиональный чек-лист' });
-  await expect(commonChecklist).toBeVisible();
-  await expect(professionalChecklist).toBeVisible();
-  await expect(commonChecklist.getByRole('article').first()).toBeVisible();
-  await expect(professionalChecklist.getByRole('article').first()).toBeVisible();
-  await expect(commonChecklist.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
-  await expect(professionalChecklist.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
-
-  await page.getByRole('button', { name: 'Спросить AI-помощника' }).click();
-  const assistant = page.getByRole('region', { name: 'AI-помощник' });
-  await assistant.getByLabel('Ваш вопрос').fill('Как оформить отпуск?');
-  await assistant.getByRole('button', { name: 'Отправить' }).click();
-  await expect(assistant.getByRole('link', { name: 'Заявление на отпуск' })).toHaveAttribute('href', 'https://hr.example.com/leave');
+test('Web UX exposes task details, calendar, tools and role actions without writes', async ({ page }) => {
+  const password = requiredCredential('E2E_DEMO_PASSWORD');
+  await page.goto('/');
+  await loginWeb(page, 'backend.intern@demo.example', password);
+  await page.getByTestId('nav-checklists').click();
+  const firstTask = page.locator('.task-row').first();
+  await expect(firstTask).toBeVisible();
+  await firstTask.click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.getByText('Ожидаемый результат:', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Закрыть' }).click();
+  await page.getByTestId('nav-calendar').click();
+  await expect(page.locator('.calendar-grid')).toBeVisible();
+  await page.getByTestId('nav-requests').click();
+  await expect(page.locator('.catalog-list article').first()).toBeVisible();
+  await expect(page.locator('.catalog-list button:disabled').first()).toBeVisible();
+  await page.getByTitle('Выйти').click();
+  await loginWeb(page, 'buddy@demo.example', password);
+  await page.getByTestId('nav-team').click();
+  await expect(page.getByRole('button', { name: '+ Стажёр' })).toHaveCount(0);
+  await page.getByTitle('Выйти').click();
+  await loginWeb(page, 'teamlead@demo.example', password);
+  await page.getByTestId('nav-team').click();
+  await expect(page.getByRole('button', { name: '+ Стажёр' })).toBeVisible();
+  await page.getByRole('button', { name: '+ Задача' }).click();
+  await expect(page.getByRole('dialog').getByLabel('Позиция в профессиональном чек-листе')).toBeVisible();
+  await page.getByRole('button', { name: 'Закрыть' }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.locator('.mobile-top')).toBeVisible();
+  await page.locator('.mobile-top button').click();
+  await expect(page.getByTestId('nav-calendar')).toBeVisible();
 });
 
 test('real MV3 popup logs in and calls authenticated chat', async () => {
@@ -56,8 +83,7 @@ test('real MV3 popup logs in and calls authenticated chat', async () => {
   const buddyPassword = requiredCredential('E2E_BUDDY_PASSWORD');
   const extension = path.resolve('apps/extension/dist');
   const context = await chromium.launchPersistentContext('', {
-    channel: 'chromium',
-    headless: true,
+    channel: 'chrome', headless: process.env.E2E_EXTENSION_HEADED !== '1',
     args: [`--disable-extensions-except=${extension}`, `--load-extension=${extension}`],
   });
   try {
@@ -65,26 +91,20 @@ test('real MV3 popup logs in and calls authenticated chat', async () => {
     const id = worker.url().split('/')[2];
     let page = await context.newPage();
     await page.goto(`chrome-extension://${id}/popup.html`);
-
-    await page.getByLabel('Email').fill(buddyEmail);
-    await page.getByLabel('Пароль').fill(buddyPassword);
-    await page.getByRole('button', { name: 'Войти' }).click();
-    await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible();
-
+    await page.locator('#email').fill(buddyEmail);
+    await page.locator('#password').fill(buddyPassword);
+    await page.locator('#login button').click();
+    await expect(page.locator('#logout')).toBeVisible();
     await page.close();
     page = await context.newPage();
     await page.goto(`chrome-extension://${id}/popup.html`);
-    await expect(page.getByRole('button', { name: 'Выйти' })).toBeVisible();
+    await expect(page.locator('#logout')).toBeVisible();
     await expect.poll(() => page.evaluate(async () => (await chrome.storage.session.get('accessToken')).accessToken)).not.toBe('');
-
-    await page.getByLabel('Ваш вопрос').fill('Как оформить отпуск?');
-    await page.getByRole('button', { name: 'Отправить' }).click();
-    await expect(page.getByRole('link', { name: 'Заявление на отпуск (демо)' })).toHaveAttribute('href', 'https://hr.example.com/leave');
-
-    await page.getByRole('button', { name: 'Выйти' }).click();
-    await expect(page.getByRole('button', { name: 'Войти' })).toBeVisible();
+    await page.locator('#message').fill('Как оформить отпуск?');
+    await page.locator('#chat button').click();
+    await expect(page.locator('#reply a')).toHaveAttribute('href', 'https://hr.example.com/leave');
+    await page.locator('#logout').click();
+    await expect(page.locator('#login')).toBeVisible();
     await expect.poll(() => page.evaluate(async () => (await chrome.storage.session.get('accessToken')).accessToken)).toBeUndefined();
-  } finally {
-    await context.close();
-  }
+  } finally { await context.close(); }
 });

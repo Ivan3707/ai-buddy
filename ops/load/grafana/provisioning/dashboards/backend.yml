@@ -1,0 +1,12 @@
+apiVersion: 1
+
+providers:
+  - name: AI-Buddy Load
+    orgId: 1
+    folder: AI-Buddy Load
+    type: file
+    disableDeletion: true
+    updateIntervalSeconds: 10
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
