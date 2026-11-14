@@ -369,6 +369,59 @@ def sse(description):
 BEARER = [{"bearerAuth": []}]
 UUID_PARAM = {"name": "id", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
 
+# Admin panel (teamlead only on the backend; AI endpoints are internal)
+INT = {"type": "integer"}
+STR = {"type": "string"}
+ADMIN_BALANCE = {"type": "object", "required": ["available", "note"], "properties": {
+    "available": {"type": "boolean"}, "currency": STR, "usage": {"type": ["number", "null"]},
+    "limit": {"type": ["number", "null"]}, "limit_remaining": {"type": ["number", "null"]},
+    "usage_daily": {"type": ["number", "null"]}, "usage_weekly": {"type": ["number", "null"]},
+    "usage_monthly": {"type": ["number", "null"]}, "is_free_tier": {"type": ["boolean", "null"]},
+    "label": {"type": ["string", "null"]}, "note": {**STR, "description": "Human note when no balance is available"}}}
+ADMIN_LLM = {"type": "object", "required": ["provider", "mode", "model", "balance"], "properties": {
+    "provider": STR, "mode": ref("AiMode"), "model": STR, "fallback_model": STR, "balance": ADMIN_BALANCE,
+    "budget": {"type": ["object", "null"], "properties": {
+        "daily_tokens_limit": INT, "daily_tokens_used": INT, "per_minute_limit": INT}}}}
+ADMIN_PING = {"type": "object", "required": ["ok", "latency_ms", "answer"], "properties": {
+    "ok": {"type": "boolean"}, "mode": ref("AiMode"), "model": STR, "latency_ms": INT, "answer": STR,
+    "input_tokens": INT, "output_tokens": INT, "error": STR}}
+ADMIN_KB = {"type": "object", "required": ["documents", "chunks"], "properties": {
+    "documents": INT, "chunks": INT, "source": STR}}
+ADMIN_ACCOUNT = {"type": "object", "required": ["id", "email", "role", "created_at", "active_sessions"], "properties": {
+    "id": {"type": "string", "format": "uuid"}, "email": STR, "first_name": STR, "last_name": STR,
+    "role": {"type": "string", "enum": ["intern", "buddy", "teamlead"]}, "profession": STR, "team": STR,
+    "department": STR, "buddy_name": STR, "teamlead_name": STR,
+    "created_at": {"type": "string", "format": "date-time"},
+    "last_login_at": {"type": ["string", "null"], "format": "date-time"},
+    "active_sessions": {**INT, "description": "Not revoked and not expired sessions"}}}
+ADMIN_CHECK = {"type": "object", "required": ["id", "title", "status", "detail", "latency_ms"], "properties": {
+    "id": STR, "title": STR, "status": {"type": "string", "enum": ["ok", "error"]}, "detail": STR, "latency_ms": INT}}
+ADMIN_SYSTEM = {"type": "object", "required": ["checks", "counters", "hints"], "properties": {
+    "checks": {"type": "array", "items": ADMIN_CHECK},
+    "counters": {"type": "object", "properties": {
+        "users_by_role": {"type": "object", "additionalProperties": INT}, "open_questions": INT,
+        "pending_requests": INT, "messages_today": INT, "active_sessions": INT}},
+    "hints": {"type": "object", "additionalProperties": INT,
+              "description": "task_hints by status (pending, processing, ready) plus unread"}}}
+ADMIN_SAMPLE = {"type": "object", "required": ["text"], "properties": {
+    "trigger": STR, "text": STR, "detail": STR, "ask": STR}}
+ADMIN_NOTIFICATION = {"type": "object", "required": ["id", "title", "source", "when", "cadence", "check", "samples", "live"], "properties": {
+    "id": {"type": "string", "enum": ["greeting", "page_hint", "selection", "request_status", "stuck_task",
+                                      "mentor_answered", "staff_counts"]},
+    "title": STR, "source": {"type": "string", "enum": ["widget", "site", "worker"]}, "when": STR, "cadence": STR,
+    "button": STR, "check": {"type": "string", "enum": ["preview", "backend"],
+                             "description": "preview: the web shows the sample in the admin's own Бади; backend: POST .../check"},
+    "samples": {"type": "array", "items": ADMIN_SAMPLE},
+    "live": {"type": "array", "items": {"type": "object", "required": ["label", "value"],
+                                         "properties": {"label": STR, "value": INT}}}}}
+ADMIN_STUCK_CHECK = {"type": "object", "required": ["overdue_tasks", "pending_before", "ready_before", "pending_after",
+                                                    "ready_after", "tasks"], "properties": {
+    "overdue_tasks": INT, "pending_before": INT, "ready_before": INT, "pending_after": INT, "ready_after": INT,
+    "error": STR, "tasks": {"type": "array", "maxItems": 10, "items": {"type": "object", "properties": {
+        "task": STR, "user_email": STR, "hint_status": {"type": "string", "enum": ["none", "pending", "processing", "ready"]},
+        "hint_text": {**STR, "maxLength": 200}}}}}}
+ADMIN_FORBIDDEN = json_resp("Teamlead only", ERROR)
+
 # ---------------------------------------------------------------- AI spec
 ai_spec = {
     "openapi": "3.1.0",
@@ -447,6 +500,19 @@ ai_spec = {
                 "properties": {"documents": {"type": "integer"}, "chunks": {"type": "integer"},
                                "source": {"type": "string"}}}),
                           "502": json_resp("Source unavailable or empty; the previous index is kept", ERROR)}}},
+        "/v1/admin/llm": {"get": {
+            "operationId": "adminLlm",
+            "description": "Provider, model, mode and API balance for the admin panel. OpenRouter: GET {base}/key; other "
+                           "providers return a note. Never contains the key or a raw provider error.",
+            "responses": {"200": json_resp("Status", ADMIN_LLM)}}},
+        "/v1/admin/llm-ping": {"post": {
+            "operationId": "adminLlmPing",
+            "description": "Tiny completion (max_tokens 16) with the same base URL, key, model and extra body as chat; "
+                           "canned result in mock mode. Failures are reported in the body (ok=false).",
+            "responses": {"200": json_resp("Ping result", ADMIN_PING)}}},
+        "/v1/admin/kb": {"get": {
+            "operationId": "adminKb", "description": "Document and chunk counts of the current index.",
+            "responses": {"200": json_resp("Counts", ADMIN_KB)}}},
         "/metrics": {"get": {
             "operationId": "metrics", "description": "Prometheus metrics (latency, tokens, finish reasons, errors).",
             "responses": {"200": {"description": "Prometheus text format",
@@ -620,6 +686,42 @@ backend_paths.update({
         "responses": {"200": json_resp("Decided", ref("ServiceRequest")), "400": json_resp("Invalid status", ERROR),
                       "404": json_resp("Not found / not this staff's intern", ERROR),
                       "409": json_resp("Already decided", ERROR)}}},
+    "/api/admin/accounts": {"get": {
+        "operationId": "adminAccounts", "security": BEARER,
+        "description": "Teamlead only: all accounts with role, profession, team, buddy/teamlead names, last login and the "
+                       "number of active sessions. Never returns password hashes, tokens or secrets.",
+        "responses": {"200": json_resp("Accounts", {"type": "object", "required": ["accounts"], "properties": {
+            "accounts": {"type": "array", "items": ADMIN_ACCOUNT}}}), "403": ADMIN_FORBIDDEN}}},
+    "/api/admin/llm": {"get": {
+        "operationId": "adminLlm", "security": BEARER,
+        "description": "Teamlead only: provider, model, mode and API balance (AI /v1/admin/llm).",
+        "responses": {"200": json_resp("Status", ADMIN_LLM), "403": ADMIN_FORBIDDEN,
+                      "502": json_resp("AI unavailable", ERROR)}}},
+    "/api/admin/llm/ping": {"post": {
+        "operationId": "adminLlmPing", "security": BEARER,
+        "description": "Teamlead only: a tiny completion to check the model (AI /v1/admin/llm-ping).",
+        "responses": {"200": json_resp("Ping result", ADMIN_PING), "403": ADMIN_FORBIDDEN,
+                      "502": json_resp("AI unavailable", ERROR)}}},
+    "/api/admin/system": {"get": {
+        "operationId": "adminSystem", "security": BEARER,
+        "description": "Teamlead only: health checks (database, AI service, knowledge base, hint worker) and counters.",
+        "responses": {"200": json_resp("Status", ADMIN_SYSTEM), "403": ADMIN_FORBIDDEN}}},
+    "/api/admin/kb/reload": {"post": {
+        "operationId": "adminKbReload", "security": BEARER,
+        "description": "Teamlead only: re-read the knowledge base (AI /v1/kb/reload).",
+        "responses": {"200": json_resp("Reloaded", ADMIN_KB), "403": ADMIN_FORBIDDEN,
+                      "502": json_resp("AI unavailable", ERROR)}}},
+    "/api/admin/notifications": {"get": {
+        "operationId": "adminNotifications", "security": BEARER,
+        "description": "Teamlead only: catalog of Бади's pop-up notifications (single source of truth) with live numbers "
+                       "for backend-backed entries.",
+        "responses": {"200": json_resp("Catalog", {"type": "object", "required": ["items"], "properties": {
+            "items": {"type": "array", "items": ADMIN_NOTIFICATION}}}), "403": ADMIN_FORBIDDEN}}},
+    "/api/admin/notifications/stuck_task/check": {"post": {
+        "operationId": "adminCheckStuckTask", "security": BEARER,
+        "description": "Teamlead only: run the real hint worker tick now and report overdue tasks, hints before/after "
+                       "and up to 10 affected tasks.",
+        "responses": {"200": json_resp("Result", ADMIN_STUCK_CHECK), "403": ADMIN_FORBIDDEN}}},
     "/api/metrics/chat": {"get": {
         "operationId": "chatMetrics", "security": BEARER,
         "description": "Buddy only: aggregated assistant metrics for own interns.",

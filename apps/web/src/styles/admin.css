@@ -1,0 +1,79 @@
+/* Админ-панель руководителя. Подключается после staff.css и до responsive.css. */
+.admin-page { display: grid; gap: 14px; align-content: start; }
+.admin-stack { display: grid; gap: 14px; }
+.admin-tabs { margin-bottom: 2px; }
+.admin-tabs .pill-light { background: var(--cream); }
+.admin-block { min-width: 0; }
+.admin-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.admin-plain-head { margin: 0; }
+.admin-plain-head p { margin: 0; }
+.admin-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.admin-filter select { height: 40px; padding: 0 14px; }
+.admin-page .pill-sm { text-transform: none; letter-spacing: 0; font-weight: 700; font-family: var(--font); }
+
+.admin-page .notice { margin: 8px 0 0; padding: 10px 14px; border-radius: 16px; background: #fff; overflow-wrap: anywhere; }
+.admin-page .notice.success { background: var(--green); }
+.admin-page .notice.error { background: var(--pink-soft); color: var(--danger); }
+
+/* Аккаунты */
+.admin-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.admin-row {
+  display: grid;
+  grid-template-columns: 1.6fr 0.9fr 0.8fr 1.1fr 1.1fr 1.1fr 1fr 1fr 0.5fr;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 16px;
+  border-radius: 20px;
+  background: var(--grey);
+  font-size: 13px;
+}
+.admin-cell { min-width: 0; overflow-wrap: anywhere; }
+.admin-main { display: grid; gap: 2px; font-size: 14px; }
+.admin-main small { overflow-wrap: anywhere; }
+
+/* Параметры «название: значение» */
+.admin-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 0 0 8px; }
+.admin-facts-wide { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.admin-facts div { display: grid; gap: 2px; padding: 10px 14px; border-radius: 16px; background: var(--grey-soft); min-width: 0; }
+.admin-facts dt { font-size: 12px; color: var(--text-muted); }
+.admin-facts dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+
+.admin-bar { position: relative; height: 26px; border-radius: var(--radius-pill); background: var(--grey); overflow: hidden; }
+.admin-bar span { position: absolute; inset: 0 auto 0 0; background: var(--green); }
+.admin-bar em { position: relative; display: block; padding: 0 12px; line-height: 26px; font-size: 12px; font-style: normal; font-weight: 700; }
+
+/* Оповещения */
+.admin-live { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.admin-samples { display: grid; gap: 8px; margin: 0 0 10px; padding: 0; list-style: none; }
+.admin-samples li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 16px; background: var(--grey-soft); }
+.admin-samples p { margin: 2px 0 0; overflow-wrap: anywhere; }
+.admin-result { margin-top: 10px; padding: 12px 14px; border-radius: 16px; background: #fff; }
+.admin-result p { margin: 0 0 6px; overflow-wrap: anywhere; }
+.admin-mini { display: grid; gap: 6px; margin: 6px 0 0; padding-left: 18px; font-size: 13px; }
+.admin-mini p { margin: 2px 0 0; }
+
+/* Система */
+.admin-checks { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.admin-checks li { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 16px; background: var(--grey-soft); }
+.admin-checks li div { display: grid; min-width: 0; }
+.admin-checks small { overflow-wrap: anywhere; }
+.admin-counters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.admin-counters div { display: grid; gap: 2px; padding: 12px 16px; border-radius: 18px; background: var(--grey-soft); }
+.admin-counters b { font-size: 28px; font-weight: 800; line-height: 1.1; }
+.admin-counters span { font-size: 12px; color: var(--text-muted); }
+
+@media (max-width: 899px) {
+  .admin-page { gap: 12px; }
+  .admin-tabs { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; }
+  .admin-tabs .pill { flex: none; }
+  .admin-page .panel-head { flex-wrap: wrap; }
+  .admin-actions { justify-content: flex-start; }
+  .admin-row { grid-template-columns: 1fr 1fr; padding: 14px; }
+  .admin-main { grid-column: 1 / -1; }
+  .admin-cell[data-label]::before { content: attr(data-label); display: block; font-size: 11px; color: var(--text-muted); }
+  .admin-facts, .admin-facts-wide { grid-template-columns: 1fr; }
+  .admin-samples li { flex-direction: column; align-items: stretch; }
+  .admin-checks li { grid-template-columns: auto 1fr; }
+  .admin-checks li > small:last-child { grid-column: 2; }
+  .admin-counters { grid-template-columns: 1fr 1fr; }
+}

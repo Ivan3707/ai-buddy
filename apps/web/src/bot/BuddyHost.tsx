@@ -101,6 +101,17 @@ export function BuddyHost({ token, user, onNavigate }: { token: string; user: Us
     });
   }, [extension, onNavigate, readHint]);
 
+  // Админ-панель: «Проверить» показывает пример всплывашки прямо сейчас. Id у каждого показа свой, повторы видны.
+  useEffect(() => {
+    const onPreview = (event: Event) => {
+      const d = (event as CustomEvent<{ id?: unknown; text?: unknown; detail?: unknown; ask?: unknown }>).detail;
+      if (!d || typeof d.id !== 'string' || typeof d.text !== 'string') return;
+      push({ id: d.id, text: d.text, detail: typeof d.detail === 'string' ? d.detail : undefined, ask: typeof d.ask === 'string' ? d.ask : undefined });
+    };
+    window.addEventListener('ai-buddy:nudge-preview', onPreview);
+    return () => window.removeEventListener('ai-buddy:nudge-preview', onPreview);
+  }, [push]);
+
   const seenKey = `ai-buddy-seen:${user.id}`;
   const poll = useCallback(async () => {
     const token = tokenRef.current;

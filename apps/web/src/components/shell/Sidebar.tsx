@@ -1,4 +1,4 @@
-export type View = 'home' | 'calendar' | 'tasks' | 'feedback' | 'team' | 'mentor' | 'buddy';
+export type View = 'home' | 'calendar' | 'tasks' | 'feedback' | 'team' | 'mentor' | 'buddy' | 'admin';
 export type NavItem = { view: Exclude<View, 'feedback'>; label: string };
 
 export const NAV_ITEMS: NavItem[] = [

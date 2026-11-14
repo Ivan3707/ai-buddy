@@ -11,5 +11,6 @@ import './legacy.css';
 import './styles/typography.css';
 import './styles/figma.css';
 import './styles/staff.css';
+import './styles/admin.css';
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);
