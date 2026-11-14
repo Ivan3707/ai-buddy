@@ -37,6 +37,7 @@ const html = await readFile(new URL(manifest.side_panel.default_path, dist), 'ut
 const referenced = [
   manifest.background.service_worker,
   manifest.side_panel.default_path,
+  'buddy/widget.js',
   'buddy/content.js',
   ...[...html.matchAll(/(?:src|href)="([^":]+)"/g)].map(match => match[1]),
 ];

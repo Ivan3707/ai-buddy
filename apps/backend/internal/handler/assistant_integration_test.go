@@ -74,6 +74,10 @@ func (f *fakeAI) handler(t *testing.T) http.Handler {
 			_, _ = w.Write([]byte(`{"total_questions":1,"clusters":[]}`))
 		case "/v1/kb/lint":
 			_, _ = w.Write([]byte(`{"issues":[]}`))
+		case "/v1/kb/docs/leave":
+			_, _ = w.Write([]byte(`{"id":"leave","title":"Отпуска","url":"u","updated":"","sections":[]}`))
+		case "/v1/kb/docs/nope":
+			w.WriteHeader(http.StatusNotFound)
 		default:
 			t.Errorf("unexpected AI path %s", r.URL.Path)
 		}
@@ -393,6 +397,9 @@ func TestAssistantFlowWithPostgres(t *testing.T) {
 	}
 	expect(lead, http.MethodGet, "/api/kb/lint", nil, http.StatusOK)
 	expect(intern, http.MethodGet, "/api/kb/lint", nil, http.StatusForbidden)
+	expect(intern, http.MethodGet, "/api/kb/docs/leave", nil, http.StatusOK)
+	expect(intern, http.MethodGet, "/api/kb/docs/nope", nil, http.StatusNotFound)
+	expect(intern, http.MethodGet, "/api/kb/docs/bad%20id", nil, http.StatusNotFound)
 	expect(intern, http.MethodGet, "/api/analytics/gaps", nil, http.StatusForbidden)
 
 	// ---- history and feedback

@@ -49,6 +49,7 @@ func RegisterAssistantRoutes(mux *http.ServeMux, auth func(http.Handler) http.Ha
 	route("GET /api/buddy/questions/{id}/draft", h.draft)
 	route("GET /api/analytics/gaps", h.gaps)
 	route("GET /api/kb/lint", h.lint)
+	route("GET /api/kb/docs/{id}", h.kbDoc)
 	route("GET /api/metrics/chat", h.metrics)
 }
 
@@ -377,6 +378,11 @@ func (h assistantHandler) gaps(w http.ResponseWriter, r *http.Request, user *mod
 func (h assistantHandler) lint(w http.ResponseWriter, r *http.Request, user *model.User) {
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(4 * time.Minute))
 	raw, err := h.s.Lint(r.Context(), user)
+	sendRaw(w, raw, err)
+}
+
+func (h assistantHandler) kbDoc(w http.ResponseWriter, r *http.Request, _ *model.User) {
+	raw, err := h.s.KBDoc(r.Context(), r.PathValue("id"))
 	sendRaw(w, raw, err)
 }
 

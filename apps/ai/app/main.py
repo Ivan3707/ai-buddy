@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.responses import Response, StreamingResponse
 from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
-from . import gaps, hint, kb_lint, mentor, sources
+from . import gaps, hint, kb_docs, kb_lint, mentor, sources
 from . import metrics
 from .agent import run_turn, sse
 from .brief import run_brief
@@ -44,6 +44,7 @@ def create_app(settings: Settings | None = None, retriever: Retriever | None = N
     app.include_router(kb_lint.router)
     app.include_router(sources.router)
     app.include_router(hint.router)
+    app.include_router(kb_docs.router)
 
     @app.get("/metrics")
     def prometheus_metrics() -> Response:

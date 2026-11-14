@@ -212,6 +212,15 @@ SHARED = {
                                "examples": {"type": "array", "maxItems": 3, "items": {"type": "string"}}}}},
         },
     },
+    "KbDocument": {
+        "type": "object", "required": ["id", "title", "url", "updated", "sections"],
+        "description": "One knowledge-base document with its sections in order (reader in the chat).",
+        "properties": {
+            "id": {"type": "string"}, "title": {"type": "string"},
+            "url": {"type": "string", "description": "Full page in the (demo) wiki"},
+            "updated": {"type": "string", "description": "YYYY-MM-DD or empty"},
+            "sections": {"type": "array", "items": {"type": "object", "required": ["heading", "text"], "properties": {
+                "heading": {"type": "string"}, "text": {"type": "string", "description": "Markdown"}}}}}},
     "KbLintReport": {
         "type": "object", "required": ["generated_at", "issues"],
         "description": "Knowledge-base hygiene: contradictions between documents and stale documents.",
@@ -419,6 +428,11 @@ ai_spec = {
             "operationId": "kbLint",
             "description": "Contradictions and stale documents in the knowledge base (cached; refreshed on reload).",
             "responses": {"200": json_resp("Report", ref("KbLintReport"))}}},
+        "/v1/kb/docs/{doc_id}": {"get": {
+            "operationId": "kbDocument",
+            "parameters": [{"name": "doc_id", "in": "path", "required": True, "schema": {"type": "string"}}],
+            "description": "One KB document (all sections) by the source id from chat events.",
+            "responses": {"200": json_resp("Document", ref("KbDocument")), "404": json_resp("No such document", ERROR)}}},
         "/v1/kb/reload": {"post": {
             "operationId": "kbReload",
             "description": "Re-read the knowledge base from its source (Markdown dir or Confluence) and re-index.",
@@ -521,6 +535,13 @@ backend_paths.update({
         "operationId": "kbLint", "security": BEARER,
         "description": "Buddy only: knowledge-base contradictions and stale documents (AI /v1/kb/lint).",
         "responses": {"200": json_resp("Report", ref("KbLintReport")), "403": json_resp("Not a buddy", ERROR)}}},
+    "/api/kb/docs/{id}": {"get": {
+        "operationId": "kbDocument", "security": BEARER,
+        "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string", "pattern": "^[A-Za-z0-9_.-]{1,128}$"}}],
+        "description": "Any signed-in user: one knowledge-base document by the source id from chat events (AI /v1/kb/docs/{doc_id}). "
+                       "Opened in the chat when the user clicks a source.",
+        "responses": {"200": json_resp("Document", ref("KbDocument")), "404": json_resp("No such document", ERROR),
+                      "502": json_resp("AI unavailable", ERROR)}}},
     "/api/questions": {"get": {
         "operationId": "ownQuestions", "security": BEARER,
         "description": "The intern's own questions escalated to the buddy, newest first (to notify about answers; "

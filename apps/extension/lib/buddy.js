@@ -67,8 +67,8 @@ export function toView(state) {
     messageId: state.finished && !state.error ? state.messageId : null,
     error: state.error ? state.error.message : null,
     sources: state.sources
-      .filter(source => /^https:\/\//.test(source.url))
-      .map(source => ({title: source.title, url: source.url, snippet: source.snippet || ''})),
+      .filter(source => /^https?:\/\//.test(source.url)) // no javascript:/data: links in the page
+      .map(source => ({id: source.id, title: source.title, url: source.url, snippet: source.snippet || ''})),
     card: action ? {
       id: action.id,
       title: actionTitle(action.type),

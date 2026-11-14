@@ -95,3 +95,6 @@
   .bot-page-head h1{font-size:30px}.bot-page-face{width:60px;height:60px}
   .bot-log{max-height:none}
 }
+
+.bot-info-list { padding-left: 20px; line-height: 1.65; margin: 8px 0 0; }
+.bot-info-list li + li { margin-top: 4px; }

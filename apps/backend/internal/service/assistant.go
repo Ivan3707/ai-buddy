@@ -11,6 +11,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -951,6 +953,33 @@ func (s *AssistantService) Lint(ctx context.Context, staff *model.User) (json.Ra
 		return nil, ErrNotBuddy
 	}
 	return s.callAI(ctx, http.MethodGet, "/v1/kb/lint", nil)
+}
+
+var kbDocID = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
+
+// KBDoc returns one knowledge-base document (sections in order) for the reader in the chat.
+// The demo KB holds no per-role documents, so every signed-in user may read it.
+func (s *AssistantService) KBDoc(ctx context.Context, id string) (json.RawMessage, error) {
+	if !kbDocID.MatchString(id) {
+		return nil, repository.ErrNotFound
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.aiURL+"/v1/kb/docs/"+url.PathEscape(id), nil)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := s.short.Do(req)
+	if err != nil {
+		return nil, ErrAIUnavailable
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound {
+		return nil, repository.ErrNotFound
+	}
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
+	if err != nil || resp.StatusCode != http.StatusOK || !json.Valid(raw) {
+		return nil, ErrAIUnavailable
+	}
+	return raw, nil
 }
 
 func (s *AssistantService) callAI(ctx context.Context, method, path string, payload any) (json.RawMessage, error) {

@@ -64,7 +64,7 @@ test('view model: display strings only, unsafe sources dropped, feedback id only
   state = applyStreamEvent(state, ev('done', {}));
   const view = toView(state);
   assert.equal(view.messageId, 'm1');
-  assert.deepEqual(view.sources, [{title: 'Отпуска', url: 'https://kb.example/leave', snippet: 'за 14 дней'}]);
+  assert.deepEqual(view.sources, [{id: 'leave', title: 'Отпуска', url: 'https://kb.example/leave', snippet: 'за 14 дней'}]);
   assert.equal(view.card.title, 'Заявка на отсутствие');
   assert.deepEqual(view.card.rows.map(row => row.value), ['Отпуск', '01.12.2026', '14.12.2026']);
   assert.equal(view.card.pending, true);

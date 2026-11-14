@@ -44,9 +44,10 @@ class KbSource(Protocol):
 class MarkdownSource:
     directory: Path
     name: str = "markdown"
+    wiki_url: str = ""
 
     def load(self) -> list[Doc]:
-        return load_markdown_kb(self.directory)
+        return load_markdown_kb(self.directory, self.wiki_url)
 
 
 # ---- Confluence storage format (XHTML) -> plain-text sections ----
@@ -161,7 +162,7 @@ class ConfluenceSource:
 def make_source(env: Mapping[str, str], kb_dir: Path) -> KbSource:
     kind = (env.get("KB_SOURCE") or "markdown").strip()
     if kind == "markdown":
-        return MarkdownSource(kb_dir)
+        return MarkdownSource(kb_dir, wiki_url=(env.get("KB_WIKI_URL") or "").strip())
     if kind == "confluence":
         url, token, space = (env.get(n, "").strip() for n in ("CONFLUENCE_URL", "CONFLUENCE_TOKEN", "CONFLUENCE_SPACE"))
         missing = [n for n, v in (("CONFLUENCE_URL", url), ("CONFLUENCE_TOKEN", token),

@@ -358,12 +358,11 @@ async function refreshSiteToggle() {
     siteToggle.hidden = true;
     return;
   }
-  const builtIn = /^http:\/\/(127\.0\.0\.1|localhost):5173\/(?!demo\/)/.test(tab.url); // web app: its own Бади widget
-  const {enabled = false} = builtIn ? {enabled: false} : await chrome.runtime.sendMessage({op: 'site-state', pattern});
-  site = {pattern, tabId: tab.id, enabled, builtIn};
+  const {enabled = false} = await chrome.runtime.sendMessage({op: 'site-state', pattern});
+  site = {pattern, tabId: tab.id, enabled};
   siteBar.hidden = false;
-  siteToggle.hidden = builtIn;
-  siteLabel.textContent = builtIn ? 'На сайте AI-buddy Бади встроен в страницу.' : `Бади на ${new URL(tab.url).hostname}`;
+  siteToggle.hidden = false;
+  siteLabel.textContent = `Бади на ${new URL(tab.url).hostname}`;
   siteToggle.textContent = enabled ? 'Убрать' : 'Показать';
 }
 

@@ -33,6 +33,8 @@ services:
       CONFLUENCE_TOKEN: ${CONFLUENCE_TOKEN:-}
       CONFLUENCE_SPACE: ${CONFLUENCE_SPACE:-}
       KB_RELOAD_SECONDS: ${KB_RELOAD_SECONDS:-0}
+      # Where the demo wiki (web: /wiki/<id>.html, built from data/kb) is opened from source links.
+      KB_WIKI_URL: ${KB_WIKI_URL:-http://127.0.0.1:5173/wiki}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')"]
       interval: 5s

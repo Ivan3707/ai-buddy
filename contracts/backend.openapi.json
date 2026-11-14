@@ -1994,6 +1994,76 @@
           }
         }
       }
+    },
+    "/api/kb/docs/{id}": {
+      "get": {
+        "operationId": "kbDocument",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+            }
+          }
+        ],
+        "description": "Any signed-in user: one knowledge-base document by the source id from chat events (AI /v1/kb/docs/{doc_id}). Opened in the chat when the user clicks a source.",
+        "responses": {
+          "200": {
+            "description": "Document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KbDocument"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "AI unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2630,6 +2700,52 @@
                   "items": {
                     "type": "string"
                   }
+                }
+              }
+            }
+          }
+        }
+      },
+      "KbDocument": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "url",
+          "updated",
+          "sections"
+        ],
+        "description": "One knowledge-base document with its sections in order (reader in the chat).",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "Full page in the (demo) wiki"
+          },
+          "updated": {
+            "type": "string",
+            "description": "YYYY-MM-DD or empty"
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "heading",
+                "text"
+              ],
+              "properties": {
+                "heading": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string",
+                  "description": "Markdown"
                 }
               }
             }

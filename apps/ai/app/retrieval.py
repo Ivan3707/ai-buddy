@@ -84,11 +84,12 @@ def _front_matter(raw: str) -> tuple[dict[str, str], str]:
     return {k.strip(): v.strip() for k, v in meta.items()}, body
 
 
-def load_markdown_kb(directory: Path) -> list[Doc]:
+def load_markdown_kb(directory: Path, wiki_url: str = "") -> list[Doc]:
     """One .md per document; every '## ' section becomes a chunk (Doc) that keeps the document id.
 
     Chunking matters: the model gets the relevant section, not a whole page, and BM25 length
     normalisation works on comparable pieces.
+    wiki_url: where the demo wiki publishes the documents (<wiki_url>/<id>.html); empty keeps the url from front matter.
     """
     chunks: list[Doc] = []
     for path in sorted(directory.glob("*.md")):
@@ -106,7 +107,8 @@ def load_markdown_kb(directory: Path) -> list[Doc]:
                 lines.append(line)
         for heading, text in sections:
             title = f"{meta['title']} — {heading}" if heading else meta["title"]
-            chunks.append(Doc(id=meta["id"], title=title, url=meta["url"], text=text,
+            url = f"{wiki_url.rstrip('/')}/{meta['id']}.html" if wiki_url else meta["url"]
+            chunks.append(Doc(id=meta["id"], title=title, url=url, text=text,
                               updated=meta.get("updated", "")))
     return chunks
 
