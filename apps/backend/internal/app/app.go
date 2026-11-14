@@ -66,6 +66,7 @@ func Run() error {
 		Checklists:    service.NewChecklistService(db),
 		Items:         progress,
 		Submissions:   progress,
+		Assistant:     service.NewAssistantService(db, env("AI_URL", "http://127.0.0.1:8001")),
 	}
 	deps.Corporate.Unavailable = os.Getenv("CORPORATE_MOCK_UNAVAILABLE") == "1"
 	defer db.Close()

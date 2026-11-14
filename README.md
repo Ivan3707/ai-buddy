@@ -49,7 +49,17 @@ Web: <http://127.0.0.1:5173>; Backend: <http://127.0.0.1:8080/health>. Пров�
 
 AI-сервис доступен только внутри Docker-сети, клиенты ходят в него через Backend. Без ключа он работает в детерминированном режиме `LLM_PROVIDER=mock`. Для настоящих ответов задайте в `.env` переменные `LLM_PROVIDER=openai_compatible`, `LLM_BASE_URL`, `LLM_API_KEY` и `LLM_MODEL`. Проверено с OpenRouter и моделью `openai/gpt-6.1-terra`. Остальные переменные с комментариями описаны в `.env.example`. Спецификация: `docs/specifications/002-ai-agent-chat.md`. Eval: `apps/ai/eval/`.
 
-Пока Backend не реализует чат-эндпоинты из `contracts/backend.openapi.json` (`/api/chat/stream`, `/api/actions/*`, `/api/requests`, `/api/buddy/questions`), их эталонную реализацию даёт dev-плейграунд:
+Backend реализует API ассистента из `contracts/backend.openapi.json`. Код: `apps/backend/internal/service/assistant.go`, таблицы — в миграции `00002_assistant.sql`.
+
+- `POST /api/chat/stream` и `/api/chat/brief/stream` — ответ потоком (SSE). Backend собирает контекст стажёра из БД: задачи, этап, наставника, заявки — и хранит историю диалога.
+- `/api/actions/{id}/confirm|cancel` — действие выполняется только после подтверждения стажёром.
+- `/api/requests` — мок-заявки на отгул и доступ. Наставник или руководитель согласует их через `/api/buddy/requests/{id}/decision`.
+- `/api/buddy/questions` — вопросы, переданные наставнику, с AI-черновиком ответа.
+- `/api/analytics/gaps`, `/api/kb/lint`, `/api/metrics/chat` — аналитика для наставника.
+
+Фоновые подсказки «застрял на задаче» (`task_hints`) генерирует AI-эндпоинт `/hint`.
+
+Dev-плейграунд с одним демо-стажёром и данными в памяти остаётся для ручной проверки без БД:
 
 ```powershell
 docker compose --profile playground up -d --build playground
@@ -64,7 +74,7 @@ docker compose --profile playground up -d --build playground
 ## Расширение Chrome (apps/extension)
 
 ```powershell
-$env:BACKEND_ORIGIN = "http://127.0.0.1:18090"   # плейграунд; для настоящего Backend укажите его адрес
+$env:BACKEND_ORIGIN = "http://127.0.0.1:8080"   # адрес Backend (BACKEND_PORT); для плейграунда — http://127.0.0.1:18090
 npm run build --workspace @ai-buddy/extension
 ```
 

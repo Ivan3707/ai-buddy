@@ -240,6 +240,98 @@
         }
       }
     },
+    "/hint": {
+      "post": {
+        "operationId": "taskHint",
+        "description": "Short practical hint for an intern stuck on a task (backend hint worker). KB-grounded; 502 on LLM failure, then the backend shows its own fallback text.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "title"
+                ],
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  },
+                  "description": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 4000
+                  },
+                  "expected_result": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 2000
+                  },
+                  "estimated_minutes": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Hint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "hint"
+                  ],
+                  "properties": {
+                    "hint": {
+                      "type": "string"
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      },
+                      "description": "KB document titles named in the hint"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "LLM unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/kb/lint": {
       "get": {
         "operationId": "kbLint",

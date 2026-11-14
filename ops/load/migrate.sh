@@ -25,7 +25,7 @@ if [ "$history" = 't' ]; then
     echo 'Existing load database uses verified legacy Goose v9 schema; no migration applied'
     exit 0
   fi
-  if [ "$applied" -ne 0 ] && [ "$applied" -ne 1 ]; then
+  if [ "$applied" -ne 0 ] && [ "$applied" -ne 1 ] && [ "$applied" -ne 2 ]; then
     echo "Existing load database uses unsupported Goose version $applied; no migration applied" >&2
     exit 1
   fi

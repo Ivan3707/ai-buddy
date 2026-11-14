@@ -402,6 +402,19 @@ ai_spec = {
             "description": "Group escalated / unanswered questions by topic.",
             "requestBody": json_body(ref("GapsRequest")),
             "responses": {"200": json_resp("Report", ref("GapsReport"))}}},
+        "/hint": {"post": {
+            "operationId": "taskHint",
+            "description": "Short practical hint for an intern stuck on a task (backend hint worker). KB-grounded; "
+                           "502 on LLM failure, then the backend shows its own fallback text.",
+            "requestBody": json_body({"type": "object", "required": ["title"], "properties": {
+                "title": {"type": "string", "minLength": 1, "maxLength": 300},
+                "description": {"type": ["string", "null"], "maxLength": 4000},
+                "expected_result": {"type": ["string", "null"], "maxLength": 2000},
+                "estimated_minutes": {"type": ["integer", "null"], "minimum": 1}}}),
+            "responses": {"200": json_resp("Hint", {"type": "object", "required": ["hint"], "properties": {
+                "hint": {"type": "string"},
+                "sources": {"type": "array", "items": {"type": "string"}, "description": "KB document titles named in the hint"}}}),
+                "502": json_resp("LLM unavailable", ERROR)}}},
         "/v1/kb/lint": {"get": {
             "operationId": "kbLint",
             "description": "Contradictions and stale documents in the knowledge base (cached; refreshed on reload).",
@@ -508,6 +521,23 @@ backend_paths.update({
         "operationId": "kbLint", "security": BEARER,
         "description": "Buddy only: knowledge-base contradictions and stale documents (AI /v1/kb/lint).",
         "responses": {"200": json_resp("Report", ref("KbLintReport")), "403": json_resp("Not a buddy", ERROR)}}},
+    "/api/buddy/requests": {"get": {
+        "operationId": "staffRequests", "security": BEARER,
+        "description": "Buddy/teamlead: requests of their interns, newest first.",
+        "responses": {"200": json_resp("Success", {"type": "array", "items": {
+            "type": "object", "required": ["request", "intern_id", "intern_name"],
+            "properties": {"request": ref("ServiceRequest"), "intern_id": {"type": "string", "format": "uuid"},
+                           "intern_name": {"type": "string"}}}}),
+            "403": json_resp("Not a buddy", ERROR)}}},
+    "/api/buddy/requests/{id}/decision": {"post": {
+        "operationId": "decideRequest", "security": BEARER, "parameters": [UUID_PARAM],
+        "description": "Mock corporate approval: the intern's buddy or teamlead approves or rejects a pending request. "
+                       "The intern sees the new status in /api/requests, the brief and the extension.",
+        "requestBody": json_body({"type": "object", "required": ["status"], "properties": {
+            "status": {"type": "string", "enum": ["approved", "rejected"]}}}),
+        "responses": {"200": json_resp("Decided", ref("ServiceRequest")), "400": json_resp("Invalid status", ERROR),
+                      "404": json_resp("Not found / not this staff's intern", ERROR),
+                      "409": json_resp("Already decided", ERROR)}}},
     "/api/metrics/chat": {"get": {
         "operationId": "chatMetrics", "security": BEARER,
         "description": "Buddy only: aggregated assistant metrics for own interns.",

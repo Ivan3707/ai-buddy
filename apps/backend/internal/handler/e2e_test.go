@@ -80,7 +80,7 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	`).Scan(&version); err != nil {
 		t.Fatalf("read goose version: %v", err)
 	}
-	if version != 1 {
+	if version != 2 {
 		t.Fatalf("test database must be at Goose v1, got v%d", version)
 	}
 

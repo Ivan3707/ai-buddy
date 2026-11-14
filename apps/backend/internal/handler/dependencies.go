@@ -74,4 +74,5 @@ type Dependencies struct {
 	Corporate     *service.CorporateService
 	SessionCheck  SessionChecker
 	Sessions      SessionService
+	Assistant     *service.AssistantService
 }

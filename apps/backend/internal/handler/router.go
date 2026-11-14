@@ -74,6 +74,9 @@ func NewRouter(
 	}
 
 	mux.Handle("POST /api/chat", authenticated(chatHandler(aiURL)))
+	if deps.Assistant != nil {
+		RegisterAssistantRoutes(mux, authenticated, deps.Assistant)
+	}
 
 	return middleware.InstrumentHTTP(mux)
 }
