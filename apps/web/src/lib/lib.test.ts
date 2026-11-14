@@ -2,7 +2,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { checklist, checklistsResponse, item } from '../test/fixtures';
 import { WEEKDAYS, formatDate, isSameDay, monthGrid, monthTitle, shiftMonth } from './calendar';
 import { cleanChecklistName, currentStage, displayName, formatDateTime, internshipDuration, isDone, overallProgress, plural, professionLabel, roleLabel, weekLabel } from './format';
-import { sendFeedback } from './stubs';
 
 describe('format', () => {
   it('displayName берёт первую часть email с заглавной буквы', () => {
@@ -89,20 +88,5 @@ describe('calendar', () => {
     expect(formatDate(new Date(2026, 10, 14))).toBe('14.11.2026');
     expect(monthTitle(2026, 10)).toMatch(/^Ноябрь/);
     expect(WEEKDAYS).toHaveLength(7);
-  });
-});
-
-describe('sendFeedback', () => {
-  afterEach(() => vi.useRealTimers());
-
-  it('отклоняет пустое сообщение', async () => {
-    await expect(sendFeedback({ name: 'A', email: 'a@b.c', message: '  ' })).rejects.toThrow('Напишите сообщение');
-  });
-
-  it('успешно «отправляет» непустое сообщение', async () => {
-    vi.useFakeTimers();
-    const promise = sendFeedback({ name: 'A', email: 'a@b.c', message: 'Привет' });
-    await vi.advanceTimersByTimeAsync(500);
-    await expect(promise).resolves.toBeUndefined();
   });
 });

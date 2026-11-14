@@ -42,6 +42,7 @@ interface Window {
       storage: { get(key: string): Promise<unknown>; set(key: string, value: unknown): Promise<void> };
       features?: { login?: boolean; pageContext?: boolean; hide?: boolean; requests?: boolean };
       onHide?(): void;
+      portalUrl?(kind: string, id: string): string;
     }): BuddyApi;
   };
 }

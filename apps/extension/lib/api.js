@@ -1,4 +1,4 @@
-// Backend calls of the side panel that are not (yet) in packages/client:
+// Backend calls of the widget that are not (yet) in packages/client:
 // SSE streaming chat with a fallback to the legacy POST /api/chat.
 import { legacyResponseToEvents } from './stream-events.js';
 import { readSseStream } from './sse.js';

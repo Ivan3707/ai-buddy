@@ -15,11 +15,3 @@ export const PROFILE_STUB = {
   department: 'Департамент цифровизации бизнес-процессов',
   unit: 'Отдел аналитики',
 };
-
-export type FeedbackInput = { name: string; email: string; message: string };
-
-/** Имитация отправки обратной связи в корпоративный сервис (реального метода в API нет). */
-export function sendFeedback(input: FeedbackInput): Promise<void> {
-  if (!input.message.trim()) return Promise.reject(new Error('Напишите сообщение'));
-  return new Promise(resolve => setTimeout(resolve, 400));
-}

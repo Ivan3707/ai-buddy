@@ -1,7 +1,8 @@
 // MV3 service worker.
 // 1. Бади has two states for the whole browser: SHOWN (in every window, at the same place) or HIDDEN (in no window).
 //    The toolbar icon makes him shown (pressed again, it opens/closes his chat on this tab), the "×" on him hides him
-//    everywhere. On pages where scripts cannot run (chrome://, Web Store) the icon opens the side panel instead.
+//    everywhere. On pages where scripts cannot run (chrome://, the new tab page, Web Store) the icon opens
+//    Бади in a small window of his own (buddy-window.html).
 // 2. Backend gateway for the on-page character "Бади" (buddy/widget.js + buddy/content.js): the content script runs in
 //    the page, so it never sees the token and never calls the backend itself — it sends commands here
 //    and receives ready-to-render view models.
@@ -13,14 +14,22 @@ import { createAuth } from './lib/auth.js';
 import { createGateway } from './lib/gateway.js';
 import { decideSync } from './lib/sso.js';
 
-chrome.sidePanel
-  .setPanelBehavior({openPanelOnActionClick: false})
-  .catch(error => console.error('AI-buddy: cannot configure side panel', error));
+const WINDOW_KEY = 'buddyWindowId';
+// Pages where content scripts are forbidden (chrome://, the new tab page, the Web Store): Бади opens in a window of his own.
+async function openBuddyWindow() {
+  await chrome.storage.local.set({buddyVisible: true});
+  const known = (await chrome.storage.session.get(WINDOW_KEY))[WINDOW_KEY];
+  if (known !== undefined) {
+    try { await chrome.windows.update(known, {focused: true}); return; } catch { /* the window was closed */ }
+  }
+  const created = await chrome.windows.create({url: chrome.runtime.getURL('buddy-window.html'), type: 'popup', width: 440, height: 720});
+  await chrome.storage.session.set({[WINDOW_KEY]: created.id});
+}
 
 const VISIBLE_KEY = 'buddyVisible'; // false = hidden in every window; anything else = shown in every window
 chrome.action.onClicked.addListener(tab => {
   if (!tab.id) return;
-  if (!/^https?:/.test(tab.url || '')) { void chrome.sidePanel.open({tabId: tab.id}); return; } // sync: keeps the user gesture
+  if (!/^https?:/.test(tab.url || '')) { void openBuddyWindow(); return; }
   void (async () => {
     const wasShown = (await chrome.storage.local.get(VISIBLE_KEY))[VISIBLE_KEY] !== false;
     await chrome.storage.local.set({[VISIBLE_KEY]: true}); // every tab shows him through storage.onChanged
@@ -38,7 +47,7 @@ chrome.action.onClicked.addListener(tab => {
 
 const ALL_SITES = ['http://*/*', 'https://*/*'];
 const SCRIPT_ID = 'ai-buddy-character';
-const SCRIPTS = ['buddy/widget.js', 'buddy/content.js']; // the shared widget, then the extension's glue
+const SCRIPTS = ['buddy/bridge.js', 'buddy/widget.js', 'buddy/content.js']; // guarded link to the worker, the shared widget, the glue
 
 // ---------- character registration ----------
 
@@ -57,7 +66,7 @@ chrome.runtime.onStartup.addListener(() => { void syncRegistration(); });
 
 // ---------- session (lib/auth.js, shared with the web app) ----------
 // The session lives in chrome.storage.local: it survives closing tabs and restarting the browser. Only this worker
-// holds the tokens; pages and content scripts never see them (the side panel asks for a fresh access token).
+// holds the tokens; pages and content scripts never see them.
 
 const local = {
   get: key => chrome.storage.local.get(key).then(stored => stored[key]),
@@ -146,13 +155,6 @@ async function handle(message, sender) {
       if (!fromWebApp(sender)) return {error: 'forbidden'};
       await auth.logout();
       await chrome.storage.session.remove('conversationId');
-      return {ok: true};
-    case 'token': // for the side panel only: a fresh access token
-      if (!fromOwnPage(sender)) return {error: 'forbidden'};
-      return {token: await auth.token()};
-    case 'open-panel':
-      // A click in the page is a user gesture that Chrome forwards with the message.
-      await chrome.sidePanel.open({tabId: sender.tab.id});
       return {ok: true};
     default:
       return gateway.call(message);

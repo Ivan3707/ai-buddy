@@ -4,6 +4,7 @@ import { BuddyHost } from './bot/BuddyHost';
 import { LoginPage } from './components/LoginPage';
 import { AppShell } from './components/shell/AppShell';
 import { StaffShell } from './components/staff/StaffShell';
+import { PortalPage, parsePortalPath } from './pages/PortalPage';
 import { auth, currentUser, hasStoredSession } from './session';
 import { extensionPresent, handshake, notifySignedOut } from './sso';
 
@@ -105,6 +106,17 @@ export default function App() {
 
   if (loading) return <main className="splash"><div className="loader" /><p>Восстанавливаем сессию…</p></main>;
   if (!user || !session) return <LoginPage error={error} onLogin={login} />;
+
+  // Псевдокорпоративный портал: по клику на заявку в окне Бади открывается её страница (адрес /portal/requests/...)
+  const portal = parsePortalPath(location.pathname);
+  if (portal) {
+    return (
+      <>
+        <PortalPage user={user} token={session.access} route={portal} />
+        <BuddyHost token={session.access} user={user} onNavigate={navigate} />
+      </>
+    );
+  }
 
   // Один дизайн для всех: у стажёра и у наставника общие меню, сцена и боковые вкладки, различаются разделы.
   const Shell = user.role === 'intern' ? AppShell : StaffShell;

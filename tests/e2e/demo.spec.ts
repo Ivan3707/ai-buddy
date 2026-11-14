@@ -78,20 +78,17 @@ test('teamlead sees the team in the same design', async ({ page }) => {
   await logoutWeb(page);
 });
 
-test('real MV3 side panel logs in and calls authenticated chat', async ({}, testInfo) => {
+test('real MV3 extension: the Бади window signs in through the background worker and keeps the session', async ({}, testInfo) => {
   const buddyEmail = 'buddy@demo.example';
   const buddyPassword = initialPassword(buddyEmail);
   const extension = path.resolve('apps/extension/dist');
   const stages: string[] = [];
   const stage = async (name: string, action: () => Promise<void>) => {
     stages.push(name + ': started');
-    console.info('[MV3] ' + name + ': started');
     await test.step(name, action);
     stages.push(name + ': completed');
-    console.info('[MV3] ' + name + ': completed');
   };
   let context: Awaited<ReturnType<typeof chromium.launchPersistentContext>> | undefined;
-  let page: Page | undefined;
   try {
     await stage('launch browser', async () => {
       context = await chromium.launchPersistentContext('', {
@@ -105,55 +102,32 @@ test('real MV3 side panel logs in and calls authenticated chat', async ({}, test
       id = new URL(worker.url()).host;
       expect(id).toBeTruthy();
     });
-    await stage('open side panel', async () => {
-      page = await context!.newPage();
-      await page.goto('chrome-extension://' + id + '/sidepanel.html');
-      await expect(page.locator('#login')).toBeVisible();
+    const windowUrl = () => 'chrome-extension://' + id + '/buddy-window.html';
+    const send = (page: Page, message: object) => page.evaluate(m => chrome.runtime.sendMessage(m), message);
+    await stage('sign in through the background worker', async () => {
+      const page = await context!.newPage();
+      await page.goto(windowUrl());
+      const result = await send(page, { op: 'login', email: buddyEmail, password: buddyPassword });
+      expect(result).toMatchObject({ ok: true });
+      await page.close();
     });
-    await stage('login', async () => {
-      await page!.locator('#email').fill(buddyEmail);
-      await page!.locator('#password').fill(buddyPassword);
-      await page!.locator('#login button').click();
-      await expect(page!.locator('#logout')).toBeVisible();
-    });
-    await stage('reopen side panel', async () => {
-      await page!.close();
-      page = await context!.newPage();
-      await page.goto('chrome-extension://' + id + '/sidepanel.html');
-      await expect(page.locator('#logout')).toBeVisible();
-      await expect.poll(() => page!.evaluate(async () => {
+    await stage('the session survives reopening the window', async () => {
+      const page = await context!.newPage();
+      await page.goto(windowUrl());
+      await expect.poll(() => page.evaluate(async () => {
         const auth = (await chrome.storage.local.get('auth')).auth;
-        return typeof auth?.access === 'string' && auth.access.length > 0;
+        return typeof auth?.access === 'string' && typeof auth?.refresh === 'string';
       })).toBe(true);
+      expect(await send(page, { op: 'session' })).toMatchObject({ authenticated: true });
+      await page.close();
     });
-    await stage('request AI chat', async () => {
-      await page!.locator('#message').fill('Как оформить отпуск?');
-      await page!.locator('#chat button').click();
-      await expect(page!.locator('#reply a')).toHaveAttribute('href', 'https://hr.example.com/leave');
+    await stage('sign out clears the session', async () => {
+      const page = await context!.newPage();
+      await page.goto(windowUrl());
+      expect(await send(page, { op: 'logout' })).toMatchObject({ ok: true });
+      await expect.poll(() => page.evaluate(async () => (await chrome.storage.local.get('auth')).auth === undefined)).toBe(true);
+      await page.close();
     });
-    await stage('logout', async () => {
-      await page!.locator('#logout').click();
-      await expect(page!.locator('#login')).toBeVisible();
-      await expect.poll(() => page!.evaluate(async () =>
-        (await chrome.storage.local.get('auth')).auth === undefined
-      )).toBe(true);
-    });
-  } catch (error) {
-    if (page && !page.isClosed()) {
-      try {
-        // Traces may contain fill values and Authorization headers. Save only a redacted screenshot.
-        await page.evaluate(() => {
-          const password = document.querySelector<HTMLInputElement>('#password');
-          if (password) password.value = '';
-        });
-        await testInfo.attach('mv3-sidepanel-failure', {
-          body: await page.screenshot({ timeout: 5_000 }), contentType: 'image/png',
-        });
-      } catch {
-        stages.push('screenshot: unavailable');
-      }
-    }
-    throw error;
   } finally {
     await testInfo.attach('mv3-stages', { body: stages.join('\n'), contentType: 'text/plain' });
     if (context) await context.close();

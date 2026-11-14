@@ -50,6 +50,7 @@ export function BuddyHost({ token, user, onNavigate }: { token: string; user: Us
         set: async (key, value) => write(localStorage, `ai-buddy-widget:${key}`, value),
       },
       features: { login: false, pageContext: false, hide: false, requests: false },
+      portalUrl: (kind: string, id: string) => `${location.origin}/portal/requests/${kind}/${encodeURIComponent(id)}`,
     });
     api.show();
     widget.current = api;

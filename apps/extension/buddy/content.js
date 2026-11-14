@@ -4,37 +4,23 @@
 (() => {
   if (globalThis.__aiBuddyCharacter) return; // injected twice (registration + executeScript)
   globalThis.__aiBuddyCharacter = true;
-  if (!globalThis.AIBuddyWidget) return;
+  if (!globalThis.AIBuddyWidget || !globalThis.AIBuddyBridge) return;
 
+  const SITE_ORIGIN = 'http://127.0.0.1:5173';
   const VISIBLE_KEY = 'buddyVisible'; // shared by all windows: false = hidden everywhere, anything else = shown everywhere
   const POS_KEY = 'buddyPos';
 
-  const call = message => chrome.runtime.sendMessage(message).catch(() => ({error: 'extension reloaded'}));
-  let port = null;
-  const handlers = new Map();
-  let seq = 0;
-  function stream(payload, onMessage) {
-    if (!port) {
-      port = chrome.runtime.connect({name: 'buddy'});
-      port.onMessage.addListener(message => handlers.get(message.requestId)?.(message));
-      port.onDisconnect.addListener(() => { port = null; });
-    }
-    const requestId = ++seq;
-    handlers.set(requestId, onMessage);
-    port.postMessage({...payload, requestId});
-    return () => port?.postMessage({op: 'abort'});
-  }
-  const storage = {
-    get: key => chrome.storage.local.get(key).then(stored => stored[key]),
-    set: (key, value) => chrome.storage.local.set({[key]: value}),
-  };
+  const {call, stream, storage} = globalThis.AIBuddyBridge; // guarded: orphaned scripts stay quiet after an update
 
   const buddy = globalThis.AIBuddyWidget.mount({
     call, stream, storage,
     features: {login: true, logout: true, pageContext: true, hide: true, requests: true},
-    onHide: () => chrome.storage.local.set({[VISIBLE_KEY]: false}), // the "×": hidden in every window
+    portalUrl: (kind, id) => `${SITE_ORIGIN}/portal/requests/${kind}/${encodeURIComponent(id)}`, // pseudo corporate site of the web app
+    onHide: () => storage.set(VISIBLE_KEY, false), // the "×": hidden in every window
   });
-  chrome.storage.local.get(VISIBLE_KEY).then(stored => { if (stored[VISIBLE_KEY] !== false) buddy.show(); });
+  storage.get(VISIBLE_KEY).then(visible => { if (visible !== false) buddy.show(); });
+  // after an extension update this script is orphaned: remove the character and stop every timer
+  globalThis.AIBuddyBridge.onInvalidated(() => buddy.remove());
   // one state for all windows: shown / hidden and the position follow what any window changes
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;

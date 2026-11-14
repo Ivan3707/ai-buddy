@@ -10,6 +10,7 @@
 //   storage: {get(key): Promise<any>, set(key, value): Promise<void>}   per-browser settings (position, sizes, mode)
 //   features: {login, pageContext, hide, requests}   what this host supports (all true in the extension)
 //   onHide?(): void                        the "×" on the character was clicked
+//   portalUrl?(kind, id): string           page of the corporate portal (mock) that shows one request
 // }
 // Everything renders in a closed shadow root: page styles cannot break the character and ours cannot leak.
 // Page and answer text is untrusted: set via textContent or escaped before the tiny markdown pass.
@@ -20,12 +21,13 @@
   const MIN = {w: 300, h: 340};
   const DEFAULT_SIZE = {
     compact: () => ({w: 380, h: 560}),
-    full: () => ({w: Math.min(980, innerWidth - 32), h: Math.min(740, innerHeight - 48)}),
+    // on a phone the big mode takes the whole screen
+    full: () => (innerWidth < 600 ? {w: innerWidth - 16, h: innerHeight - 16} : {w: Math.min(980, innerWidth - 32), h: Math.min(740, innerHeight - 48)}),
   };
   const KEYS = {pos: 'buddyPos', mode: 'buddyChatMode', sizes: 'buddyChatSizes', greeting: 'buddyGreeting', page: 'buddyPageMode', tips: 'buddyTips'};
 
   function mount(env) {
-    const opt = {login: true, logout: false, pageContext: true, hide: true, requests: true, ...(env.features || {})};
+    const opt = {login: true, logout: false, pageContext: true, hide: true, requests: true, embedded: false, ...(env.features || {})};
     const store = env.storage;
     const today = new Date().toISOString().slice(0, 10);
     const cleanup = [];
@@ -144,6 +146,7 @@
     const grip = $('.grip'), modeButton = $('.mode'), openFull = $('.open-full');
     const scrim = $('.scrim'), tabsBar = $('.tabs'), notesPanel = $('.notes'), reqsPanel = $('.reqs'), askPanel = $('.ask'), calPanel = $('.cal');
     $('.hide').hidden = !opt.hide;
+    if (opt.embedded) { char.hidden = true; chat.classList.add('embedded'); } // the Бади window: just the chat, filling the window
     $('.page').hidden = !opt.pageContext;
 
     let pos = {x: innerWidth - SIZE - 24, y: innerHeight - SIZE - 24};
@@ -191,6 +194,10 @@
       const right = pos.x + SIZE / 2 > innerWidth / 2; // character on the right half -> open to the left
       const below = pos.y + SIZE / 2 < innerHeight / 2;
       anchor = {right, below};
+      if (opt.embedded) {
+        chat.style.width = '100vw'; chat.style.height = '100vh'; chat.style.transform = 'none';
+        return;
+      }
       const {w, h} = chatSize();
       chat.style.width = `${w}px`; chat.style.height = `${h}px`;
       if (mode === 'full') { // fixed in the middle of the screen, grows from the centre
@@ -210,7 +217,7 @@
       bubble.classList.toggle('from-right', right);
     }
     function setMode(next, persist = true) {
-      mode = next === 'full' ? 'full' : 'compact';
+      mode = opt.embedded || next === 'full' ? 'full' : 'compact';
       chat.classList.toggle('full', mode === 'full');
       modeButton.textContent = mode === 'full' ? '⤡' : '⤢';
       modeButton.title = mode === 'full' ? 'Компактный режим' : 'Развернуть';
@@ -296,6 +303,7 @@
     let bubbleTimer = 0, bubbleDone = null;
     function say(text, o = {}) {
       return new Promise(resolve => {
+        if (opt.embedded) { resolve(); return; } // no character in the Бади window: nothing to speak from
         const item = {text, ...o, resolve};
         if (o.queue) { queue.push(item); showNext(); return; }
         if (!chat.hidden || !bubble.hidden) { resolve(); return; } // a passing remark: skip if busy
@@ -353,7 +361,7 @@
         }
       }
     }
-    function closeChat() { chat.hidden = true; char.classList.remove('open'); layout(); setTimeout(showNext, 400); }
+    function closeChat() { if (opt.embedded) return; chat.hidden = true; char.classList.remove('open'); layout(); setTimeout(showNext, 400); }
     scrim.onclick = closeChat;
 
     // One place decides what the window shows: login (not signed in), or - signed in - the chat / reader / notes / requests.
@@ -361,7 +369,9 @@
       const full = mode === 'full';
       if (!full) tab = 'chat';
       const out = !signedIn;
-      scrim.hidden = !(full && !chat.hidden);
+      scrim.hidden = opt.embedded || !(full && !chat.hidden);
+      $('.mode').hidden = opt.embedded;
+      $('.close').hidden = opt.embedded;
       tabsBar.hidden = out || !full;
       $('.out').hidden = out || !opt.logout;
       for (const b of tabsBar.querySelectorAll('button')) {
@@ -591,6 +601,7 @@
     const dayRu = iso => (iso || '').split('-').reverse().join('.');
     function describeRequest(r) {
       const p = r.params || {};
+      if (r.type === 'corporate_access') return `Доступ к инструменту: ${p.tool || ''}`;
       return r.type === 'leave_request'
         ? `${WORDS[p.kind] || 'Отсутствие'}: ${dayRu(p.date_from)}${p.date_to && p.date_to !== p.date_from ? ` — ${dayRu(p.date_to)}` : ''}`
         : `Доступ: ${p.system || ''} · ${p.resource || ''} · ${WORDS[p.access_level] || p.access_level || ''}`;
@@ -599,12 +610,15 @@
       const box = $('.r-list');
       if (!list.length) { box.replaceChildren(el('p', 'muted pad', 'Заявок пока нет. Нажмите «Новая заявка» или попросите Бади в чате.')); return; }
       box.replaceChildren(...list.map(r => {
-        const row = el('div', 'req');
+        const url = env.portalUrl?.(r.kind, r.id);
+        const row = url ? el('a', 'req link') : el('div', 'req');
+        if (url) { row.href = url; row.target = '_blank'; row.rel = 'noreferrer'; row.title = 'Открыть заявку на корпоративном портале'; }
         const head = el('div', 'req-head');
         head.append(el('b', '', r.number), el('span', `pill ${r.status}`, STATUS[r.status] || r.status));
         row.append(head, el('div', '', describeRequest(r)));
         if (r.params?.comment || r.params?.justification) row.append(el('small', 'muted', r.params.comment || r.params.justification));
         if (r.approver) row.append(el('small', 'muted', `Согласует: ${r.approver}`));
+        if (url) row.append(el('small', 'open-portal', 'Открыть на портале ↗'));
         return row;
       }));
     }
@@ -1003,6 +1017,7 @@
     .scrim{position:fixed;inset:0;background:rgba(37,37,37,.62)}
     .chat{position:fixed;left:0;top:0;display:flex;flex-direction:column;background:var(--cream);color:var(--ink);border-radius:28px;box-shadow:0 14px 48px rgba(0,0,0,.4);overflow:hidden;font-size:14px;line-height:1.45}
     .chat.full{font-size:15px}
+    .chat.embedded{border-radius:0;box-shadow:none}.chat.embedded .grip{display:none}
     .chat header{display:flex;align-items:center;gap:6px;padding:14px 18px;background:var(--ink);color:#fff}
     .chat header b{font-size:18px;font-weight:800;margin-right:auto}
     button{font:inherit;cursor:pointer;border-radius:999px;border:0;background:var(--grey);color:var(--ink);padding:6px 16px;font-weight:600}
@@ -1082,6 +1097,8 @@
     .f-leave,.f-access{display:grid;gap:8px}
     .req{display:flex;flex-direction:column;gap:2px;padding:12px 16px;border-radius:20px;background:var(--grey-soft)}
     .req.dim{opacity:.6}
+    a.req{text-decoration:none;color:inherit;cursor:pointer}a.req:hover{background:var(--pink-soft)}
+    .open-portal{margin-top:2px;font-weight:700;color:var(--ink);text-decoration:underline;text-underline-offset:2px}
     .req-head{display:flex;align-items:center;gap:8px}
     .pill{font-size:11px;border-radius:999px;padding:2px 10px;background:#fff;color:var(--ink);font-weight:700}
     .pill.approved{background:var(--green)}.pill.rejected{background:var(--pink)}.pill.pending_approval{background:var(--pink-soft)}
@@ -1097,6 +1114,21 @@
     .grip[data-corner=tr]{top:0;right:0;cursor:nesw-resize}.grip[data-corner=tr]::before{border-top-width:2px;border-right-width:2px;border-top-right-radius:6px;border-color:#fff}
     .grip[data-corner=bl]{bottom:0;left:0;cursor:nesw-resize}.grip[data-corner=bl]::before{border-bottom-width:2px;border-left-width:2px;border-bottom-left-radius:6px}
     .grip[data-corner=br]{bottom:0;right:0;cursor:nwse-resize}.grip[data-corner=br]::before{border-bottom-width:2px;border-right-width:2px;border-bottom-right-radius:6px}
+
+    /* узкое окно (телефон, окно Бади): панели складываются в одну колонку; ширина считается по самому окну чата */
+    .chat{container-type:inline-size}
+    @container (max-width:560px){
+      .panel.notes{flex-direction:column}
+      .notes .side{width:100%;max-height:170px;border-right:0;border-bottom:1px solid var(--grey)}
+      .notes .side .items{display:flex;flex-wrap:wrap;gap:6px}.item{width:auto}
+      .r-form .two,.e-form .two{grid-template-columns:1fr}
+      .col{padding:12px}.editor{padding:10px}
+      .tabs{padding:8px 8px 0}.tabs button{padding:8px 10px;font-size:13px}
+      .log,.full .log{padding:12px}.msg,.full .msg{max-width:94%}
+      .reader-body{padding:14px}.composer-wrap{padding:8px 10px 12px}
+    }
+    @media (hover:none){.hide{opacity:1}}
+    @media (pointer:coarse){.composer textarea,.login input,.editor input,.editor textarea,.r-form input,.r-form select,.r-form textarea,.q-form textarea,.e-form input{font-size:16px}}
     `;
   }
 

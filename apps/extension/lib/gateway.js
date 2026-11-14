@@ -54,6 +54,28 @@ export function createGateway({baseUrl, auth, hooks = {}, store, client, fetchIm
   }
   const failure = (error, fallback) => ({error: error?.status === 401 ? 'Сессия истекла. Обновите страницу.' : error?.message && error.status ? error.message : fallback});
 
+  // Every request of the user: the assistant's (leave and access, from the chat or the form) and the corporate
+  // service's access tickets (mock service). One shape; statuses are named like the assistant's.
+  const FROM_CORPORATE = {open: 'pending_approval', approved: 'approved', denied: 'rejected'};
+  async function allRequests() {
+    const [own, corporate] = await Promise.allSettled([getJson('/api/requests'), getJson('/api/corporate/access-requests')]);
+    if (own.status === 'rejected' && corporate.status === 'rejected') throw own.reason;
+    const items = [];
+    if (own.status === 'fulfilled') {
+      for (const r of own.value) {
+        items.push({kind: 'assistant', id: r.id, number: r.number, status: r.status, type: r.type, params: r.params || {},
+          approver: r.approver || '', created_at: r.created_at});
+      }
+    }
+    if (corporate.status === 'fulfilled') {
+      for (const r of corporate.value) {
+        items.push({kind: 'corporate', id: r.id, number: r.ticket_number, status: FROM_CORPORATE[r.status] || 'pending_approval',
+          type: 'corporate_access', params: {tool: r.tool}, approver: '', created_at: r.created_at});
+      }
+    }
+    return items.sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
+  }
+
   async function call(message) {
     const token = await auth.token();
     switch (message?.op) {
@@ -106,7 +128,7 @@ export function createGateway({baseUrl, auth, hooks = {}, store, client, fetchIm
       case 'requests': {
         if (!token) return {changes: []};
         try {
-          const {changes, next} = requestStatusChanges(await store.get('buddyRequests'), await getJson('/api/requests'));
+          const {changes, next} = requestStatusChanges(await store.get('buddyRequests'), await allRequests());
           await store.set('buddyRequests', next);
           return {changes};
         } catch { return {changes: []}; }
@@ -133,7 +155,7 @@ export function createGateway({baseUrl, auth, hooks = {}, store, client, fetchIm
         } catch (error) { return failure(error, 'Не удалось сохранить заметку.'); }
       }
       case 'requests-list':
-        try { return {requests: await getJson('/api/requests')}; } catch (error) { return failure(error, 'Не удалось загрузить заявки.'); }
+        try { return {requests: await allRequests()}; } catch (error) { return failure(error, 'Не удалось загрузить заявки.'); }
       case 'request-create': {
         const kind = message.type === 'access_request' ? 'access_request' : 'leave_request';
         const params = {};

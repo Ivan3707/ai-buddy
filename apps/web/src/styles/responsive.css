@@ -1,0 +1,143 @@
+/*
+ * Адаптив: телефоны и узкие планшеты (до 899 px).
+ * Макет дизайнера рисует кадр 1920×1080 и на больших экранах масштабируется целиком (useStageScale).
+ * На узких экранах масштабирование выключено, а раскладка собрана заново: меню сверху, блоки друг под другом,
+ * панели на всю ширину. Подключается последним, чтобы перекрыть абсолютные позиции из figma.css.
+ */
+@media (max-width: 899px) {
+  body { min-width: 0; }
+
+  /* ───────── Каркас: полоса меню сверху, содержимое под ней ───────── */
+  .shell, .shell:has(.feedback) { display: block; grid-template-columns: 1fr; min-height: 100vh; }
+  .sidebar, .shell:has(.feedback) .sidebar {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    width: auto;
+    height: auto;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+    box-sizing: border-box;
+    max-width: 100vw;
+    padding: 10px 12px;
+    background: var(--ink);
+  }
+  .sidebar .lang, .lang { display: none; }
+  .sidebar nav { position: static; display: flex; flex: 1; min-width: 0; gap: 6px; margin: 0; overflow-x: auto; scrollbar-width: none; }
+  .sidebar nav::-webkit-scrollbar { display: none; }
+  .nav-link { flex: none; padding: 8px 14px; border-radius: var(--radius-pill); font-size: 15px; opacity: 0.85; }
+  .nav-link.is-active { background: #fff; color: var(--ink); opacity: 1; }
+  .sidebar-exit { position: static; flex: none; display: grid; place-content: center; width: 40px; height: 40px; }
+  .workspace { min-height: calc(100vh - 60px); padding: 14px 12px 88px; border-radius: 24px 24px 0 0; }
+
+  /* вкладки профиля и заметок: круглые кнопки внизу слева, чтобы не мешать Бади справа */
+  .side-tabs { top: auto; bottom: 14px; left: 12px; right: auto; display: flex; gap: 10px; justify-items: start; }
+  .side-tab, .side-tab:hover { width: 52px; height: 52px; padding: 0; place-content: center; border-radius: 50%; box-shadow: 0 4px 14px #00000040; }
+
+  /* ───────── Главная ───────── */
+  .home { gap: 12px; }
+  .greeting { margin-bottom: 4px; padding: 22px 18px 14px; border-radius: 24px; }
+  .greeting h1 { font-size: 30px; }
+  .greeting p { font-size: 15px; }
+  .home-top, .home-top.is-professional { grid-template-columns: 1fr; gap: 12px; }
+  .checklist-card { height: auto; min-height: 150px; border-radius: 24px; }
+  .checklist-card.is-selected { grid-template-columns: 1fr 1fr; }
+  .checklist-card-info { padding: 16px; border-radius: 24px; }
+  .checklist-card-progress { padding: 12px; }
+  .ring { max-width: 100%; }
+  .checklist-card .ring { width: min(220px, 100%) !important; height: auto !important; aspect-ratio: 1; }
+  .ring svg { width: 100%; height: 100%; }
+  .ring-text { font-size: 28px; }
+  .mini-calendar { height: auto; padding: 14px; border-radius: 24px; }
+  .calendar-grid { grid-template-columns: repeat(7, 1fr); height: auto; margin: 10px 0 0; grid-auto-rows: 30px; }
+  .calendar-day, .calendar-weekday { justify-self: center; text-align: center; }
+  .task-table { height: auto; padding: 16px; border-radius: 24px; }
+  .task-table header { margin-bottom: 14px; }
+  .task-rows { overflow: visible; }
+  .task-columns { display: none; }
+  .task-row { grid-template-columns: 1fr; gap: 6px; }
+  .task-row + .task-row { margin-top: 16px; }
+  .task-name { min-height: 56px; height: auto; padding: 10px 16px; border-radius: 22px; font-size: 15px; }
+  .task-cell { min-height: 0; height: auto; padding: 8px 16px; border-radius: 18px; font-size: 13px; }
+
+  /* ───────── Задачи ───────── */
+  .tasks-page { height: auto; display: flex; flex-direction: column; gap: 12px; }
+  .tasks-title, .tasks-switch, .tasks-panel { position: static; }
+  .tasks-title { width: auto; height: auto; padding: 16px 18px; border-radius: 24px; }
+  .tasks-title h2 { font-size: 24px; }
+  .tasks-switch { display: flex; gap: 10px; }
+  .tasks-switch-btn, .tasks-switch-btn.is-selected { flex: 1; width: auto; height: auto; padding: 12px 14px; border-radius: 22px; font-size: 15px; line-height: 1.25; }
+  .tasks-panel { display: block; overflow: visible; padding: 12px; border-radius: 24px; }
+  /* колонки статусов листаются вбок, по одной на экран */
+  .kanban-columns { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+  .kanban-column { flex: 0 0 84%; scroll-snap-align: start; border-radius: 24px; }
+  .kanban-column-head h3 { font-size: 18px; line-height: 1.3; }
+  .kanban-cards { overflow: visible; }
+
+  /* ───────── Календарь ───────── */
+  .calendar-page { width: 100%; height: auto; margin-left: 0; padding: 14px; border-radius: 24px; }
+  .calendar-page-grid { gap: 4px; grid-auto-rows: 54px; margin-top: 12px; }
+  .calendar-page-weekday { font-size: 13px; }
+  .calendar-page-cell { padding: 6px 8px; border-radius: 12px; font-size: 14px; }
+
+  /* ───────── Панели профиля и заметок ───────── */
+  .drawer, .notes-drawer { width: 100%; }
+  .drawer-header, .notes-drawer .drawer-header { min-height: 84px; padding: 22px 16px 0; border-radius: 0; }
+  .drawer-body, .notes-body { width: 100%; padding: 16px; border-radius: 24px 0 0 0; }
+  .person-card { height: auto; padding: 14px; }
+  .avatar { width: 80px; height: 80px; font-size: 34px; }
+  .fact-row { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .fact-card { height: auto; gap: 8px; padding: 14px; }
+  .fact-card p { font-size: 17px; line-height: normal; white-space: normal; }
+  .progress-card { height: auto; }
+  .about-card { min-height: 0; padding: 18px; }
+
+  /* ───────── Обратная связь ───────── */
+  .feedback { padding: 20px 14px 28px; border-radius: 24px 24px 0 0; }
+  .feedback h1 { font-size: 26px; }
+  .feedback-lead { margin-bottom: 18px; font-size: 16px; }
+  .feedback label, .rating-field { font-size: 15px; }
+  .feedback input { height: 46px; font-size: 16px; }
+  .feedback textarea { height: 150px; font-size: 16px; }
+  .feedback label:nth-of-type(3) { margin-top: 0; }
+  .feedback .pill { width: 100%; height: 54px; margin-top: 14px; font-size: 18px; }
+
+  /* ───────── Вход ───────── */
+  .auth { --u: 1px; display: flex; flex-direction: column; height: auto; min-height: 100vh; }
+  .auth-art { display: none; }
+  .auth-panel { display: flex; flex-direction: column; gap: 18px; min-height: 100vh; padding: 24px 20px 40px; }
+  .auth-panel .lang { position: static; width: auto; height: auto; font-size: 18px; line-height: normal; }
+  .auth-title { position: static; width: auto; height: auto; margin: 36px 0 4px; font-size: 40px; line-height: 1.2; }
+  .auth-form { position: static; display: grid; gap: 14px; width: 100%; }
+  .auth-field { position: static; width: 100%; height: auto; gap: 6px; font-size: 18px; line-height: 1.3; }
+  .auth-field input { height: 54px; padding: 0 22px; font-size: 18px; }
+  .auth-form .pill { position: static; width: 100%; height: 58px; padding: 0 20px; font-size: 20px; }
+  .auth-error { position: static; width: 100%; padding: 10px 16px; font-size: 14px; }
+
+  /* ───────── Интерфейс наставника ───────── */
+  .staff-card { padding: 16px; border-radius: 24px; }
+  .stat-row { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat-card { padding: 14px 16px; border-radius: 22px; }
+  .stat-value { font-size: 34px; }
+  .intern-columns { display: none; }
+  .intern-row { grid-template-columns: 1fr; gap: 6px; margin-top: 14px; }
+  .intern-name, .intern-cell { min-height: 48px; border-radius: 20px; }
+  .team-grid { grid-template-columns: 1fr; }
+  .mini-task { grid-template-columns: 1fr auto; }
+  .mini-meta { display: none; }
+  .desk-metrics { grid-template-columns: 1fr 1fr; }
+  .desk-request { flex-direction: column; align-items: stretch; }
+  .dialog { width: 96vw; }
+  .dialog-head { padding: 16px 18px; }
+  .dialog-body { padding: 16px; }
+  .info-card { padding: 16px; }
+}
+
+@media (max-width: 420px) {
+  .greeting h1 { font-size: 26px; }
+  .stat-row { grid-template-columns: 1fr; }
+  .fact-row { grid-template-columns: 1fr; }
+  .kanban-column { flex-basis: 90%; }
+}

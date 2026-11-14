@@ -50,7 +50,7 @@ export function AppShell({ user, token, onLogout }: Props) {
     return (
       <div className="shell">
         <Sidebar view={view} onNavigate={setView} onLogout={onLogout} />
-        <FeedbackPage user={user} />
+        <FeedbackPage user={user} token={token} checklists={checklists} />
       </div>
     );
   }

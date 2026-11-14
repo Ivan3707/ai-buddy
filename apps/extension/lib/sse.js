@@ -1,5 +1,5 @@
 // Minimal Server-Sent Events parser for fetch() streams.
-// EventSource cannot send POST bodies or the Authorization header, so the side panel
+// EventSource cannot send POST bodies or the Authorization header, so the widget
 // reads the response body itself. Chunks may be split anywhere: in the middle of a
 // line, of a "\r\n" pair or of a multi-byte UTF-8 character.
 

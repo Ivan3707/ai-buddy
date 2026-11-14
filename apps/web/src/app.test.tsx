@@ -22,6 +22,8 @@ vi.mock('@ai-buddy/client', async importOriginal => {
     logoutSession: vi.fn(),
     getAssignedInterns: vi.fn(),
     getInternProgress: vi.fn(),
+    getFeedback: vi.fn(),
+    submitFeedback: vi.fn(),
   };
 });
 
@@ -44,6 +46,8 @@ beforeEach(() => {
   vi.resetAllMocks();
   localStorage.clear();
   api.logoutSession.mockResolvedValue(undefined);
+  api.getFeedback.mockResolvedValue({ feedback: null });
+  api.submitFeedback.mockResolvedValue({} as never);
   api.refreshSession.mockRejectedValue(new ApiError(401, 'revoked'));
   api.getChecklists.mockResolvedValue(checklistsResponse());
   api.getPendingSubmissions.mockResolvedValue([]);
@@ -197,7 +201,13 @@ describe('кабинет стажёра', () => {
     expect(await screen.findByRole('heading', { name: /Есть идеи/ })).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Опиши свою идею или задай вопрос'), 'Добавьте тёмную тему');
     await userEvent.click(screen.getByRole('button', { name: 'Отправить' }));
-    expect(await screen.findByRole('status')).toHaveTextContent('Сообщение отправлено');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Поставьте оценку');
+    await userEvent.click(screen.getByRole('button', { name: 'Оценка 5 из 5' }));
+    api.getFeedback.mockResolvedValue({ feedback: { id: 'f1', user_id: 'u', checklist_id: 'c', rating: 5, comment: '', delivery_status: 'sent', created_at: '', delivered_at: null } });
+    await userEvent.click(screen.getByRole('button', { name: 'Отправить' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Спасибо! Отзыв отправлен.');
+    expect(api.submitFeedback).toHaveBeenCalledTimes(2);
+    expect(api.submitFeedback).toHaveBeenCalledWith('', 'saved', expect.any(String), { rating: 5, comment: 'Добавьте тёмную тему' });
   });
 
   it('при ошибке загрузки чек-листов даёт повторить', async () => {
