@@ -17,7 +17,7 @@ export async function apiRequest(baseUrl, path, { token, method = 'GET', body } 
   });
   if (!response.ok) {
     if (response.status === 401 && token && typeof globalThis.dispatchEvent === 'function') {
-      globalThis.dispatchEvent(new Event('ai-buddy:unauthorized'));
+      globalThis.dispatchEvent(new CustomEvent('ai-buddy:unauthorized', { detail: { token } }));
     }
     let message = `Backend: HTTP ${response.status}`;
     try {
