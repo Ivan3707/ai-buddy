@@ -1,8 +1,8 @@
 // MV3 service worker.
 // 1. Бади has two states for the whole browser: SHOWN (in every window, at the same place) or HIDDEN (in no window).
 //    The toolbar icon makes him shown (pressed again, it opens/closes his chat on this tab), the "×" on him hides him
-//    everywhere. On pages where scripts cannot run (chrome://, the new tab page, Web Store) the icon opens
-//    Бади in a small window of his own (buddy-window.html).
+//    everywhere. On pages where Chrome forbids scripts (chrome://, the new tab page, Web Store) he cannot be drawn:
+//    the icon then only switches him to "shown" for the ordinary pages and says so with a badge.
 // 2. Backend gateway for the on-page character "Бади" (buddy/widget.js + buddy/content.js): the content script runs in
 //    the page, so it never sees the token and never calls the backend itself — it sends commands here
 //    and receives ready-to-render view models.
@@ -14,22 +14,25 @@ import { createAuth } from './lib/auth.js';
 import { createGateway } from './lib/gateway.js';
 import { decideSync } from './lib/sso.js';
 
-const WINDOW_KEY = 'buddyWindowId';
-// Pages where content scripts are forbidden (chrome://, the new tab page, the Web Store): Бади opens in a window of his own.
-async function openBuddyWindow() {
+// Chrome forbids extension scripts on chrome:// pages, the new tab page and the Web Store, so the character cannot appear
+// there. The button still does its job (Бади becomes "shown" on every ordinary page) and a badge tells what happened.
+async function showOnPlainPages(tabId) {
   await chrome.storage.local.set({buddyVisible: true});
-  const known = (await chrome.storage.session.get(WINDOW_KEY))[WINDOW_KEY];
-  if (known !== undefined) {
-    try { await chrome.windows.update(known, {focused: true}); return; } catch { /* the window was closed */ }
-  }
-  const created = await chrome.windows.create({url: chrome.runtime.getURL('buddy-window.html'), type: 'popup', width: 440, height: 720});
-  await chrome.storage.session.set({[WINDOW_KEY]: created.id});
+  try {
+    await chrome.action.setBadgeBackgroundColor({color: '#a7cb77', tabId});
+    await chrome.action.setBadgeText({text: '✓', tabId});
+    await chrome.action.setTitle({title: 'Бади показан на обычных страницах. Здесь Chrome не разрешает расширениям рисовать.', tabId});
+    setTimeout(() => {
+      void chrome.action.setBadgeText({text: '', tabId}).catch(() => {});
+      void chrome.action.setTitle({title: 'Открыть AI-buddy', tabId}).catch(() => {});
+    }, 4000);
+  } catch { /* the tab was closed */ }
 }
 
 const VISIBLE_KEY = 'buddyVisible'; // false = hidden in every window; anything else = shown in every window
 chrome.action.onClicked.addListener(tab => {
   if (!tab.id) return;
-  if (!/^https?:/.test(tab.url || '')) { void openBuddyWindow(); return; }
+  if (!/^https?:/.test(tab.url || '')) { void showOnPlainPages(tab.id); return; }
   void (async () => {
     const wasShown = (await chrome.storage.local.get(VISIBLE_KEY))[VISIBLE_KEY] !== false;
     await chrome.storage.local.set({[VISIBLE_KEY]: true}); // every tab shows him through storage.onChanged

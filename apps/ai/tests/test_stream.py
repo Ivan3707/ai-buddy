@@ -132,7 +132,7 @@ def test_llm_sees_kb_in_user_turn_and_only_allowed_tools(chat_body):
     assert "<user_context>" in turn.messages[0]["content"] and "«Отпуска, отгулы" not in turn.messages[0]["content"]
     assert "[1] «Отпуска, отгулы и больничный" in turn.messages[-1]["content"]
     assert "обновлено 2026-09-01" in turn.messages[-1]["content"]
-    assert [t["function"]["name"] for t in turn.tools] == ["propose_mentor_question"]
+    assert [t["function"]["name"] for t in turn.tools] == ["propose_mentor_question", "show_form"]
 
 
 def test_cited_sources_ignores_out_of_range_and_duplicates():

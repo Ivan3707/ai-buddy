@@ -950,6 +950,40 @@
           }
         }
       },
+      "FormEvent": {
+        "type": "object",
+        "required": [
+          "form"
+        ],
+        "description": "Event `form`: the assistant shows a form instead of asking for details in text. The chat draws it prefilled; the user submits it to the ordinary API (POST /api/requests, /api/notes, /api/calendar/events, /api/questions).",
+        "properties": {
+          "form": {
+            "type": "object",
+            "required": [
+              "type",
+              "prefill"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "leave_request",
+                  "access_request",
+                  "note",
+                  "event",
+                  "mentor_question"
+                ]
+              },
+              "prefill": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
       "DoneEvent": {
         "type": "object",
         "required": [
@@ -962,7 +996,8 @@
             "enum": [
               "answered",
               "no_answer",
-              "action_proposed"
+              "action_proposed",
+              "form_shown"
             ],
             "description": "no_answer = KB has no grounded answer (bot offered escalation)"
           },
@@ -1344,6 +1379,9 @@
           },
           {
             "$ref": "#/components/schemas/AiActionEvent"
+          },
+          {
+            "$ref": "#/components/schemas/FormEvent"
           },
           {
             "$ref": "#/components/schemas/DoneEvent"

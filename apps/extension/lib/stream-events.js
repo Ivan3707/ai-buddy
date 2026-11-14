@@ -25,6 +25,7 @@ export function createAssistantState() {
     stage: null,
     sources: [],
     action: null,
+    form: null,
     finished: false,
     finishReason: null,
     mode: null,
@@ -35,6 +36,18 @@ export function createAssistantState() {
 
 const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const isString = value => typeof value === 'string';
+
+const FORM_TYPES = ['leave_request', 'access_request', 'note', 'event', 'mentor_question'];
+
+// The assistant asks the chat to draw a form (instead of asking for details in text). Only known types and string values pass.
+export function normalizeForm(value) {
+  if (!isObject(value) || !FORM_TYPES.includes(value.type)) return null;
+  const prefill = {};
+  if (isObject(value.prefill)) {
+    for (const [key, item] of Object.entries(value.prefill)) if (isString(item)) prefill[key] = item.slice(0, 8000);
+  }
+  return {type: value.type, prefill};
+}
 
 export function parseEventData(raw) {
   try {
@@ -99,6 +112,10 @@ export function applyStreamEvent(state, event) {
     case 'action': {
       const action = normalizeAction(data.action);
       return action ? {...state, action} : state;
+    }
+    case 'form': {
+      const form = normalizeForm(data.form);
+      return form ? {...state, form} : state;
     }
     case 'done':
       return {

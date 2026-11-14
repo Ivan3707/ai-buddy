@@ -13,7 +13,6 @@ await mkdir(dist, {recursive: true});
 
 const files = [
   'manifest.json', 'background.js', 'config.js',
-  'buddy-window.html', 'buddy-window.js',
 ];
 for (const file of files) {
   await copyFile(new URL(file, source), new URL(file, dist));
@@ -33,14 +32,11 @@ for (const file of ['manifest.json', 'config.js']) {
 // Sanity check of the output: valid manifest, referenced files and relative imports exist.
 const exists = file => stat(new URL(file, dist)).then(() => true, () => false);
 const manifest = JSON.parse(await readFile(new URL('manifest.json', dist), 'utf8'));
-const html = await readFile(new URL('buddy-window.html', dist), 'utf8');
 const referenced = [
   manifest.background.service_worker,
-  'buddy-window.html',
   'buddy/bridge.js',
   'buddy/widget.js',
   'buddy/content.js',
-  ...[...html.matchAll(/(?:src|href)="([^":]+)"/g)].map(match => match[1]),
 ];
 const modules = ['background.js'];
 for (let i = 0; i < modules.length; i += 1) {

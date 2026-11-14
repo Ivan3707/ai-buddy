@@ -160,10 +160,17 @@ SHARED = {
     "DeltaEvent": {"type": "object", "required": ["text"], "properties": {"text": {"type": "string"}}},
     "SourcesEvent": {"type": "object", "required": ["sources"],
                      "properties": {"sources": {"type": "array", "items": ref("Source")}}},
+    "FormEvent": {
+        "type": "object", "required": ["form"],
+        "description": "Event `form`: the assistant shows a form instead of asking for details in text. The chat draws it prefilled; "
+                       "the user submits it to the ordinary API (POST /api/requests, /api/notes, /api/calendar/events, /api/questions).",
+        "properties": {"form": {"type": "object", "required": ["type", "prefill"], "properties": {
+            "type": {"type": "string", "enum": ["leave_request", "access_request", "note", "event", "mentor_question"]},
+            "prefill": {"type": "object", "additionalProperties": {"type": "string"}}}}}},
     "DoneEvent": {
         "type": "object", "required": ["finish_reason", "mode"],
         "properties": {
-            "finish_reason": {"type": "string", "enum": ["answered", "no_answer", "action_proposed"],
+            "finish_reason": {"type": "string", "enum": ["answered", "no_answer", "action_proposed", "form_shown"],
                               "description": "no_answer = KB has no grounded answer (bot offered escalation)"},
             "mode": ref("AiMode"),
             "cached": {"type": "boolean", "description": "Served from the answer cache of frequent KB questions"},
@@ -356,7 +363,7 @@ BACKEND_ONLY = {
 
 
 def stream_events(action_schema, extra=()):
-    names = ["StatusEvent", "DeltaEvent", "SourcesEvent", action_schema, "DoneEvent", "ErrorEvent", *extra]
+    names = ["StatusEvent", "DeltaEvent", "SourcesEvent", action_schema, "FormEvent", "DoneEvent", "ErrorEvent", *extra]
     return {"oneOf": [ref(n) for n in names]}
 
 

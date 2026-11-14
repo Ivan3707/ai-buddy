@@ -16,12 +16,13 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from .config import Settings
+from .forms import allowed_forms, to_form
 from .llm import LLM, LLMError, TextDelta, ToolCall, Turn, Usage
 from . import metrics
 from .cache import AnswerCache, CachedAnswer
 from .limits import Limiter
 from .pii import mask
-from .prompts import ACCESS_LEVELS_BY_ROLE, FALLBACK_TEXT, TOOL_TO_ACTION, build_messages, build_tools
+from .prompts import ACCESS_LEVELS_BY_ROLE, FALLBACK_TEXT, TOOL_TO_ACTION, build_messages, build_tools, FORM_TEXT
 from .retrieval import Hit, Retriever, fuse, tokenize
 from .schemas import (AccessRequestParams, ActionProposal, AgentChatRequest, LeaveRequestParams,
                       MentorQuestionParams, Source)
@@ -239,12 +240,16 @@ async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
         yield "error", {"code": "internal", "message": ERROR_MESSAGES["internal"]}
         return
 
-    proposal = next((p for p in (to_proposal(c, allowed, req.user_context.role) for c in calls) if p), None)
+    action_calls = [c for c in calls if c.name != "show_form"]
+    proposal = next((p for p in (to_proposal(c, allowed, req.user_context.role) for c in action_calls) if p), None)
+    # the model could not create anything yet (details missing): the chat shows a form, the user submits it
+    forms = allowed_forms(allowed)
+    form = None if proposal else next((f for f in (to_form(c, forms, req.user_context.role) for c in calls) if f), None)
     text = "".join(parts)
     if proposal:
         yield "status", {"stage": "preparing_action"}
     if not text.strip():
-        text = FALLBACK_TEXT[proposal.type] if proposal else EMPTY_ANSWER
+        text = FALLBACK_TEXT[proposal.type] if proposal else (FORM_TEXT if form else EMPTY_ANSWER)
         yield "delta", {"text": text}
 
     sources = cited_sources(text, hits)
@@ -252,8 +257,12 @@ async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
         yield "sources", {"sources": [s.model_dump(exclude_none=True) for s in sources]}
     if proposal:
         yield "action", {"proposal": proposal.model_dump(mode="json")}
+    if form:
+        yield "form", {"form": form}
 
-    if proposal and proposal.type != "mentor_question":
+    if form:
+        finish = "form_shown"
+    elif proposal and proposal.type != "mentor_question":
         finish = "action_proposed"
     elif proposal and not sources:
         finish = "no_answer"  # nothing grounded to say, escalation offered
