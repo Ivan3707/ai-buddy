@@ -269,6 +269,15 @@ async def mentor_page():
     return MENTOR_PAGE
 
 
+@app.get("/demo/{name}", response_class=HTMLResponse)
+async def demo_page(name: str):
+    """Fake wiki / dashboards / task board where the extension's on-page character is shown."""
+    from .demo_pages import PAGES
+    if name not in PAGES:
+        raise HTTPException(404, "not found")
+    return PAGES[name]
+
+
 INTERN_PAGE = os.path.join(os.path.dirname(__file__), "intern.html")
 
 
