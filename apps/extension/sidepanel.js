@@ -5,6 +5,7 @@ import {
 } from './lib/actions.js';
 import { cancelAction, confirmAction, sendFeedback, streamBrief, streamChat } from './lib/api.js';
 import { briefStorageKey, shouldRequestBrief, todayKey } from './lib/brief.js';
+import { siteMatchPattern } from './lib/buddy.js';
 import {
   applyStreamEvent, createAssistantState, failureCode, finalizeStream, statusLabel,
 } from './lib/stream-events.js';
@@ -331,6 +332,7 @@ const PAGE_STATUS_TEXT = {
 };
 
 async function refreshPageStatus() {
+  void refreshSiteToggle();
   if (!usePageToggle.checked) {
     pageStatus.textContent = 'Контекст страницы не передаётся.';
     return;
@@ -338,6 +340,42 @@ async function refreshPageStatus() {
   const preview = await describeActiveTab(chrome);
   pageStatus.textContent = preview.state === 'ready' ? `Страница: ${preview.title}` : PAGE_STATUS_TEXT[preview.state];
 }
+
+// ---------- character "Бади" on the current site ----------
+
+const siteBar = $('#site-bar');
+const siteLabel = $('#site-label');
+const siteToggle = $('#site-toggle');
+let site = null; // {pattern, tabId, enabled}
+
+async function refreshSiteToggle() {
+  const [tab] = await chrome.tabs.query({active: true, currentWindow: true}).catch(() => []);
+  const pattern = siteMatchPattern(tab?.url || '');
+  if (!tab || !pattern) {
+    site = null;
+    siteBar.hidden = false;
+    siteLabel.textContent = 'Персонаж Бади: нажмите на иконку AI-buddy на нужной вкладке.';
+    siteToggle.hidden = true;
+    return;
+  }
+  const builtIn = tab.url.startsWith(`${backend}/demo/`);
+  const {enabled = false} = builtIn ? {enabled: true} : await chrome.runtime.sendMessage({op: 'site-state', pattern});
+  site = {pattern, tabId: tab.id, enabled, builtIn};
+  siteBar.hidden = false;
+  siteToggle.hidden = builtIn;
+  siteLabel.textContent = builtIn ? 'Бади уже на демо-страницах.' : `Бади на ${new URL(tab.url).hostname}`;
+  siteToggle.textContent = enabled ? 'Убрать' : 'Показать';
+}
+
+siteToggle.addEventListener('click', async () => {
+  if (!site) return;
+  const enable = !site.enabled;
+  // permissions.request must run directly in the click handler (user gesture): asks only for this site.
+  if (enable && !(await chrome.permissions.request({origins: [site.pattern]}))) return;
+  await chrome.runtime.sendMessage({op: 'set-site', pattern: site.pattern, enabled: enable, tabId: site.tabId});
+  if (!enable) await chrome.permissions.remove({origins: [site.pattern]}).catch(() => false);
+  await refreshSiteToggle();
+});
 
 async function loadPagePreference() {
   try {

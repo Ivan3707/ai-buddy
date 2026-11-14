@@ -124,3 +124,7 @@ button:disabled { opacity: .6; cursor: default; }
 .composer textarea { resize: none; min-height: 40px; max-height: 140px; }
 
 .footnote { margin: 0; padding: 4px 12px 8px; color: var(--muted); font-size: 11px; }
+
+.site-bar { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+.site-bar span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.site-bar button { font-size: 12px; padding: 3px 8px; }

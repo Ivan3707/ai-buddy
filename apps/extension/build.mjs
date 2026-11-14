@@ -18,6 +18,7 @@ const files = [
 for (const file of files) {
   await copyFile(new URL(file, source), new URL(file, dist));
 }
+await cp(new URL('./buddy/', source), new URL('./buddy/', dist), {recursive: true});
 const lib = new URL('./lib/', source);
 if (await stat(lib).then(() => true, () => false)) {
   await cp(lib, new URL('./lib/', dist), {recursive: true});
@@ -36,9 +37,10 @@ const html = await readFile(new URL(manifest.side_panel.default_path, dist), 'ut
 const referenced = [
   manifest.background.service_worker,
   manifest.side_panel.default_path,
+  'buddy/content.js',
   ...[...html.matchAll(/(?:src|href)="([^":]+)"/g)].map(match => match[1]),
 ];
-const modules = ['sidepanel.js'];
+const modules = ['sidepanel.js', 'background.js'];
 for (let i = 0; i < modules.length; i += 1) {
   const code = await readFile(new URL(modules[i], dist), 'utf8');
   for (const [, target] of code.matchAll(/^import[^'"]*['"](\.[^'"]+)['"]/gm)) {

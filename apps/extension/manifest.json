@@ -1,10 +1,13 @@
 {
   "manifest_version": 3,
   "name": "AI-buddy Demo",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "minimum_chrome_version": "116",
-  "description": "Демо-помощник онбординга в боковой панели. Работает только с локальным Backend.",
-  "background": {"service_worker": "background.js"},
+  "description": "Демо-помощник онбординга: персонаж Бади на страницах и боковая панель. Работает только с локальным Backend.",
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
   "permissions": [
     "sidePanel",
     "storage",
@@ -22,5 +25,9 @@
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'none'; connect-src http://127.0.0.1:8080"
-  }
+  },
+  "optional_host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ]
 }
