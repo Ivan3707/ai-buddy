@@ -521,6 +521,11 @@ backend_paths.update({
         "operationId": "kbLint", "security": BEARER,
         "description": "Buddy only: knowledge-base contradictions and stale documents (AI /v1/kb/lint).",
         "responses": {"200": json_resp("Report", ref("KbLintReport")), "403": json_resp("Not a buddy", ERROR)}}},
+    "/api/questions": {"get": {
+        "operationId": "ownQuestions", "security": BEARER,
+        "description": "The intern's own questions escalated to the buddy, newest first (to notify about answers; "
+                       "the answer is also added to the chat conversation the question came from).",
+        "responses": {"200": json_resp("Success", {"type": "array", "items": ref("MentorQuestion")})}}},
     "/api/buddy/requests": {"get": {
         "operationId": "staffRequests", "security": BEARER,
         "description": "Buddy/teamlead: requests of their interns, newest first.",

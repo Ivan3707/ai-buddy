@@ -744,7 +744,7 @@ func (s *AssistantService) DecideRequest(ctx context.Context, staff *model.User,
 func (s *AssistantService) StaffRequests(ctx context.Context, staff *model.User) ([]map[string]any, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT r.id, r.number, r.type, r.status, COALESCE(r.approver, ''), r.params, r.created_at, r.updated_at,
-		       u.id, COALESCE(u.first_name, ''), COALESCE(u.last_name, '')
+		       u.id, COALESCE(NULLIF(btrim(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.email), ''
 		FROM service_requests r JOIN users u ON u.id = r.user_id
 		WHERE u.buddy_id = $1 OR u.teamlead_id = $1 ORDER BY r.created_at DESC LIMIT 100`, staff.ID)
 	if err != nil {
@@ -833,7 +833,7 @@ func (s *AssistantService) Questions(ctx context.Context, staff *model.User, sta
 		return nil, ErrNotBuddy
 	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT q.id, q.intern_id, COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, ''), q.question, q.context,
+		SELECT q.id, q.intern_id, COALESCE(NULLIF(btrim(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.email), q.question, q.context,
 		       q.status, q.escalation_level, q.answer, q.created_at, q.answered_at
 		FROM mentor_questions q JOIN users u ON u.id = q.intern_id
 		WHERE (q.buddy_id = $1 OR u.buddy_id = $1 OR u.teamlead_id = $1) AND ($2 = '' OR q.status = $2)
@@ -881,7 +881,41 @@ func (s *AssistantService) Answer(ctx context.Context, staff *model.User, id uui
 		return q, err
 	}
 	q.Status, q.Answer, q.AnsweredAt = "answered", &answer, &now
+	// The answer also lands in the intern's chat, in the conversation the question was escalated from.
+	who := strings.TrimSpace(fullName(staff.FirstName, staff.LastName))
+	if who == "" {
+		who = "наставник"
+	}
+	text := fmt.Sprintf("**Ответ наставника (%s)** на вопрос «%s»:\n\n%s", who, truncate(q.Question, 200), answer)
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT INTO chat_messages (conversation_id, role, content, finish_reason)
+		SELECT m.conversation_id, 'assistant', $2, 'mentor_answer'
+		FROM mentor_questions mq JOIN chat_messages m ON m.action_id = mq.action_id
+		WHERE mq.id = $1 LIMIT 1`, id, text); err != nil {
+		log.Printf("assistant: answer to chat failed: %v", err)
+	}
 	return q, nil
+}
+
+// OwnQuestions lists the intern's own escalated questions (to notify about mentor answers).
+func (s *AssistantService) OwnQuestions(ctx context.Context, user *model.User) ([]MentorQuestion, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id, intern_id, question, context, status, escalation_level, answer, created_at, answered_at
+		FROM mentor_questions WHERE intern_id = $1 ORDER BY created_at DESC LIMIT 50`, user.ID)
+	if err != nil {
+		return nil, fmt.Errorf("own questions: %w", err)
+	}
+	defer rows.Close()
+	out := []MentorQuestion{}
+	for rows.Next() {
+		var q MentorQuestion
+		if err := rows.Scan(&q.ID, &q.InternID, &q.Question, &q.Context, &q.Status, &q.EscalationLevel, &q.Answer, &q.CreatedAt, &q.AnsweredAt); err != nil {
+			return nil, err
+		}
+		q.EscalatedAt = q.CreatedAt
+		out = append(out, q)
+	}
+	return out, rows.Err()
 }
 
 func (s *AssistantService) Draft(ctx context.Context, staff *model.User, id uuid.UUID) (json.RawMessage, error) {

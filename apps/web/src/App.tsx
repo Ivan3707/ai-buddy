@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ApiError, getMe, logoutSession, refreshSession, type LoginResponse, type User } from '@ai-buddy/client';
 import { LoginPage } from './components/LoginPage';
-import { ChatPage, ChecklistsPage, ProfilePage, RequestsPage, TeamPage } from './components/Pages';
+import { ChecklistsPage, ProfilePage, RequestsPage, TeamPage } from './components/Pages';
 import { CalendarPage, NotesPage } from './components/ProductivityPages';
 import { DashboardPage } from './components/DashboardV2';
+import { BotPage } from './bot/BotPage';
+import { BotWidget } from './bot/BotWidget';
 
 type Session = { access: string; refresh: string; expiresAt: number };
 const SESSION_KEY = 'ai-buddy-session-v2';
 function readSession(): Session | null { try { const value = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null') as Session | null; return value?.access && value.refresh ? value : null; } catch { return null; } }
-const labels: Record<string, string> = { '/': 'Главная', '/checklists': 'Чек-листы', '/team': 'Команда', '/calendar': 'Календарь', '/notes': 'Заметки', '/requests': 'Заявки', '/chat': 'AI-помощник', '/profile': 'Профиль' };
+const labels: Record<string, string> = { '/': 'Главная', '/checklists': 'Чек-листы', '/team': 'Команда', '/calendar': 'Календарь', '/notes': 'Заметки', '/requests': 'Заявки', '/chat': 'Бади · AI', '/profile': 'Профиль' };
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(readSession);
@@ -29,6 +31,6 @@ export default function App() {
   if (loading) return <main className="center"><span className="loader"/><p>Восстанавливаем защищённую сессию…</p></main>;
   if (!user || !session) return <LoginPage error={error} onLogin={login}/>;
   if (!nav.includes(path)) queueMicrotask(() => go('/'));
-  const page = path === '/checklists' && user.role === 'intern' ? <ChecklistsPage token={session.access}/> : path === '/team' && user.role !== 'intern' ? <TeamPage token={session.access} user={user}/> : path === '/calendar' ? <CalendarPage token={session.access}/> : path === '/notes' ? <NotesPage token={session.access}/> : path === '/requests' && user.role === 'intern' ? <RequestsPage token={session.access}/> : path === '/chat' ? <ChatPage token={session.access}/> : path === '/profile' ? <ProfilePage token={session.access}/> : <DashboardPage token={session.access} user={user}/>;
-  return <div className="app-shell"><aside className={menu ? 'sidebar open' : 'sidebar'}><button className="brand-button" onClick={() => go('/')}>AI·BUDDY</button><nav>{nav.map(item => <button data-testid={`nav-${item === '/' ? 'home' : item.slice(1)}`} key={item} className={path === item ? 'active' : ''} onClick={() => go(item)}><span>{({ '/':'⌂','/checklists':'✓','/team':'◎','/calendar':'◫','/notes':'≡','/requests':'↗','/chat':'✦','/profile':'○' } as Record<string,string>)[item]}</span>{labels[item]}</button>)}</nav><div className="sidebar-foot"><div className="avatar">{(user.first_name?.[0] || user.email[0]).toUpperCase()}</div><div><b>{user.first_name || user.email}</b><small>{user.role}</small></div><button title="Выйти" onClick={() => void logout()}>↪</button></div></aside><section className="workspace"><header className="mobile-top"><button onClick={() => setMenu(!menu)}>☰</button><b>AI·BUDDY</b><span>{labels[path]}</span></header>{page}</section>{menu && <button className="scrim" aria-label="Закрыть меню" onClick={() => setMenu(false)}/>}</div>;
+  const page = path === '/checklists' && user.role === 'intern' ? <ChecklistsPage token={session.access}/> : path === '/team' && user.role !== 'intern' ? <TeamPage token={session.access} user={user}/> : path === '/calendar' ? <CalendarPage token={session.access}/> : path === '/notes' ? <NotesPage token={session.access}/> : path === '/requests' && user.role === 'intern' ? <RequestsPage token={session.access}/> : path === '/chat' ? <BotPage token={session.access} user={user}/> : path === '/profile' ? <ProfilePage token={session.access}/> : <DashboardPage token={session.access} user={user}/>;
+  return <div className="app-shell"><aside className={menu ? 'sidebar open' : 'sidebar'}><button className="brand-button" onClick={() => go('/')}>AI·BUDDY</button><nav>{nav.map(item => <button data-testid={`nav-${item === '/' ? 'home' : item.slice(1)}`} key={item} className={path === item ? 'active' : ''} onClick={() => go(item)}><span>{({ '/':'⌂','/checklists':'✓','/team':'◎','/calendar':'◫','/notes':'≡','/requests':'↗','/chat':'✦','/profile':'○' } as Record<string,string>)[item]}</span>{labels[item]}</button>)}</nav><div className="sidebar-foot"><div className="avatar">{(user.first_name?.[0] || user.email[0]).toUpperCase()}</div><div><b>{user.first_name || user.email}</b><small>{user.role}</small></div><button title="Выйти" onClick={() => void logout()}>↪</button></div></aside><section className="workspace"><header className="mobile-top"><button onClick={() => setMenu(!menu)}>☰</button><b>AI·BUDDY</b><span>{labels[path]}</span></header>{page}</section>{path !== '/chat' && <BotWidget token={session.access} user={user} onNavigate={go}/>}{menu && <button className="scrim" aria-label="Закрыть меню" onClick={() => setMenu(false)}/>}</div>;
 }

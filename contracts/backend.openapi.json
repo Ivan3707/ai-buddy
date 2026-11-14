@@ -1968,6 +1968,32 @@
           }
         }
       }
+    },
+    "/api/questions": {
+      "get": {
+        "operationId": "ownQuestions",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "The intern's own questions escalated to the buddy, newest first (to notify about answers; the answer is also added to the chat conversation the question came from).",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MentorQuestion"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
