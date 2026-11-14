@@ -4,6 +4,7 @@ import { BuddyDashboard } from './components/BuddyDashboard';
 import { LoginPage } from './components/LoginPage';
 import { AppShell } from './components/shell/AppShell';
 import { roleLabel } from './lib/format';
+import { markOnboardingPending } from './lib/onboarding';
 
 export const TOKEN_KEY = 'ai-buddy-token';
 
@@ -51,7 +52,8 @@ export default function App() {
     return (
       <LoginPage
         error={error}
-        onLogin={(nextToken, nextUser) => {
+        onLogin={(nextToken, nextUser, isFirstLogin) => {
+          if (isFirstLogin && nextUser.role === 'intern') markOnboardingPending(nextUser.id);
           sessionStorage.setItem(TOKEN_KEY, nextToken);
           justLoggedIn.current = true;
           setToken(nextToken);

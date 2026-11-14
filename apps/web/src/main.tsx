@@ -10,5 +10,6 @@ import './styles/feedback.css';
 import './legacy.css';
 import './styles/typography.css';
 import './styles/figma.css';
+import './styles/onboarding.css';
 
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App /></React.StrictMode>);

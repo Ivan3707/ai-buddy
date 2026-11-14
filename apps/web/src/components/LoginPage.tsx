@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { login, type User } from '@ai-buddy/client';
 
-type Props = { error: string; onLogin: (token: string, user: User) => void };
+type Props = { error: string; onLogin: (token: string, user: User, isFirstLogin: boolean) => void };
 
 export function LoginPage({ error: initialError, onLogin }: Props) {
   const [identity, setIdentity] = useState('');
@@ -15,7 +15,7 @@ export function LoginPage({ error: initialError, onLogin }: Props) {
     setError('');
     try {
       const result = await login('', identity.trim(), password);
-      onLogin(result.access_token, result.user);
+      onLogin(result.access_token, result.user, result.is_first_login);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Не удалось войти');
     } finally {
