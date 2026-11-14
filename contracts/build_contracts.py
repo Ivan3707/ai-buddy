@@ -498,6 +498,17 @@ backend_paths.update({
         "operationId": "cancelAction", "security": BEARER, "parameters": [UUID_PARAM],
         "responses": {"200": json_resp("Cancelled", ref("PendingAction")),
                       "404": json_resp("Not found", ERROR), "409": json_resp("Already executed", ERROR)}}},
+    "/api/auth/link": {"post": {
+        "operationId": "linkSession",
+        "description": "Opens a NEW session of the same user for another client (the Chrome extension next to the web app), "
+                       "without the password: the caller proves possession of its own refresh token, which is not rotated. "
+                       "Each client keeps its own refresh-token chain (rotation + replay detection would revoke a shared one). "
+                       "Logging one client out does not sign the other out.",
+        "requestBody": json_body({"type": "object", "required": ["refresh_token"], "properties": {"refresh_token": {"type": "string"}}}),
+        "responses": {"201": json_resp("New session", {"type": "object", "required": ["access_token", "refresh_token", "expires_in"], "properties": {
+            "access_token": {"type": "string"}, "refresh_token": {"type": "string"}, "token_type": {"type": "string"},
+            "expires_in": {"type": "integer"}}}),
+                      "401": json_resp("Invalid, expired, revoked or already rotated refresh token", ERROR)}}},
     "/api/requests": {"get": {
         "operationId": "listRequests", "security": BEARER,
         "description": "Current user's requests in corporate services (mock), newest first.",
@@ -558,7 +569,15 @@ backend_paths.update({
         "operationId": "ownQuestions", "security": BEARER,
         "description": "The intern's own questions escalated to the buddy, newest first (to notify about answers; "
                        "the answer is also added to the chat conversation the question came from).",
-        "responses": {"200": json_resp("Success", {"type": "array", "items": ref("MentorQuestion")})}}},
+        "responses": {"200": json_resp("Success", {"type": "array", "items": ref("MentorQuestion")})}},
+        "post": {
+            "operationId": "createQuestion", "security": BEARER,
+            "description": "Ask the buddy a question directly (the \"Вопросы наставнику\" tab), without the chat. "
+                           "Same storage as a confirmed mentor_question action; the buddy sees it in the mentor desk.",
+            "requestBody": json_body({"type": "object", "required": ["question"], "properties": {
+                "question": {"type": "string", "minLength": 1, "maxLength": 2000}}}),
+            "responses": {"201": json_resp("Created", ref("MentorQuestion")),
+                          "422": json_resp("Empty question", ERROR)}}},
     "/api/buddy/requests": {"get": {
         "operationId": "staffRequests", "security": BEARER,
         "description": "Buddy/teamlead: requests of their interns, newest first.",

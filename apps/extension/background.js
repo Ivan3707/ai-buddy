@@ -6,10 +6,11 @@
 //    and receives ready-to-render view models.
 // 3. Registers the character on all sites except the ones the user switched off
 //    ("Убрать" in the side panel). On the AI-buddy web app it replaces the site's own widget (bridge in content.js).
-import { getMe, login } from './client.js';
+import { getMe, linkSession, login, logoutSession, refreshSession } from './client.js';
 import { BACKEND_ORIGIN as backend } from './config.js';
+import { createAuth } from './lib/auth.js';
 import { createGateway } from './lib/gateway.js';
-import { clearToken, readToken, saveToken } from './popup-session.js';
+import { decideSync } from './lib/sso.js';
 
 chrome.sidePanel
   .setPanelBehavior({openPanelOnActionClick: false})
@@ -30,7 +31,6 @@ chrome.action.onClicked.addListener(tab => {
   })();
 });
 
-const session = chrome.storage.session;
 const OFF_KEY = 'buddyOffSites'; // sites where the user switched Бади off
 const ALL_SITES = ['http://*/*', 'https://*/*'];
 const SCRIPT_ID = 'ai-buddy-character';
@@ -69,17 +69,66 @@ async function setSite(pattern, enabled, tabId) {
 chrome.runtime.onInstalled.addListener(() => { void syncRegistration(); });
 chrome.runtime.onStartup.addListener(() => { void syncRegistration(); });
 
+// ---------- session (lib/auth.js, shared with the web app) ----------
+// The session lives in chrome.storage.local: it survives closing tabs and restarting the browser. Only this worker
+// holds the tokens; pages and content scripts never see them (the side panel asks for a fresh access token).
+
+const local = {
+  get: key => chrome.storage.local.get(key).then(stored => stored[key]),
+  set: (key, value) => chrome.storage.local.set({[key]: value}),
+  remove: key => chrome.storage.local.remove(key),
+};
+const auth = createAuth({baseUrl: backend, storage: local, client: {login, refreshSession, linkSession, logoutSession}});
+
+// ---------- single sign-on with the AI-buddy web app ----------
+// The site and the extension keep separate sessions of the same user (lib/auth.js). On a handshake the site sends
+// {sub, loginAt, signedOutAt}; lib/sso.js decides who adopts whose session. Only a tab of the site's own origin may do this.
+const WEB_ORIGINS = ['http://127.0.0.1:5173', 'http://localhost:5173'];
+const fromWebApp = sender => {
+  try { return Boolean(sender?.tab) && WEB_ORIGINS.includes(new URL(sender.url || '').origin); } catch { return false; }
+};
+const fromOwnPage = sender => !sender?.tab && String(sender?.url || '').startsWith(chrome.runtime.getURL(''));
+const num = value => (Number.isFinite(value) ? value : 0);
+
+// Tell the open site tabs that the extension signed in/out, so they run a handshake.
+async function notifySiteTabs() {
+  const tabs = await chrome.tabs.query({url: WEB_ORIGINS.map(origin => `${origin}/*`)}).catch(() => []);
+  for (const tab of tabs) chrome.tabs.sendMessage(tab.id, {op: 'sso-changed'}).catch(() => {});
+}
+
+async function adoptPair(pair, loginAt) {
+  const before = (await auth.info()).sub;
+  await auth.adopt(pair, {loginAt});
+  if ((await auth.info()).sub !== before) await chrome.storage.session.remove('conversationId'); // another user: new dialog
+}
+
+async function handshake(site) {
+  const ext = await auth.info();
+  const action = decideSync({sub: String(site?.sub || ''), loginAt: num(site?.loginAt), signedOutAt: num(site?.signedOutAt)}, ext);
+  if (action === 'pull') {
+    const pair = await auth.link();
+    return pair ? {action: 'pull', pair, loginAt: ext.loginAt} : {action: 'none'};
+  }
+  if (action === 'ext-logout') { // the site signed out after our sign-in, while the extension was not listening
+    await auth.logout();
+    await chrome.storage.session.remove('conversationId');
+    return {action: 'none'};
+  }
+  return {action};
+}
+
 // ---------- backend gateway (lib/gateway.js, shared with the web app's Бади) ----------
 
 const gateway = createGateway({
   baseUrl: backend,
-  tokens: {get: () => readToken(session), set: token => saveToken(session, token)},
+  auth,
+  hooks: {onLogin: () => void notifySiteTabs(), onLogout: () => void notifySiteTabs()},
   store: { // conversation lives for the browser session; request statuses are remembered between sessions
-    get: key => (key === 'conversationId' ? session : chrome.storage.local).get(key).then(stored => stored[key]),
-    set: (key, value) => (key === 'conversationId' ? session : chrome.storage.local).set({[key]: value}),
-    remove: key => (key === 'conversationId' ? session : chrome.storage.local).remove(key),
+    get: key => (key === 'conversationId' ? chrome.storage.session : chrome.storage.local).get(key).then(stored => stored[key]),
+    set: (key, value) => (key === 'conversationId' ? chrome.storage.session : chrome.storage.local).set({[key]: value}),
+    remove: key => (key === 'conversationId' ? chrome.storage.session : chrome.storage.local).remove(key),
   },
-  client: {getMe, login},
+  client: {getMe},
 });
 
 // Long-lived port per page: streams answers to the character as view models.
@@ -96,35 +145,25 @@ chrome.runtime.onConnect.addListener(port => {
   });
 });
 
-// ---------- single sign-on with the AI-buddy web app ----------
-// The web app pushes its access token through the content script on its own origin (content.js bridge); the
-// refresh token never leaves the site. Only that origin may set or clear the token.
-const WEB_ORIGINS = ['http://127.0.0.1:5173', 'http://localhost:5173'];
-const JWT_SHAPE = /^[\w-]+\.[\w-]+\.[\w-]+$/;
-const fromWebApp = sender => {
-  try { return Boolean(sender?.tab) && WEB_ORIGINS.includes(new URL(sender.url || '').origin); } catch { return false; }
-};
-function tokenSubject(token) {
-  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub || ''; } catch { return ''; }
-}
-async function adoptSiteToken(token) {
-  const subject = tokenSubject(token);
-  const stored = await session.get('authSubject');
-  if (stored.authSubject !== subject) await session.remove('conversationId'); // another user: start a fresh dialog
-  await saveToken(session, token);
-  await session.set({authSubject: subject});
-}
-
 async function handle(message, sender) {
   switch (message.op) {
-    case 'set-token':
-      if (!fromWebApp(sender) || typeof message.token !== 'string' || !JWT_SHAPE.test(message.token)) return {error: 'forbidden'};
-      await adoptSiteToken(message.token);
-      return {ok: true};
-    case 'clear-token':
+    case 'sso-handshake':
       if (!fromWebApp(sender)) return {error: 'forbidden'};
-      await Promise.all([clearToken(session), session.remove(['conversationId', 'authSubject'])]);
+      return handshake(message.state);
+    case 'sso-adopt': { // the site opened a session for us (POST /api/auth/link)
+      const pair = message.pair;
+      if (!fromWebApp(sender) || !pair || typeof pair.access_token !== 'string' || typeof pair.refresh_token !== 'string') return {error: 'forbidden'};
+      await adoptPair(pair, num(message.loginAt) || Date.now());
       return {ok: true};
+    }
+    case 'sso-logout': // the user signed out on the site
+      if (!fromWebApp(sender)) return {error: 'forbidden'};
+      await auth.logout();
+      await chrome.storage.session.remove('conversationId');
+      return {ok: true};
+    case 'token': // for the side panel only: a fresh access token
+      if (!fromOwnPage(sender)) return {error: 'forbidden'};
+      return {token: await auth.token()};
     case 'open-panel':
       // A click in the page is a user gesture that Chrome forwards with the message.
       await chrome.sidePanel.open({tabId: sender.tab.id});

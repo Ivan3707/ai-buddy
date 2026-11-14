@@ -135,4 +135,63 @@ func TestAuthSessionsHTTPIntegration(t *testing.T) {
 	if code, _ := call("POST", "/api/auth/refresh", `{"refresh_token":"`+refresh+`"}`, ""); code != 401 {
 		t.Fatalf("logout must revoke refresh, got %d", code)
 	}
+
+	// ---- link: a second client gets its OWN session; refresh chains and logouts are independent
+	siteAccess, siteRefresh := login()
+	code, body = call("POST", "/api/auth/link", `{"refresh_token":"`+siteRefresh+`"}`, "")
+	if code != 201 {
+		t.Fatalf("link status %d: %s", code, body)
+	}
+	var linked struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err = json.Unmarshal(body, &linked); err != nil {
+		t.Fatal(err)
+	}
+	if linked.RefreshToken == "" || linked.RefreshToken == siteRefresh || strings.Split(linked.RefreshToken, ".")[0] == strings.Split(siteRefresh, ".")[0] {
+		t.Fatal("link must create a different session")
+	}
+	if code, _ := call("GET", "/api/auth/me", "", linked.AccessToken); code != 200 {
+		t.Fatalf("linked access: %d", code)
+	}
+	if code, _ := call("GET", "/api/auth/me", "", siteAccess); code != 200 {
+		t.Fatalf("link must not touch the caller's session: %d", code)
+	}
+	// the caller's refresh was not rotated: it still works once (and rotates then), the linked chain is unaffected
+	code, body = call("POST", "/api/auth/refresh", `{"refresh_token":"`+siteRefresh+`"}`, "")
+	if code != 200 {
+		t.Fatalf("caller refresh after link: %d", code)
+	}
+	var siteNext struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+	}
+	if err = json.Unmarshal(body, &siteNext); err != nil {
+		t.Fatal(err)
+	}
+	code, body = call("POST", "/api/auth/refresh", `{"refresh_token":"`+linked.RefreshToken+`"}`, "")
+	if code != 200 {
+		t.Fatalf("linked refresh: %d", code)
+	}
+	if err = json.Unmarshal(body, &linked); err != nil {
+		t.Fatal(err)
+	}
+	// replaying a rotated token cannot open a session; garbage cannot either
+	if code, _ := call("POST", "/api/auth/link", `{"refresh_token":"`+siteRefresh+`"}`, ""); code != 401 {
+		t.Fatalf("link with a rotated token: %d", code)
+	}
+	if code, _ := call("POST", "/api/auth/link", `{"refresh_token":"nope"}`, ""); code != 401 {
+		t.Fatalf("link with garbage: %d", code)
+	}
+	// logging one client out leaves the other signed in
+	if code, _ := call("POST", "/api/auth/logout", `{"refresh_token":"`+linked.RefreshToken+`"}`, linked.AccessToken); code != 204 {
+		t.Fatalf("linked logout: %d", code)
+	}
+	if code, _ := call("GET", "/api/auth/me", "", linked.AccessToken); code != 401 {
+		t.Fatalf("linked session must be revoked: %d", code)
+	}
+	if code, _ := call("GET", "/api/auth/me", "", siteNext.AccessToken); code != 200 {
+		t.Fatalf("the other client must stay signed in: %d", code)
+	}
 }

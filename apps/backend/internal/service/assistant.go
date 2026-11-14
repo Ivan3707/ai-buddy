@@ -680,6 +680,28 @@ func (s *AssistantService) CreateRequest(ctx context.Context, user *model.User, 
 	return s.Confirm(ctx, user, a.ID)
 }
 
+// CreateQuestion sends a question to the user's buddy from the "Вопросы наставнику" tab (no chat needed): the same
+// validation and storage as a mentor_question the user confirmed in the chat.
+func (s *AssistantService) CreateQuestion(ctx context.Context, user *model.User, question string) (MentorQuestion, error) {
+	params, _ := json.Marshal(map[string]string{"question": strings.TrimSpace(question), "context": "Вопрос из вкладки «Вопросы наставнику»"})
+	if _, err := validateParams("mentor_question", params); err != nil {
+		return MentorQuestion{}, err
+	}
+	proposal, _ := json.Marshal(map[string]any{"proposal": map[string]any{"type": "mentor_question", "params": json.RawMessage(params), "summary": "Вопрос наставнику"}})
+	a, err := s.storeProposal(ctx, user.ID, proposal)
+	if err != nil {
+		return MentorQuestion{}, err
+	}
+	result, err := s.Confirm(ctx, user, a.ID)
+	if err != nil {
+		return MentorQuestion{}, err
+	}
+	if result.MentorQuestion == nil {
+		return MentorQuestion{}, ErrActionInvalid
+	}
+	return *result.MentorQuestion, nil
+}
+
 func (s *AssistantService) Cancel(ctx context.Context, userID, actionID uuid.UUID) (PendingAction, error) {
 	var a PendingAction
 	err := withTransaction(ctx, s.db, func(tx *sql.Tx) error {

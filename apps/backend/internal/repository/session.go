@@ -90,6 +90,27 @@ func (r *SessionRepository) Revoke(ctx context.Context, id, userID uuid.UUID, se
 	return nil
 }
 
+// Verify checks a refresh secret against an active session without rotating it and returns the owner.
+// Used to open a separate session for another client (the Chrome extension) without asking for the password.
+func (r *SessionRepository) Verify(ctx context.Context, id uuid.UUID, secret string) (uuid.UUID, error) {
+	var userID uuid.UUID
+	var hash []byte
+	var expires time.Time
+	var revoked sql.NullTime
+	err := r.db.QueryRowContext(ctx, `SELECT user_id,token_hash,expires_at,revoked_at FROM auth_sessions WHERE id=$1`, id).Scan(&userID, &hash, &expires, &revoked)
+	if errors.Is(err, sql.ErrNoRows) {
+		return uuid.Nil, ErrNotFound
+	}
+	if err != nil {
+		return uuid.Nil, err
+	}
+	got := sha256.Sum256([]byte(secret))
+	if revoked.Valid || !expires.After(time.Now()) || !equalHash(hash, got[:]) {
+		return uuid.Nil, ErrNotFound
+	}
+	return userID, nil
+}
+
 func (r *SessionRepository) IsActive(ctx context.Context, id, userID uuid.UUID) (bool, error) {
 	var active bool
 	err := r.db.QueryRowContext(ctx, `SELECT revoked_at IS NULL AND expires_at>now() FROM auth_sessions WHERE id=$1 AND user_id=$2`, id, userID).Scan(&active)

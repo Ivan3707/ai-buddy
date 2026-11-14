@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getChecklists, getMe, type User } from '@ai-buddy/client';
 import '@buddy/buddy/widget.js';
 import { createGateway } from '@buddy/lib/gateway.js';
+import { auth } from '../session';
 import { bot, ownQuestions, REQUEST_STATUS, type Hint } from './api';
 
 // Бади on the site: the same widget as in the Chrome extension (apps/extension/buddy/widget.js), talking to the
@@ -34,7 +35,7 @@ export function BuddyHost({ token, user, onNavigate }: { token: string; user: Us
     const prefix = `ai-buddy:${user.id}:`;
     const gateway = createGateway({
       baseUrl: '',
-      tokens: { get: async () => tokenRef.current },
+      auth,
       store: { // the conversation lives for the tab session, like the site session
         get: async key => read(sessionStorage, prefix + key),
         set: async (key, value) => write(sessionStorage, prefix + key, value),
@@ -54,14 +55,6 @@ export function BuddyHost({ token, user, onNavigate }: { token: string; user: Us
     widget.current = api;
     return () => { api.remove(); widget.current = null; };
   }, [extension, user.id]);
-
-  // ---------- single sign-on: the extension is signed in as the same user ----------
-  // Only the short-lived access token is shared (the refresh token stays on the site), on every rotation,
-  // and an empty token on sign-out. The content script of the extension forwards it, only for this origin.
-  useEffect(() => {
-    if (extension) window.postMessage({ source: 'ai-buddy-web', op: 'auth', token }, location.origin);
-  }, [extension, token]);
-  useEffect(() => () => { window.postMessage({ source: 'ai-buddy-web', op: 'auth', token: '' }, location.origin); }, []);
 
   // ---------- nudges ----------
   const shown = useRef<Set<string>>(new Set());

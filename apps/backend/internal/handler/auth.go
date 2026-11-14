@@ -201,6 +201,30 @@ func (d Dependencies) refreshHandler() http.HandlerFunc {
 		send(w, 200, map[string]any{"access_token": access, "refresh_token": refresh, "token_type": "Bearer", "expires_in": ttl})
 	}
 }
+// linkHandler: POST /api/auth/link {refresh_token} -> a new session (access + refresh) of the same user.
+func (d Dependencies) linkHandler() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var body refreshRequest
+		if !decodeJSONBody(w, r, &body) {
+			return
+		}
+		if d.Sessions == nil {
+			send(w, 500, map[string]string{"error": "sessions unavailable"})
+			return
+		}
+		access, refresh, ttl, err := d.Sessions.Link(r.Context(), body.RefreshToken)
+		if errors.Is(err, service.ErrInvalidRefresh) {
+			send(w, 401, map[string]string{"error": "invalid refresh token"})
+			return
+		}
+		if err != nil {
+			send(w, 500, map[string]string{"error": "internal server error"})
+			return
+		}
+		send(w, 201, map[string]any{"access_token": access, "refresh_token": refresh, "token_type": "Bearer", "expires_in": ttl})
+	}
+}
+
 func (d Dependencies) logoutHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var body refreshRequest
@@ -232,6 +256,11 @@ func (d Dependencies) RegisterAuthRoutes(
 	mux.HandleFunc(
 		"POST /api/auth/refresh",
 		d.refreshHandler(),
+	)
+
+	mux.HandleFunc(
+		"POST /api/auth/link",
+		d.linkHandler(),
 	)
 
 	mux.Handle(

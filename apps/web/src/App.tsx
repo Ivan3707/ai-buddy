@@ -1,31 +1,48 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ApiError, getMe, logoutSession, refreshSession, type LoginResponse, type User } from '@ai-buddy/client';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type LoginResponse, type User } from '@ai-buddy/client';
 import { LoginPage } from './components/LoginPage';
 import { ChecklistsPage, ProfilePage, RequestsPage, TeamPage } from './components/Pages';
 import { CalendarPage, NotesPage } from './components/ProductivityPages';
 import { DashboardPage } from './components/DashboardV2';
 import { BuddyInfoPage, MentorPage } from './bot/BuddyPages';
 import { BuddyHost } from './bot/BuddyHost';
+import { auth, currentUser, hasStoredSession } from './session';
+import { extensionPresent, handshake, notifySignedOut } from './sso';
 
-type Session = { access: string; refresh: string; expiresAt: number };
-const SESSION_KEY = 'ai-buddy-session-v2';
-function readSession(): Session | null { try { const value = JSON.parse(sessionStorage.getItem(SESSION_KEY) || 'null') as Session | null; return value?.access && value.refresh ? value : null; } catch { return null; } }
+type Session = { access: string; expiresAt: number };
 const labels: Record<string, string> = { '/': 'Главная', '/checklists': 'Чек-листы', '/team': 'Команда', '/calendar': 'Календарь', '/notes': 'Заметки', '/requests': 'Заявки', '/chat': 'Бади · AI', '/mentor': 'Кабинет наставника', '/profile': 'Профиль' };
 
 export default function App() {
-  const [session, setSession] = useState<Session | null>(readSession);
+  const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [path, setPath] = useState(location.pathname);
-  const [loading, setLoading] = useState(Boolean(session)); const [error, setError] = useState(''); const [menu, setMenu] = useState(false);
-  const save = useCallback((next: Session | null) => { setSession(next); if (next) sessionStorage.setItem(SESSION_KEY, JSON.stringify(next)); else sessionStorage.removeItem(SESSION_KEY); }, []);
-  const clear = useCallback(() => { save(null); setUser(null); setError(''); history.replaceState({}, '', '/'); setPath('/'); }, [save]);
-  const rotate = useCallback(async (current: Session) => { const result = await refreshSession('', current.refresh); const next = { access: result.access_token, refresh: result.refresh_token, expiresAt: Date.now() + result.expires_in * 1000 }; save(next); return next; }, [save]);
+  const [loading, setLoading] = useState(hasStoredSession); const [error, setError] = useState(''); const [menu, setMenu] = useState(false);
+  const userId = useRef('');
+  userId.current = user?.id ?? '';
+  // what the tokens in storage say -> React state (tokens are refreshed by lib/auth.js, never here)
+  const sync = useCallback(async () => { const s = await auth.read(); setSession(s ? { access: s.access, expiresAt: s.expiresAt } : null); return s; }, []);
+  const reset = useCallback((message = '') => { setSession(null); setUser(null); setError(message); history.replaceState({}, '', '/'); setPath('/'); }, []);
+  // the session may belong to another user now (another tab / the extension): reload who it is
+  const adopted = useCallback(async () => { const current = await currentUser(); if (!current) { reset(); return; } setUser(current.user); await sync(); setError(''); }, [reset, sync]);
   useEffect(() => { const pop = () => setPath(location.pathname); addEventListener('popstate', pop); return () => removeEventListener('popstate', pop); }, []);
-  useEffect(() => { if (!session) { setLoading(false); return; } let cancelled = false; (async () => { setLoading(true); try { const active = session.expiresAt - Date.now() < 60_000 ? await rotate(session) : session; const me = await getMe('', active.access); if (!cancelled) setUser(me); } catch (reason) { if (!cancelled) { clear(); setError(reason instanceof Error ? reason.message : 'Не удалось восстановить сессию'); } } finally { if (!cancelled) setLoading(false); } })(); return () => { cancelled = true; }; }, []); // restore once
-  useEffect(() => { if (!session) return; const delay = Math.max(1000, session.expiresAt - Date.now() - 60_000); const id = setTimeout(() => void rotate(session).catch(clear), delay); return () => clearTimeout(id); }, [session, rotate, clear]);
-  useEffect(() => { const unauthorized = () => { if (session) void rotate(session).catch(clear); }; addEventListener('ai-buddy:unauthorized', unauthorized); return () => removeEventListener('ai-buddy:unauthorized', unauthorized); }, [session, rotate, clear]);
-  const login = (result: LoginResponse) => { const next = { access: result.access_token, refresh: result.refresh_token, expiresAt: Date.now() + result.expires_in * 1000 }; save(next); setUser(result.user); setError(''); };
-  const logout = async () => { if (session) { try { await logoutSession('', session.access, session.refresh); } catch (e) { if (!(e instanceof ApiError && e.status === 401)) setError('Сессия закрыта локально; сервер не подтвердил выход.'); } } clear(); };
+  // restore once: a stored session survives closing the tab and the browser
+  useEffect(() => { let cancelled = false; (async () => { try { const current = await currentUser(); if (cancelled) return; if (current) { setUser(current.user); await sync(); } } catch (reason) { if (!cancelled) setError(reason instanceof Error ? reason.message : 'Не удалось восстановить сессию'); } finally { if (!cancelled) setLoading(false); } })(); return () => { cancelled = true; }; }, []);
+  // refresh shortly before the access token expires
+  useEffect(() => { if (!session) return; const delay = Math.max(1000, session.expiresAt - Date.now() - 70_000); const id = setTimeout(async () => { const token = await auth.token({ force: true, stale: session.access }); if (!token) reset('Сессия завершена. Войдите снова.'); else await sync(); }, delay); return () => clearTimeout(id); }, [session, reset, sync]);
+  // an API call got 401: refresh once (several callers at once share one refresh)
+  useEffect(() => { const unauthorized = async () => { if (!session) return; const token = await auth.token({ force: true, stale: session.access }); if (!token) reset('Сессия завершена. Войдите снова.'); else await sync(); }; addEventListener('ai-buddy:unauthorized', unauthorized); return () => removeEventListener('ai-buddy:unauthorized', unauthorized); }, [session, reset, sync]);
+  // another tab signed in / out / refreshed
+  useEffect(() => auth.onChange(async () => { const s = await sync(); if (!s) { reset(); return; } if (!userId.current || s.sub !== userId.current) await adopted(); }), [sync, reset, adopted]);
+  // single sign-on with the extension: on start, when the extension appears, and when it signs in / out
+  useEffect(() => {
+    const run = () => void handshake({ onSessionChanged: adopted, onSignedOut: async () => reset() });
+    if (extensionPresent()) run();
+    const onMessage = (event: MessageEvent) => { if (event.source === window && event.origin === location.origin && event.data?.source === 'ai-buddy-extension' && event.data.op === 'changed') run(); };
+    addEventListener('ai-buddy:extension', run); addEventListener('message', onMessage);
+    return () => { removeEventListener('ai-buddy:extension', run); removeEventListener('message', onMessage); };
+  }, [adopted, reset]);
+  const login = async (result: LoginResponse) => { await auth.adopt({ access_token: result.access_token, refresh_token: result.refresh_token, expires_in: result.expires_in }, { loginAt: Date.now() }); setUser(result.user); await sync(); setError(''); void handshake({ onSessionChanged: adopted, onSignedOut: async () => reset() }); };
+  const logout = async () => { await auth.logout(); void notifySignedOut(); reset(); };
   const nav = useMemo(() => { const common = ['/', '/calendar', '/notes', '/chat', '/profile']; if (user?.role === 'intern') return ['/', '/checklists', '/requests', ...common.slice(1)]; return ['/', '/team', '/mentor', ...common.slice(1)]; }, [user?.role]);
   const go = (next: string) => { history.pushState({}, '', next); setPath(next); setMenu(false); };
   if (loading) return <main className="center"><span className="loader"/><p>Восстанавливаем защищённую сессию…</p></main>;

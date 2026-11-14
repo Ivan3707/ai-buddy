@@ -1,4 +1,4 @@
-import { chat, getMe, login } from './client.js';
+import { chat, getMe } from './client.js';
 import { BACKEND_ORIGIN as backend } from './config.js';
 import {
   actionTitle, describeActionError, describeActionStatus, describeParams, describeResult,
@@ -10,7 +10,7 @@ import {
   applyStreamEvent, createAssistantState, failureCode, finalizeStream, statusLabel,
 } from './lib/stream-events.js';
 import { collectPageContext, contextLabel, describeActiveTab } from './lib/page-context.js';
-import { clearToken, isUnauthorized, restoreSession, saveToken } from './popup-session.js';
+import { isUnauthorized } from './popup-session.js';
 
 const storage = chrome.storage.session;
 const conversationKey = 'conversationId';
@@ -42,6 +42,14 @@ let dialogGeneration = 0; // bumps on "new dialog"/logout so late results are dr
 let streamingSupported = true;
 
 // ---------- session ----------
+// The session (tokens, refresh, single sign-on with the site) belongs to the background worker; the panel only
+// asks it for a fresh access token before it talks to the backend.
+
+async function freshToken() {
+  const reply = await chrome.runtime.sendMessage({op: 'token'}).catch(() => null);
+  accessToken = typeof reply?.token === 'string' ? reply.token : '';
+  return accessToken;
+}
 
 function showOnly(section) {
   sessionSection.hidden = section !== sessionSection;
@@ -76,7 +84,7 @@ function showSessionCheck(message = 'Проверяем сессию…', canRet
 async function logout(message = '') {
   accessToken = '';
   abortCurrent();
-  await Promise.all([clearToken(storage), storage.remove(conversationKey)]);
+  await Promise.all([chrome.runtime.sendMessage({op: 'logout'}).catch(() => null), storage.remove(conversationKey)]);
   showLogin(message);
 }
 
@@ -86,18 +94,14 @@ async function verifyStoredSession() {
   const withTimeout = request => Promise.race([
     request, new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000)),
   ]);
-  const restored = await restoreSession(storage, token => withTimeout(getMe(backend, token)));
-  if (restored.status === 'authenticated') {
-    accessToken = restored.token;
-    showAssistant(restored.user);
-    return;
+  const token = await freshToken();
+  if (!token) { showLogin(''); return; }
+  try {
+    showAssistant(await withTimeout(getMe(backend, token)));
+  } catch (error) {
+    if (isUnauthorized(error)) { showLogin('Сессия истекла. Войдите снова.'); return; }
+    showSessionCheck('Backend временно недоступен. Вход сохранён, попробуйте ещё раз.', true);
   }
-  if (restored.status === 'unavailable') {
-    accessToken = restored.token;
-    showSessionCheck('Backend временно недоступен. Токен сохранён, попробуйте ещё раз.', true);
-    return;
-  }
-  showLogin(restored.status === 'unauthorized' ? 'Сессия истекла. Войдите снова.' : '');
 }
 
 // ---------- rendering ----------
@@ -182,7 +186,7 @@ function renderActionCard(action) {
     confirm.disabled = cancel.disabled = true;
     card.setAttribute('aria-busy', 'true');
     showResult(operation === 'confirm' ? 'Отправляю заявку…' : 'Отменяю…', 'muted');
-    const options = {baseUrl: backend, token: accessToken};
+    const options = {baseUrl: backend, token: await freshToken()};
     try {
       if (operation === 'confirm') {
         const outcome = describeResult(await confirmAction(options, action.id));
@@ -225,7 +229,7 @@ function renderFeedback(messageId) {
       for (const other of buttons) other.disabled = true;
       button.setAttribute('aria-pressed', 'true');
       try {
-        await sendFeedback({baseUrl: backend, token: accessToken}, messageId, rating);
+        await sendFeedback({baseUrl: backend, token: await freshToken()}, messageId, rating);
         note.textContent = 'Спасибо за оценку';
       } catch (error) {
         if (isUnauthorized(error)) return;
@@ -398,6 +402,7 @@ async function pageContextForRequest(userNode) {
 async function ask(message, view, userNode) {
   if (busy || !accessToken) return;
   setBusy(true);
+  await freshToken();
   const generation = dialogGeneration;
   const controller = new AbortController();
   currentRequest = controller;
@@ -452,7 +457,7 @@ async function ask(message, view, userNode) {
 
 // Proactive greeting with the next onboarding step, once per user per day.
 async function maybeShowBrief(userId) {
-  if (busy || !accessToken) return;
+  if (busy || !(await freshToken())) return;
   const today = todayKey();
   const key = briefStorageKey(userId);
   let lastBriefDate;
@@ -515,10 +520,10 @@ loginForm.addEventListener('submit', async event => {
   button.disabled = true;
   loginError.textContent = '';
   try {
-    const result = await login(backend, $('#email').value.trim(), passwordInput.value);
-    accessToken = result.access_token;
-    await Promise.all([saveToken(storage, accessToken), storage.remove(conversationKey)]);
-    showAssistant(result.user);
+    const result = await chrome.runtime.sendMessage({op: 'login', email: $('#email').value.trim(), password: passwordInput.value});
+    if (!result?.ok) throw Object.assign(new Error(result?.error || 'login failed'), {status: result?.error?.startsWith('Неверный') ? 401 : 503});
+    await storage.remove(conversationKey);
+    showAssistant(await getMe(backend, await freshToken()));
   } catch (error) {
     loginError.textContent = isUnauthorized(error)
       ? 'Неверный email или пароль.'

@@ -31,12 +31,16 @@
 
   const buddy = globalThis.AIBuddyWidget.mount({
     call, stream, storage,
-    features: {login: true, pageContext: true, hide: true, requests: true},
+    features: {login: true, logout: true, pageContext: true, hide: true, requests: true},
     onHide: () => sessionStorage.setItem(HIDDEN_KEY, '1'),
   });
   if (!hiddenOnTab) buddy.show();
 
   chrome.runtime.onMessage.addListener(message => {
+    if (message?.op === 'sso-changed' && WEB_APP.test(location.host)) { // the extension signed in/out: the site syncs
+      window.postMessage({source: 'ai-buddy-extension', op: 'changed'}, location.origin);
+      return;
+    }
     if (message?.op === 'remove') buddy.remove();
     if (message?.op === 'toggle') { // toolbar icon: show Бади (even if hidden with ×) and open/close the chat
       sessionStorage.removeItem(HIDDEN_KEY);
@@ -57,9 +61,13 @@
     if (event.source !== window || event.origin !== location.origin) return;
     const m = event.data;
     if (!m || m.source !== 'ai-buddy-web') return;
-    if (m.op === 'auth') { // the site's session: the extension is signed in as the same user (and out when the site signs out)
-      const token = typeof m.token === 'string' ? m.token.slice(0, 4096) : '';
-      void call({op: token ? 'set-token' : 'clear-token', token}).then(() => buddy.refresh());
+    if (m.op === 'sso') { // single sign-on: request/reply between the site and the background worker
+      const op = {handshake: 'sso-handshake', adopt: 'sso-adopt', logout: 'sso-logout'}[m.request];
+      if (!op || typeof m.id !== 'string') return;
+      void call({op, state: m.state, pair: m.pair, loginAt: m.loginAt}).then(reply => {
+        window.postMessage({source: 'ai-buddy-extension', op: 'sso-reply', id: m.id, ...reply}, location.origin);
+        void buddy.refresh();
+      });
       return;
     }
     if (!buddy.isShown()) buddy.show();

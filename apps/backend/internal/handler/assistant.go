@@ -45,6 +45,7 @@ func RegisterAssistantRoutes(mux *http.ServeMux, auth func(http.Handler) http.Ha
 	route("GET /api/buddy/requests", h.staffRequests)
 	route("POST /api/buddy/requests/{id}/decision", h.decide)
 	route("GET /api/questions", h.ownQuestions)
+	route("POST /api/questions", h.createQuestion)
 	route("GET /api/buddy/questions", h.questions)
 	route("POST /api/buddy/questions/{id}/answer", h.answer)
 	route("GET /api/buddy/questions/{id}/draft", h.draft)
@@ -340,6 +341,22 @@ func (h assistantHandler) questions(w http.ResponseWriter, r *http.Request, user
 		return
 	}
 	send(w, http.StatusOK, list)
+}
+
+func (h assistantHandler) createQuestion(w http.ResponseWriter, r *http.Request, user *model.User) {
+	var in struct {
+		Question string `json:"question"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&in); err != nil {
+		send(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+	q, err := h.s.CreateQuestion(r.Context(), user, in.Question)
+	if err != nil {
+		assistantError(w, err)
+		return
+	}
+	send(w, http.StatusCreated, q)
 }
 
 func (h assistantHandler) ownQuestions(w http.ResponseWriter, r *http.Request, user *model.User) {

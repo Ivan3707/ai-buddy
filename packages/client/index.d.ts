@@ -24,6 +24,7 @@ export function apiRequest<T = unknown>(baseUrl: string, path: string, options?:
 export function chat(baseUrl: string, message: string, token?: string): Promise<ChatResponse>;
 export function login(baseUrl: string, email: string, password: string): Promise<LoginResponse>;
 export function refreshSession(baseUrl: string, refreshToken: string): Promise<RefreshResponse>;
+export function linkSession(baseUrl: string, refreshToken: string): Promise<RefreshResponse>;
 export function logoutSession(baseUrl: string, token: string, refreshToken: string): Promise<void>;
 export function getMe(baseUrl: string, token: string): Promise<User>;
 export function getChecklists(baseUrl: string, token: string): Promise<ChecklistsResponse>;

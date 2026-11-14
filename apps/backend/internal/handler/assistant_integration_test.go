@@ -463,6 +463,20 @@ func TestAssistantFlowWithPostgres(t *testing.T) {
 	}
 	expect(intern, http.MethodGet, "/api/metrics/chat", nil, http.StatusForbidden)
 
+	// ---- a question to the buddy from the "Вопросы наставнику" tab
+	var asked map[string]any
+	if err := json.Unmarshal(expect(intern, http.MethodPost, "/api/questions", map[string]string{"question": "Как получить доступ к кластеру?"}, http.StatusCreated), &asked); err != nil {
+		t.Fatal(err)
+	}
+	if asked["status"] != "open" || asked["question"] != "Как получить доступ к кластеру?" {
+		t.Fatalf("created question %v", asked)
+	}
+	expect(intern, http.MethodPost, "/api/questions", map[string]string{"question": "   "}, http.StatusUnprocessableEntity)
+	var own []map[string]any
+	if err := json.Unmarshal(expect(intern, http.MethodGet, "/api/questions", nil, http.StatusOK), &own); err != nil || len(own) < 2 {
+		t.Fatalf("own questions %v %v", own, err)
+	}
+
 	// ---- AI down: stream reports an error event, JSON endpoints 502
 	ai.mu.Lock()
 	ai.down = true

@@ -37,6 +37,7 @@ export function login(baseUrl, email, password) {
   return apiRequest(baseUrl, '/api/auth/login', { method: 'POST', body: { email, password } });
 }
 export function refreshSession(baseUrl, refreshToken) { return apiRequest(baseUrl, '/api/auth/refresh', { method: 'POST', body: { refresh_token: refreshToken } }); }
+export function linkSession(baseUrl, refreshToken) { return apiRequest(baseUrl, '/api/auth/link', { method: 'POST', body: { refresh_token: refreshToken } }); }
 export function logoutSession(baseUrl, token, refreshToken) { return apiRequest(baseUrl, '/api/auth/logout', { token, method: 'POST', body: { refresh_token: refreshToken } }); }
 export function getMe(baseUrl, token) { return apiRequest(baseUrl, '/api/auth/me', { token }); }
 export function getChecklists(baseUrl, token) { return apiRequest(baseUrl, '/api/checklists', { token }); }

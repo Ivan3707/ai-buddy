@@ -22,10 +22,10 @@
     compact: () => ({w: 380, h: 560}),
     full: () => ({w: Math.min(980, innerWidth - 32), h: Math.min(740, innerHeight - 48)}),
   };
-  const KEYS = {pos: 'buddyPos', mode: 'buddyChatMode', sizes: 'buddyChatSizes', greeting: 'buddyGreeting'};
+  const KEYS = {pos: 'buddyPos', mode: 'buddyChatMode', sizes: 'buddyChatSizes', greeting: 'buddyGreeting', page: 'buddyPageMode'};
 
   function mount(env) {
-    const opt = {login: true, pageContext: true, hide: true, requests: true, ...(env.features || {})};
+    const opt = {login: true, logout: false, pageContext: true, hide: true, requests: true, ...(env.features || {})};
     const store = env.storage;
     const today = new Date().toISOString().slice(0, 10);
     const cleanup = [];
@@ -47,13 +47,15 @@
       <div class="scrim" hidden></div>
       <section class="chat" role="dialog" aria-label="Чат с Бади" hidden>
         <header><b>Бади</b>
-          <button class="ghost new" type="button" title="Новый диалог">Новый</button>
           <button class="ghost mode" type="button"></button>
+          <button class="ghost out" type="button" title="Выйти из аккаунта" hidden>Выйти</button>
           <button class="ghost close" type="button" aria-label="Свернуть">×</button></header>
         <nav class="tabs" role="tablist" hidden>
           <button type="button" role="tab" data-tab="chat">Чат</button>
-          <button type="button" role="tab" data-tab="notes">Заметки</button>
+          <button type="button" role="tab" data-tab="ask">Вопросы наставнику</button>
           <button type="button" role="tab" data-tab="reqs">Заявки</button>
+          <button type="button" role="tab" data-tab="notes">Заметки</button>
+          <button type="button" role="tab" data-tab="cal">Календарь</button>
         </nav>
         <div class="log" role="log" aria-live="polite"></div>
         <div class="reader" hidden>
@@ -91,6 +93,26 @@
             <div class="r-list"></div>
           </div>
         </section>
+        <section class="panel ask" hidden>
+          <div class="col">
+            <form class="q-form">
+              <label>Вопрос наставнику
+                <textarea name="question" rows="3" maxlength="2000" placeholder="Например: у кого узнать про доступ к кластеру?"></textarea></label>
+              <div class="bar"><span class="q-status muted"></span><button type="submit" class="primary">Отправить наставнику</button></div>
+            </form>
+            <div class="q-list"></div>
+          </div>
+        </section>
+        <section class="panel cal" hidden>
+          <div class="col">
+            <form class="e-form">
+              <div class="two"><label>Название <input name="title" maxlength="160" required></label><label>Описание <input name="description" maxlength="300" placeholder="необязательно"></label></div>
+              <div class="two"><label>Начало <input type="datetime-local" name="starts_at" required></label><label>Конец <input type="datetime-local" name="ends_at" required></label></div>
+              <div class="bar"><span class="e-status muted"></span><button type="submit" class="primary">Добавить событие</button></div>
+            </form>
+            <div class="e-list"></div>
+          </div>
+        </section>
         <form class="login" hidden>
           <h3>Привет! Я Бади</h3>
           <p>Войдите, чтобы я знал ваш онбординг.</p>
@@ -101,7 +123,12 @@
         <div class="expired" hidden><h3>Сессия истекла</h3><p>Обновите страницу и войдите снова.</p></div>
         <div class="composer-wrap">
           <div class="chip" hidden><span class="chip-text"></span><button type="button" class="chip-x" aria-label="Не учитывать выделение">×</button></div>
-          <label class="page"><input type="checkbox" class="use-page" checked> Учитывать эту страницу</label>
+          <div class="page-row">
+            <label class="page">Страница:
+              <select class="page-mode" title="Передавать ли боту заголовок, адрес и выделенный текст этой страницы">
+                <option value="auto">определять сам</option><option value="always">всегда учитывать</option><option value="never">не учитывать</option></select></label>
+            <button type="button" class="clear" title="Очистить чат и начать новый диалог">Очистить</button>
+          </div>
           <form class="composer"><textarea rows="1" maxlength="2000" placeholder="Спроси Бади…"></textarea>
             <button type="submit" class="primary send" aria-label="Отправить">➤</button></form>
         </div>
@@ -111,12 +138,11 @@
     const $ = selector => root.querySelector(selector);
     const char = $('.char'), body = $('.body'), bubble = $('.bubble'), chat = $('.chat'), log = $('.log');
     const input = $('.composer textarea'), sendButton = $('.send'), loginForm = $('.login');
-    const chip = $('.chip'), usePage = $('.use-page'), reader = $('.reader'), readerBody = $('.reader-body');
+    const chip = $('.chip'), pageMode = $('.page-mode'), reader = $('.reader'), readerBody = $('.reader-body');
     const grip = $('.grip'), modeButton = $('.mode'), openFull = $('.open-full');
-    const scrim = $('.scrim'), tabsBar = $('.tabs'), notesPanel = $('.notes'), reqsPanel = $('.reqs');
+    const scrim = $('.scrim'), tabsBar = $('.tabs'), notesPanel = $('.notes'), reqsPanel = $('.reqs'), askPanel = $('.ask'), calPanel = $('.cal');
     $('.hide').hidden = !opt.hide;
     $('.page').hidden = !opt.pageContext;
-    if (!opt.pageContext) usePage.checked = false;
 
     let pos = {x: innerWidth - SIZE - 24, y: innerHeight - SIZE - 24};
     let mode = 'compact';
@@ -176,7 +202,8 @@
     }
     modeButton.onclick = () => setMode(mode === 'full' ? 'compact' : 'full');
 
-    Promise.all([store.get(KEYS.pos), store.get(KEYS.mode), store.get(KEYS.sizes)]).then(([p, m, s]) => {
+    Promise.all([store.get(KEYS.pos), store.get(KEYS.mode), store.get(KEYS.sizes), store.get(KEYS.page)]).then(([p, m, s, pm]) => {
+      if (['auto', 'always', 'never'].includes(pm)) pageMode.value = pm;
       if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) pos = p;
       if (s && typeof s === 'object') sizes = s;
       setMode(m, false);
@@ -313,6 +340,7 @@
       const out = !signedIn;
       scrim.hidden = !(full && !chat.hidden);
       tabsBar.hidden = out || !full;
+      $('.out').hidden = out || !opt.logout;
       for (const b of tabsBar.querySelectorAll('button')) {
         b.classList.toggle('on', b.dataset.tab === tab);
         b.setAttribute('aria-selected', String(b.dataset.tab === tab));
@@ -324,6 +352,8 @@
       $('.composer-wrap').hidden = out || tab !== 'chat' || readerOpen;
       notesPanel.hidden = out || tab !== 'notes';
       reqsPanel.hidden = out || tab !== 'reqs';
+      askPanel.hidden = out || tab !== 'ask';
+      calPanel.hidden = out || tab !== 'cal';
     }
     function showTab(next) {
       tab = next;
@@ -331,6 +361,8 @@
       layout();
       if (next === 'notes') void loadNotes();
       if (next === 'reqs') void loadRequests();
+      if (next === 'ask') void loadQuestions();
+      if (next === 'cal') void loadEvents();
       if (next === 'chat') { scroll(); input.focus(); }
     }
     for (const b of tabsBar.querySelectorAll('button')) b.onclick = () => showTab(b.dataset.tab);
@@ -590,6 +622,81 @@
       setTimeout(() => note.remove(), 8000);
     });
 
+    // ---------- questions to the mentor tab ----------
+    const QSTATUS = {open: 'ждёт ответа', answered: 'отвечен'};
+    const stamp = iso => { try { return new Date(iso).toLocaleString('ru-RU', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}); } catch { return ''; } };
+    function renderQuestions(list) {
+      const box = $('.q-list');
+      if (!list.length) { box.replaceChildren(el('p', 'muted pad', 'Вопросов наставнику пока нет. Бади тоже передаёт сюда вопросы, на которые не нашёл ответа в базе знаний.')); return; }
+      box.replaceChildren(...list.map(q => {
+        const row = el('div', 'req');
+        const head = el('div', 'req-head');
+        head.append(el('b', '', stamp(q.created_at)), el('span', `pill ${q.status === 'answered' ? 'approved' : 'pending_approval'}`, QSTATUS[q.status] || q.status));
+        row.append(head, el('div', '', q.question));
+        if (q.answer) { const a = el('div', 'answer'); a.append(el('small', 'muted', 'Ответ наставника'), el('div', '', q.answer)); row.append(a); }
+        return row;
+      }));
+    }
+    async function loadQuestions() {
+      const result = await env.call({op: 'questions'});
+      if (result?.questions) renderQuestions(result.questions); else $('.q-list').replaceChildren(el('p', 'err', result?.error || 'Не удалось загрузить вопросы.'));
+    }
+    const qForm = $('.q-form'), qStatus = $('.q-status');
+    qForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      const text = String(new FormData(qForm).get('question') || '').trim();
+      if (!text) { qStatus.textContent = 'Напишите вопрос.'; return; }
+      const submit = qForm.querySelector('[type=submit]');
+      submit.disabled = true; qStatus.textContent = 'Отправляю…';
+      const result = await env.call({op: 'question-create', question: text});
+      submit.disabled = false;
+      if (!result?.question) { qStatus.textContent = result?.error || 'Не удалось отправить.'; return; }
+      qForm.reset(); qStatus.textContent = 'Вопрос передан наставнику.';
+      await loadQuestions();
+    });
+
+    // ---------- calendar tab ----------
+    const localInput = date => { const p = n => String(n).padStart(2, '0'); return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}T${p(date.getHours())}:${p(date.getMinutes())}`; };
+    function renderEvents(list) {
+      const box = $('.e-list');
+      if (!list.length) { box.replaceChildren(el('p', 'muted pad', 'Событий пока нет.')); return; }
+      const sorted = [...list].sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+      const upcoming = sorted.filter(e => new Date(e.ends_at) >= new Date()), past = sorted.filter(e => new Date(e.ends_at) < new Date()).reverse();
+      const row = (e, dim) => {
+        const r = el('div', dim ? 'req dim' : 'req');
+        const day = new Date(e.starts_at).toLocaleDateString('ru-RU', {weekday: 'short', day: '2-digit', month: '2-digit'});
+        const time = d => new Date(d).toLocaleTimeString('ru-RU', {hour: '2-digit', minute: '2-digit'});
+        const head = el('div', 'req-head');
+        head.append(el('b', '', e.title), el('span', 'pill', `${day}, ${time(e.starts_at)}–${time(e.ends_at)}`));
+        r.append(head);
+        if (e.description) r.append(el('small', 'muted', e.description));
+        return r;
+      };
+      box.replaceChildren(...upcoming.map(e => row(e, false)),
+        ...(past.length ? [el('small', 'muted pad', 'Прошедшие'), ...past.slice(0, 20).map(e => row(e, true))] : []));
+    }
+    async function loadEvents() {
+      const result = await env.call({op: 'events'});
+      if (result?.events) renderEvents(result.events); else $('.e-list').replaceChildren(el('p', 'err', result?.error || 'Не удалось загрузить календарь.'));
+    }
+    const eForm = $('.e-form'), eStatus = $('.e-status');
+    function resetEventForm() {
+      const start = new Date(); start.setMinutes(0, 0, 0); start.setHours(start.getHours() + 1);
+      eForm.reset(); eForm.starts_at.value = localInput(start); eForm.ends_at.value = localInput(new Date(start.getTime() + 3600000));
+    }
+    resetEventForm();
+    eForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      const f = new FormData(eForm);
+      const submit = eForm.querySelector('[type=submit]');
+      submit.disabled = true; eStatus.textContent = 'Сохраняю…';
+      const result = await env.call({op: 'event-create', title: f.get('title'), description: f.get('description'), starts_at: f.get('starts_at'), ends_at: f.get('ends_at')});
+      submit.disabled = false;
+      if (!result?.event) { eStatus.textContent = result?.error || 'Не удалось создать событие.'; return; }
+      resetEventForm(); eStatus.textContent = 'Событие добавлено.';
+      await loadEvents();
+    });
+
     // ---------- asking ----------
     let queued = null; // question asked while the brief is still streaming: sent right after it
     function setBusy(value) {
@@ -610,8 +717,19 @@
         finish(message, render);
       });
     }
-    function pageContext() {
-      if (!opt.pageContext || !usePage.checked) return null;
+    // "Страница: определять сам": the page goes along only when the question is about it. Decided here, in the browser,
+    // before anything leaves the machine: a selection is attached, or the question points at the page ("тут", "это",
+    // "на странице"), or the tab is a work tool the bot has hints for (wiki, Grafana, Jira, GitLab).
+    const POINTS_AT_PAGE = /(?<!\p{L})(это|эт[аоуие]|этот|этой|этом|этих|тут|здесь|вот|выделенн\p{L}*|страниц\p{L}*|экран\p{L}*)(?!\p{L})/iu;
+    const WORK_TOOL = /grafana|дашборд|dashboard|jira|тикет|issue|board|gitlab|github|merge.?request|pull.?request|wiki|confluence|вики|регламент|faq|памятк/i;
+    function wantsPage(text, force) {
+      if (!opt.pageContext || pageMode.value === 'never') return false;
+      if (force || pageMode.value === 'always') return true;
+      return Boolean(selection) || POINTS_AT_PAGE.test(text) || WORK_TOOL.test(`${document.title} ${location.hostname}`);
+    }
+    pageMode.onchange = () => { void store.set(KEYS.page, pageMode.value); };
+    function pageContext(text, force = false) {
+      if (!wantsPage(text, force)) return null;
       const url = /^https?:/.test(location.protocol) ? `${location.origin}${location.pathname}` : '';
       if (!url) return null;
       return {
@@ -620,12 +738,12 @@
         ...(selection ? {selection: selection.slice(0, 2000)} : {}),
       };
     }
-    function ask(text) {
+    function ask(text, {forcePage = false} = {}) {
       if (!text || !signedIn) return;
       if (busy) { queued = text; return; }
       if (readerOpen) closeDoc();
       if (tab !== 'chat') showTab('chat');
-      const page = pageContext();
+      const page = pageContext(text, forcePage);
       const userNode = el('div', 'msg user', text);
       if (page) userNode.append(el('span', 'ctx', page.selection ? '📄 страница + выделенный текст' : '📄 с учётом страницы'));
       log.append(userNode);
@@ -646,13 +764,21 @@
       if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); $('.composer').requestSubmit(); }
     });
     $('.close').onclick = closeChat;
-    $('.new').onclick = async () => {
+    $('.clear').onclick = async () => { // clears the chat and starts a new dialog
       abortCurrent?.();
       setBusy(false);
       await env.call({op: 'new-dialog'});
       log.replaceChildren();
       closeDoc();
       input.focus();
+    };
+    $('.out').onclick = async () => { // signs out of the account everywhere (the site follows, see lib/sso.js)
+      abortCurrent?.();
+      setBusy(false);
+      await env.call({op: 'logout'});
+      log.replaceChildren();
+      readerOpen = false; tab = 'chat';
+      await refreshSession();
     };
     $('.hide').onclick = event => {
       event.stopPropagation();
@@ -702,7 +828,7 @@
         sessionStorage.setItem(hintKey, '1');
         void say(hint.text, {button: hint.question ? 'Да, подскажи' : '', mood: 'curious', onClick: async () => {
           await openChat();
-          if (hint.question) ask(hint.question);
+          if (hint.question) ask(hint.question, {forcePage: true});
         }});
       }
     }
@@ -841,7 +967,8 @@
     .expired{flex:1;display:flex;flex-direction:column;justify-content:center;gap:8px;padding:24px}
     .scrim{position:fixed;inset:0;background:rgba(15,20,25,.45)}
     .tabs{display:flex;gap:2px;padding:6px 12px 0;background:#fff;border-bottom:1px solid #e6e9ee}
-    .tabs button{border:none;border-bottom:3px solid transparent;border-radius:0;background:transparent;padding:8px 16px;color:#68708a}
+    .tabs{overflow-x:auto}
+    .tabs button{border:none;border-bottom:3px solid transparent;border-radius:0;background:transparent;padding:8px 14px;color:#68708a;white-space:nowrap}
     .tabs button.on{border-bottom-color:#1f6f50;color:#1f6f50;font-weight:600}
     .panel{flex:1;min-height:0;display:flex;background:#f7f8fa}
     .notes .side{width:240px;flex:none;display:flex;flex-direction:column;gap:8px;padding:12px;border-right:1px solid #e6e9ee;background:#fff;overflow-y:auto}
@@ -862,8 +989,17 @@
     .pill.approved{background:#dff3e8;color:#1f6f50}.pill.rejected{background:#fbeaea;color:#a12a2a}.pill.pending_approval{background:#fff4cc;color:#5a4a00}
     .notice{margin:0;padding:6px 10px;border-radius:8px;background:#dff3e8;color:#1f6f50;font-size:13px}
     .pad{padding:8px 4px;margin:0}
+    .page-row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:4px}
+    .page{display:flex;gap:6px;align-items:center;font-size:11px;color:#68708a;margin:0}
+    .page select{font:inherit;font-size:11px;padding:2px 4px;border:1px solid #c5cad3;border-radius:6px;background:#fff;color:#1d2330}
+    .clear{font-size:11px;padding:2px 10px;color:#68708a;margin-left:auto}
+    .q-form,.e-form{display:grid;gap:8px;padding:12px;border:1px solid #d9dee6;border-radius:12px;background:#fff}
+    .q-form label,.e-form label{display:grid;gap:3px;font-size:12px;color:#68708a}
+    .q-form textarea,.e-form input{font:inherit;padding:8px 10px;border:1px solid #c5cad3;border-radius:10px;color:#1d2330;background:#fff;width:100%}
+    .e-form .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .answer{margin-top:6px;padding:6px 10px;border-radius:8px;background:#eef6f2;font-size:13px}
+    .req.dim{opacity:.6}
     .composer-wrap{border-top:1px solid #e6e9ee;padding:6px 10px 10px;background:#fff}
-    .page{display:flex;gap:6px;align-items:center;font-size:11px;color:#68708a;margin-bottom:4px}
     .chip{display:flex;align-items:center;gap:4px;background:#eef6f2;border-radius:8px;padding:3px 6px;font-size:11px;margin-bottom:4px}
     .chip-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chip-x{border:none;background:transparent;padding:0 4px}
     .composer{display:flex;gap:6px;align-items:flex-end}
@@ -877,7 +1013,8 @@
     .grip[data-corner=bl]{bottom:0;left:0;cursor:nesw-resize}.grip[data-corner=bl]::before{border-bottom-width:2px;border-left-width:2px;border-bottom-left-radius:6px}
     .grip[data-corner=br]{bottom:0;right:0;cursor:nwse-resize}.grip[data-corner=br]::before{border-bottom-width:2px;border-right-width:2px;border-bottom-right-radius:6px}
     @media (prefers-color-scheme:dark){
-      .chat,.composer-wrap,.bubble,.reader-bar,.tabs,.notes .side,.r-form,.req{background:#1c2027;color:#e6e8ee;border-color:#2c323c}
+      .chat,.composer-wrap,.bubble,.reader-bar,.tabs,.notes .side,.r-form,.req,.q-form,.e-form{background:#1c2027;color:#e6e8ee;border-color:#2c323c}
+      .q-form textarea,.e-form input,.page select{background:#14171c;color:#e6e8ee;border-color:#2c323c}.answer{background:#1f3a2f}
       .panel{background:#14171c}.item.on{background:#1f3a2f}.editor input,.editor textarea,.r-form input,.r-form select,.r-form textarea{background:#14171c;color:#e6e8ee;border-color:#2c323c}
       .pill{background:#2c323c;color:#c5cad3}.notice{background:#1f3a2f;color:#5fd0a0}.tabs button.on{color:#5fd0a0;border-bottom-color:#5fd0a0}
       .log,.reader{background:#14171c}.bot{background:#222830;border-color:#2c323c}.card{background:#1c2027;border-color:#2c323c}

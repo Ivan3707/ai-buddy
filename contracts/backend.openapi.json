@@ -2062,6 +2062,65 @@
             }
           }
         }
+      },
+      "post": {
+        "operationId": "createQuestion",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Ask the buddy a question directly (the \"Вопросы наставнику\" tab), without the chat. Same storage as a confirmed mentor_question action; the buddy sees it in the mentor desk.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "question"
+                ],
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorQuestion"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Empty question",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/kb/docs/{id}": {
@@ -2115,6 +2174,79 @@
           },
           "502": {
             "description": "AI unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/link": {
+      "post": {
+        "operationId": "linkSession",
+        "description": "Opens a NEW session of the same user for another client (the Chrome extension next to the web app), without the password: the caller proves possession of its own refresh token, which is not rotated. Each client keeps its own refresh-token chain (rotation + replay detection would revoke a shared one). Logging one client out does not sign the other out.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "refresh_token"
+                ],
+                "properties": {
+                  "refresh_token": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "New session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "access_token",
+                    "refresh_token",
+                    "expires_in"
+                  ],
+                  "properties": {
+                    "access_token": {
+                      "type": "string"
+                    },
+                    "refresh_token": {
+                      "type": "string"
+                    },
+                    "token_type": {
+                      "type": "string"
+                    },
+                    "expires_in": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid, expired, revoked or already rotated refresh token",
             "content": {
               "application/json": {
                 "schema": {

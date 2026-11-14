@@ -81,6 +81,41 @@ func (s *AuthService) Refresh(ctx context.Context, token string) (string, string
 	}
 	return access, id.String() + "." + next, int64(s.jwt.TTL().Seconds()), nil
 }
+// sessionVerifier is implemented by the Postgres store; fakes without it simply cannot link sessions.
+type sessionVerifier interface {
+	Verify(context.Context, uuid.UUID, string) (uuid.UUID, error)
+}
+
+// Link opens a NEW session of the same user for another client (token exchange). The caller proves possession of
+// its own refresh token, which is not rotated. Every client keeps its own refresh-token chain: one shared chain
+// would be revoked by replay detection as soon as two clients refresh at the same time.
+func (s *AuthService) Link(ctx context.Context, token string) (string, string, int64, error) {
+	verifier, ok := s.sessions.(sessionVerifier)
+	if !ok || s.sessions == nil {
+		return "", "", 0, ErrInvalidRefresh
+	}
+	id, secret, err := parseRefresh(token)
+	if err != nil {
+		return "", "", 0, err
+	}
+	userID, err := verifier.Verify(ctx, id, secret)
+	if errors.Is(err, repository.ErrNotFound) {
+		return "", "", 0, ErrInvalidRefresh
+	}
+	if err != nil {
+		return "", "", 0, err
+	}
+	refresh, sessionID, err := s.createSession(ctx, userID)
+	if err != nil {
+		return "", "", 0, err
+	}
+	access, err := s.jwt.GenerateSessionAccessToken(userID, sessionID)
+	if err != nil {
+		return "", "", 0, err
+	}
+	return access, refresh, int64(s.jwt.TTL().Seconds()), nil
+}
+
 func (s *AuthService) Logout(ctx context.Context, userID uuid.UUID, token string) error {
 	if s.sessions == nil {
 		return ErrInvalidRefresh

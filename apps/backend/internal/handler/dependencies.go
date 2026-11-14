@@ -56,6 +56,7 @@ type SessionChecker interface {
 
 type SessionService interface {
 	Refresh(context.Context, string) (string, string, int64, error)
+	Link(context.Context, string) (string, string, int64, error)
 	Logout(context.Context, uuid.UUID, string) error
 }
 

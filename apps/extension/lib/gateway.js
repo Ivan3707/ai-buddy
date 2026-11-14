@@ -2,7 +2,7 @@
 // ready-to-render view models back. The same gateway runs in two places:
 // - the extension's background worker (token in chrome.storage.session, never visible to web pages);
 // - the AI-buddy web app (token of the site session).
-// Only the token store, the key-value store and the client functions differ (injected).
+// Only the session (lib/auth.js), the key-value store and the client functions differ (injected).
 import { describeActionError, describeResult } from './actions.js';
 import { cancelAction, confirmAction, HttpError, sendFeedback, streamBrief, streamChat } from './api.js';
 import { displayName, pageHint, requestStatusChanges, toView } from './buddy.js';
@@ -13,30 +13,40 @@ const DOC_ID = /^[A-Za-z0-9_.-]{1,128}$/;
 /**
  * @param {object} o
  * @param {string} o.baseUrl backend origin ('' = same origin)
- * @param {{get(): Promise<string>, set?(token: string): Promise<void>}} o.tokens
+ * @param {object} o.auth session core from lib/auth.js (token(), login(), logout())
+ * @param {{onLogin?(): void, onLogout?(): void}} [o.hooks] side effects of an explicit sign-in / sign-out
  * @param {{get(key: string): Promise<any>, set(key: string, value: any): Promise<void>, remove(key: string): Promise<void>}} o.store
- * @param {{getMe(baseUrl: string, token: string): Promise<any>, login?(baseUrl: string, email: string, password: string): Promise<any>}} o.client
+ * @param {{getMe(baseUrl: string, token: string): Promise<any>}} o.client
  * @param {typeof fetch} [o.fetchImpl]
  */
-export function createGateway({baseUrl, tokens, store, client, fetchImpl = globalThis.fetch}) {
-  const options = async () => ({baseUrl, token: await tokens.get(), fetchImpl});
+export function createGateway({baseUrl, auth, hooks = {}, store, client, fetchImpl = globalThis.fetch}) {
+  const options = async () => ({baseUrl, token: await auth.token(), fetchImpl});
+
+  // One retry after 401: another context may have rotated the token, or it expired between the check and the call.
+  async function authed(send) {
+    const token = await auth.token();
+    let response = await send(token);
+    if (response.status === 401) {
+      const next = await auth.token({force: true, stale: token});
+      if (next && next !== token) response = await send(next);
+    }
+    return response;
+  }
 
   async function getJson(path) {
-    const {token} = await options();
-    const response = await fetchImpl(`${baseUrl}${path}`, {
+    const response = await authed(token => fetchImpl(`${baseUrl}${path}`, {
       headers: {Authorization: `Bearer ${token}`}, signal: AbortSignal.timeout(15000),
-    });
+    }));
     if (!response.ok) throw new HttpError(response.status, `HTTP ${response.status}`);
     return response.json();
   }
 
   // Writes (notes, request form): the error text comes from the backend's JSON {error}.
   async function sendJson(method, path, body) {
-    const {token} = await options();
-    const response = await fetchImpl(`${baseUrl}${path}`, {
+    const response = await authed(token => fetchImpl(`${baseUrl}${path}`, {
       method, headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
       body: JSON.stringify(body), signal: AbortSignal.timeout(15000),
-    });
+    }));
     let data = null;
     try { data = await response.json(); } catch { /* empty body */ }
     if (!response.ok) throw new HttpError(response.status, data?.error || `HTTP ${response.status}`);
@@ -45,28 +55,38 @@ export function createGateway({baseUrl, tokens, store, client, fetchImpl = globa
   const failure = (error, fallback) => ({error: error?.status === 401 ? 'Сессия истекла. Обновите страницу.' : error?.message && error.status ? error.message : fallback});
 
   async function call(message) {
-    const token = await tokens.get();
+    const token = await auth.token();
     switch (message?.op) {
       case 'session': {
         if (!token) return {authenticated: false};
         try {
-          const me = await client.getMe(baseUrl, token);
+          let me;
+          try { me = await client.getMe(baseUrl, token); } catch (error) {
+            if (error?.status !== 401) throw error;
+            const next = await auth.token({force: true, stale: token});
+            if (!next || next === token) throw error;
+            me = await client.getMe(baseUrl, next);
+          }
           return {authenticated: true, user: {id: me.id, name: displayName(me)}}; // the page gets no more than this
         } catch (error) {
           return {authenticated: false, unavailable: error?.status !== 401};
         }
       }
       case 'login': {
-        if (!client.login || !tokens.set) return {ok: false, error: 'Вход здесь недоступен.'};
         try {
-          const result = await client.login(baseUrl, String(message.email), String(message.password));
-          await tokens.set(result.access_token);
+          await auth.login(String(message.email), String(message.password));
           await store.remove('conversationId');
+          hooks.onLogin?.();
           return {ok: true};
         } catch (error) {
           return {ok: false, error: error?.status === 401 ? 'Неверный email или пароль.' : 'Backend недоступен.'};
         }
       }
+      case 'logout':
+        await auth.logout();
+        await store.remove('conversationId');
+        hooks.onLogout?.();
+        return {ok: true};
       case 'confirm':
       case 'cancel': {
         try {
@@ -121,6 +141,26 @@ export function createGateway({baseUrl, tokens, store, client, fetchImpl = globa
         try { return {request: await sendJson('POST', '/api/requests', {type: kind, params})}; }
         catch (error) { return failure(error, 'Не удалось создать заявку.'); }
       }
+      case 'questions':
+        try { return {questions: await getJson('/api/questions')}; } catch (error) { return failure(error, 'Не удалось загрузить вопросы.'); }
+      case 'question-create': {
+        const question = String(message.question || '').trim().slice(0, 2000);
+        if (!question) return {error: 'Напишите вопрос.'};
+        try { return {question: await sendJson('POST', '/api/questions', {question})}; } catch (error) { return failure(error, 'Не удалось отправить вопрос.'); }
+      }
+      case 'events':
+        try { return {events: await getJson('/api/calendar/events')}; } catch (error) { return failure(error, 'Не удалось загрузить календарь.'); }
+      case 'event-create': {
+        const title = String(message.title || '').trim().slice(0, 160);
+        const start = new Date(String(message.starts_at)), end = new Date(String(message.ends_at));
+        if (!title) return {error: 'Введите название.'};
+        if (!(end > start)) return {error: 'Окончание должно быть позже начала.'};
+        try {
+          return {event: await sendJson('POST', '/api/calendar/events', {
+            title, description: String(message.description || '').slice(0, 2000), starts_at: start.toISOString(), ends_at: end.toISOString(),
+          })};
+        } catch (error) { return failure(error, 'Не удалось создать событие.'); }
+      }
       default:
         return {error: 'unknown op'};
     }
@@ -133,7 +173,7 @@ export function createGateway({baseUrl, tokens, store, client, fetchImpl = globa
     void (async () => {
       let state = createAssistantState();
       send({op: 'view', view: toView(state)});
-      const token = await tokens.get();
+      const token = await auth.token();
       if (!token) { send({op: 'signed-out'}); return; }
       const onEvent = event => { state = applyStreamEvent(state, event); send({op: 'view', view: toView(state)}); };
       try {
