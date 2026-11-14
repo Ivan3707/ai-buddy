@@ -317,7 +317,7 @@ func (s *AssistantService) StartTurn(ctx context.Context, userID uuid.UUID, conv
 	if err := rows.Err(); err != nil {
 		return uuid.Nil, nil, err
 	}
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO chat_messages (conversation_id, role, content) VALUES ($1, 'user', $2)`, id, message); err != nil {
+	if _, err := s.db.ExecContext(ctx, `INSERT INTO chat_messages (conversation_id, role, content, created_at) VALUES ($1, 'user', $2, clock_timestamp())`, id, message); err != nil {
 		return uuid.Nil, nil, fmt.Errorf("store message: %w", err)
 	}
 	return id, history, nil
@@ -1059,8 +1059,8 @@ func (s *AssistantService) HintTurn(ctx context.Context, userID uuid.UUID, conve
 			return err
 		}
 		if err := tx.QueryRowContext(ctx, `
-			INSERT INTO chat_messages (conversation_id, role, content, sources, finish_reason)
-			VALUES ($1, 'assistant', $2, $3, 'hint') RETURNING id`, out.ConversationID, out.Text, []byte(out.Sources)).Scan(&out.MessageID); err != nil {
+			INSERT INTO chat_messages (conversation_id, role, content, sources, finish_reason, created_at)
+			VALUES ($1, 'assistant', $2, $3, 'hint', clock_timestamp()) RETURNING id`, out.ConversationID, out.Text, []byte(out.Sources)).Scan(&out.MessageID); err != nil {
 			return err
 		}
 		_, err := tx.ExecContext(ctx, `UPDATE chat_conversations SET updated_at = now() WHERE id = $1`, out.ConversationID)
