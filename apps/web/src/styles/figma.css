@@ -1,0 +1,184 @@
+/*
+ * Размеры и положение из макетов Figma (файл «Авито»), кадр 1920×1080.
+ * Подключается последним: уточняет theme/shell/home/feedback и typography.
+ * Источники: Главная 2:389, Обратная связь 2:116, Личный кабинет 2:331.
+ */
+
+/* ───────── Каркас: боковое меню 194 px, зелёная сцена ───────── */
+.shell { grid-template-columns: 194px 1fr; }
+.workspace {
+  padding: 35px 195px 49px 156px;
+  border-radius: 32px 0 0 32px;
+}
+
+/* Боковое меню ("Шапка"): RU, три пункта, значок выхода */
+.sidebar { padding: 0; }
+.sidebar .lang {
+  position: absolute;
+  left: 40px;
+  top: 36px;
+  font-family: var(--font-title);
+  font-size: 24px;
+  font-weight: 700;
+}
+.sidebar nav { position: absolute; left: 40px; top: 428px; margin: 0; gap: 52px; }
+.nav-link.is-active { text-decoration: none; } /* в макете активный пункт не подчёркнут */
+.nav-link {
+  font-family: var(--font-title);
+  font-size: 24px;
+  font-weight: 700;
+  opacity: 1;
+  white-space: nowrap;
+}
+.sidebar-exit { position: absolute; left: 34px; bottom: 49px; width: 27px; height: 28px; padding: 0; line-height: 0; }
+.sidebar-exit img { display: block; }
+
+/* Вкладки справа: 64×137, верхняя на 38, нижняя на 195 */
+.side-tabs { top: 38px; gap: 20px; }
+.side-tab {
+  place-content: start start;
+  width: 64px;
+  height: 137px;
+  padding: 40px 16px;
+  border-radius: 32px 0 0 32px;
+}
+.side-tab svg { width: 33px; height: 33px; }
+.side-tab:hover { width: 72px; }
+
+/* Кнопка чата: серый квадрат 63×63 в правом нижнем углу */
+.assistant { right: 41px; bottom: 49px; }
+.assistant-toggle { width: 63px; height: 63px; border-radius: 0; background: #d9d9d9; box-shadow: none; }
+
+/* ───────── Главная ───────── */
+.home { gap: 20px; }
+.greeting {
+  min-height: 0;
+  margin-bottom: 15px;
+  padding: 56px 122px 20px 20px;
+  border-radius: 32px 32px 0 0;
+}
+.greeting h1 { margin: 0 0 4px; font-size: 60px; line-height: normal; letter-spacing: 0; }
+
+/* Три блока в ряд: 599 / 289 / 445, зазор 20 */
+.home-top { grid-template-columns: 599fr 289fr 445fr; gap: 20px; align-items: start; }
+.home-top.is-professional { grid-template-columns: 289fr 599fr 445fr; }
+
+.checklist-card { height: 309px; min-height: 0; border-radius: 32px; }
+.checklist-card.is-selected { grid-template-columns: 289fr 310fr; }
+.checklist-card-info { padding: 20px; border-radius: 32px; }
+.checklist-card h2 { line-height: normal; }
+.checklist-card-progress { place-content: center start; padding: 0 0 0 40px; }
+.checklist-card:not(.is-selected) { grid-template-columns: 1fr; }
+.checklist-card:not(.is-selected) .checklist-card-progress { display: none; } /* в макете у второго чек-листа кольца нет */
+
+/* Календарь 445×313 */
+.mini-calendar {
+  display: flex;
+  flex-direction: column;
+  height: 313px;
+  margin-top: 3px;
+  padding: 15px 20px 12px;
+  border-radius: 32px;
+}
+.mini-calendar h2 { line-height: normal; }
+.calendar-date { color: #252525; }
+.calendar-arrows { width: 54px; height: 22px; padding: 0; align-items: center; justify-content: space-between; margin-top: 5px; }
+.calendar-arrows button { width: 22px; height: 22px; }
+.calendar-grid {
+  flex: 1;
+  min-height: 0;
+  grid-template-rows: 23px;
+  grid-auto-rows: 1fr; /* 5 строк — шаг 42 px как в макете, 6 строк сжимаются */
+  gap: 0;
+  margin: 0 -6px;
+  align-items: start;
+}
+.calendar-weekday { line-height: 19px; }
+.calendar-day { width: 22px; height: 22px; line-height: 1; }
+.calendar-day.is-today { font-weight: 300; }
+
+/* Задачи: панель 1374×435, строки по 84 px */
+.task-table { min-height: 435px; padding: 20px 20px 19px; border-radius: 32px; }
+.task-table header { margin: 0 0 30px; align-items: center; }
+.task-table h2,
+.task-table header strong {
+  font-family: var(--font-title);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: normal;
+}
+.task-columns, .task-row { grid-template-columns: 430fr 206fr 206fr 431fr; gap: 20px; }
+.task-columns { margin-bottom: 21px; padding: 0; font-size: 16px; color: #252525; line-height: normal; }
+.task-columns span { padding-left: 20px; } /* подпись стоит над текстом ячейки, как в макете */
+.task-row { margin-top: 0; }
+.task-row + .task-row { margin-top: 20px; }
+.task-name, .task-cell {
+  height: 84px;
+  min-height: 0;
+  padding: 12px 20px;
+  border-radius: 32px;
+  background: #d9d9d9;
+  color: #252525;
+  font-size: 16px;
+  line-height: 1.2;
+}
+.task-name { gap: 19px; background: var(--pink); color: #000; }
+.task-mark { width: 46px; height: 46px; }
+.task-row.is-done .task-name { background: var(--pink-soft); }
+.task-row.is-locked .task-name { background: var(--pink-soft); color: #5e5c5c; font-weight: 500; }
+.task-row.is-locked .task-cell { background: var(--grey-soft); color: #252525; }
+.task-row.is-locked .task-comment { background: #d9d9d9; }
+
+/* Кольцо прогресса: 255 px, число Aeroport Bold 52 */
+.ring-text { font-family: var(--font-title); font-size: 52px; font-weight: 700; }
+
+/* ───────── Личный кабинет: шапка 570×137 ───────── */
+.drawer { width: 570px; height: calc(100% - 38px); margin-top: 38px; }
+.drawer-header {
+  align-items: flex-start;
+  gap: 24px;
+  min-height: 137px;
+  padding: 40px 16px 0;
+  border-radius: 32px 0 0 32px;
+}
+.drawer-icon svg { width: 33px; height: 33px; }
+.drawer-header h2 { line-height: 33px; }
+
+/* ───────── Обратная связь: панель начинается на 792 px ───────── */
+.shell:has(.feedback) { grid-template-columns: calc(33.333vw + 152px) 1fr; }
+.shell:has(.feedback) .sidebar { width: 216px; }
+.feedback {
+  display: flex;
+  flex-direction: column;
+  padding: 124px 43px 0 22px;
+  border-radius: 32px 0 0 32px;
+}
+.feedback h1 { max-width: 1063px; margin: 0 0 8px; font-size: 64px; line-height: normal; }
+.feedback-lead { margin: 0 0 37px; font-size: 32px; color: #000; }
+.feedback form { width: 100%; max-width: 1063px; gap: 9px; }
+.feedback label { color: #000; line-height: normal; }
+.feedback input, .feedback textarea {
+  border: 1px solid #252525;
+  border-radius: 32px;
+  color: #252525;
+  font-family: var(--font-text);
+  font-size: 24px;
+  font-weight: var(--w-light);
+}
+.feedback input { height: 44px; }
+.feedback textarea { height: 210px; min-height: 0; padding-top: 12px; border-color: #000; resize: none; }
+.feedback label:nth-of-type(3) { margin-top: 16px; }
+.feedback .pill {
+  width: 445px;
+  height: 63px;
+  margin-top: 83px;
+  border-radius: 32px;
+  background: #000;
+  color: #fff;
+  font-family: var(--font-title); /* в макете кнопка отправки набрана Aeroport Regular */
+  font-size: 32px;
+  font-weight: 400;
+}
+
+/* Высота строки «normal», как в Figma */
+.greeting p, .card-weeks, .calendar-date, .task-empty { line-height: normal; }

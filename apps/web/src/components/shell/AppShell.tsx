@@ -11,10 +11,10 @@ import { ProfileDrawer } from './ProfileDrawer';
 import { SideTabs } from './SideTabs';
 import { Sidebar, type View } from './Sidebar';
 
-type Props = { user: User; token: string; onLogout?: () => void };
+type Props = { user: User; token: string; onLogout: () => void };
 
 /** Рабочее пространство стажёра: меню слева, страница в центре, вкладки справа. */
-export function AppShell({ user, token }: Props) {
+export function AppShell({ user, token, onLogout }: Props) {
   const [view, setView] = useState<View>('home');
   const [profileOpen, setProfileOpen] = useState(false);
   const checklists = useChecklists(token);
@@ -22,7 +22,7 @@ export function AppShell({ user, token }: Props) {
   if (view === 'feedback') {
     return (
       <div className="shell">
-        <Sidebar view={view} onNavigate={setView} />
+        <Sidebar view={view} onNavigate={setView} onLogout={onLogout} />
         <FeedbackPage user={user} />
         <Assistant token={token} />
       </div>
@@ -31,7 +31,7 @@ export function AppShell({ user, token }: Props) {
 
   return (
     <div className="shell">
-      <Sidebar view={view} onNavigate={setView} />
+      <Sidebar view={view} onNavigate={setView} onLogout={onLogout} />
       <main className="workspace">
         {view === 'home' && <HomePage user={user} checklists={checklists} onOpenTasks={() => setView('tasks')} />}
         {view === 'calendar' && <CalendarPage />}

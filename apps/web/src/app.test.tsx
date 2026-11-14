@@ -146,6 +146,12 @@ describe('кабинет стажёра', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
+  it('выход из аккаунта — значок внизу бокового меню', async () => {
+    await openShell();
+    await userEvent.click(screen.getByRole('button', { name: 'Выйти' }));
+    expect(await screen.findByRole('heading', { name: 'Вход' })).toBeInTheDocument();
+  });
+
   it('обратная связь: отправка и сообщение об успехе', async () => {
     await openShell();
     await userEvent.click(screen.getByRole('button', { name: 'Обратная связь' }));

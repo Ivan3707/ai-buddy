@@ -1,5 +1,3 @@
-import { LocationIcon } from '../icons';
-
 export type View = 'home' | 'calendar' | 'tasks' | 'feedback';
 
 export const NAV_ITEMS: { view: Exclude<View, 'feedback'>; label: string }[] = [
@@ -8,9 +6,9 @@ export const NAV_ITEMS: { view: Exclude<View, 'feedback'>; label: string }[] = [
   { view: 'tasks', label: 'Задачи' },
 ];
 
-type Props = { view: View; onNavigate: (view: View) => void };
+type Props = { view: View; onNavigate: (view: View) => void; onLogout: () => void };
 
-export function Sidebar({ view, onNavigate }: Props) {
+export function Sidebar({ view, onNavigate, onLogout }: Props) {
   return (
     <aside className="sidebar">
       <span className="lang">RU</span>
@@ -26,7 +24,9 @@ export function Sidebar({ view, onNavigate }: Props) {
           </button>
         ))}
       </nav>
-      <LocationIcon className="sidebar-pin" />
+      <button className="sidebar-exit" aria-label="Выйти" onClick={onLogout}>
+        <img src="/icons/exit.svg" alt="" width={27} height={28} />
+      </button>
     </aside>
   );
 }

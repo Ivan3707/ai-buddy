@@ -26,7 +26,7 @@ export function ChecklistCard({ checklist, selected, onSelect }: Props) {
         <ProgressRing
           percent={checklist.completion_percent}
           label={`Прогресс: ${kind.toLowerCase()} чек-лист`}
-          size={selected ? 190 : 64}
+          size={selected ? 255 : 64}
         />
       </div>
     </section>

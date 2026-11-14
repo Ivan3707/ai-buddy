@@ -36,6 +36,13 @@
 }
 @font-face {
   font-family: 'Aeroport';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: local('Aeroport'), url('/fonts/Aeroport-Regular.otf') format('opentype');
+}
+@font-face {
+  font-family: 'Aeroport';
   font-weight: 500;
   font-style: normal;
   font-display: swap;
@@ -71,7 +78,7 @@
   margin: 0;
   font-family: 'Aeroport', var(--font);
   font-size: calc(60 * var(--u));
-  line-height: 100%;
+  line-height: calc(82 * var(--u));
   letter-spacing: 0;
   font-weight: 700;
   text-transform: uppercase;
@@ -99,7 +106,7 @@
   width: 100%;
   height: calc(44 * var(--u));
   padding: 0 calc(24 * var(--u));
-  border: 1px solid #ffffffb0;
+  border: 1px solid #fff;
   border-radius: 999px;
   background: transparent;
   color: #fff;

@@ -9,7 +9,7 @@ import { Sidebar } from './Sidebar';
 describe('Sidebar', () => {
   it('отмечает текущий раздел и переключает разделы', async () => {
     const onNavigate = vi.fn();
-    render(<Sidebar view="home" onNavigate={onNavigate} />);
+    render(<Sidebar view="home" onNavigate={onNavigate} onLogout={() => undefined} />);
     expect(screen.getByRole('button', { name: 'Главная' })).toHaveAttribute('aria-current', 'page');
     expect(screen.getByRole('button', { name: 'Задачи' })).not.toHaveAttribute('aria-current');
     await userEvent.click(screen.getByRole('button', { name: 'Календарь' }));
