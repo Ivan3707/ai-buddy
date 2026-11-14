@@ -114,7 +114,7 @@ func newChecklistAPIHandler(
 	if err != nil {
 		t.Fatalf("generate token: %v", err)
 	}
-	handler := handler.NewRouter("", []byte(demo), handler.Dependencies{
+	handler := handler.NewRouter("", handler.Dependencies{
 		Auth:        service.NewAuthService(users, jwtService),
 		Users:       users,
 		JWT:         jwtService,

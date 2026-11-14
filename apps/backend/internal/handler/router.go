@@ -25,20 +25,9 @@ type chatResponse struct {
 	Sources []source `json:"sources"`
 	Mode    string   `json:"mode"`
 }
-type task struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-}
-type scenario struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	Role  string `json:"role"`
-	Tasks []task `json:"tasks"`
-}
 
 func NewRouter(
 	aiURL string,
-	onboarding []byte,
 	deps Dependencies,
 ) http.Handler {
 	mux := http.NewServeMux()
@@ -49,32 +38,6 @@ func NewRouter(
 			"status": "ok",
 			"mode":   "mock",
 		})
-	})
-
-	mux.HandleFunc("GET /api/onboarding", func(w http.ResponseWriter, r *http.Request) {
-		role := r.URL.Query().Get("role")
-		if role == "" {
-			role = "ml"
-		}
-		if role != "ml" && role != "backend" && role != "frontend" {
-			send(w, http.StatusBadRequest, map[string]string{"error": "unknown role"})
-			return
-		}
-
-		var all []scenario
-		if json.Unmarshal(onboarding, &all) != nil {
-			send(w, http.StatusInternalServerError, map[string]string{"error": "invalid demo data"})
-			return
-		}
-
-		selected := []scenario{}
-		for _, s := range all {
-			if s.Role == "all" || s.Role == role {
-				selected = append(selected, s)
-			}
-		}
-
-		send(w, http.StatusOK, selected)
 	})
 
 	authenticated := func(handler http.Handler) http.Handler {

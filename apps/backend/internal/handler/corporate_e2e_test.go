@@ -71,7 +71,7 @@ func TestCorporateHTTPE2E(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	handler := handler.NewRouter("", []byte(demo), handler.Dependencies{Users: repository.NewUserRepository(db), JWT: jwt, Corporate: corp})
+	handler := handler.NewRouter("", handler.Dependencies{Users: repository.NewUserRepository(db), JWT: jwt, Corporate: corp})
 	request := func(method, path string, user *model.User, body any, want int) []byte {
 		t.Helper()
 		var payload []byte

@@ -177,7 +177,7 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	users := repository.NewUserRepository(db)
 	progress := service.NewProgressService(db)
 	userService := service.NewUserService(db)
-	server := httptest.NewServer(handler.NewRouter("", []byte(demo), handler.Dependencies{
+	server := httptest.NewServer(handler.NewRouter("", handler.Dependencies{
 		Auth:          service.NewAuthService(users, jwtService),
 		Users:         users,
 		JWT:           jwtService,

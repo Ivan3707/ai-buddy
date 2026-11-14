@@ -21,7 +21,7 @@
 
 ## API и данные
 
-Нормативные схемы: `contracts/*.openapi.json`. Предел message 2000 Unicode code points, пробельная строка запрещена. Backend — JSON errors 400/502, FastAPI — 422. AI mode=mock; при смене режима сначала обновить контракт. `data/kb.json`: id/title/keywords/text/url. `data/onboarding.json`: сценарии с role и tasks. Демо ID не представляют реальных сотрудников.
+Нормативные схемы: `contracts/*.openapi.json`. Предел message 2000 Unicode code points, пробельная строка запрещена. Backend — JSON errors 400/502, FastAPI — 422. AI mode=mock; при смене режима сначала обновить контракт. `data/kb.json`: id/title/keywords/text/url. Чек-листы и пользовательский прогресс хранятся в PostgreSQL. Демо ID не представляют реальных сотрудников.
 
 ## Порядок следующей работы
 

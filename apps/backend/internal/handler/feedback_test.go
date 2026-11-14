@@ -41,7 +41,7 @@ func TestFeedbackRoutesIdentityAndRole(t *testing.T) {
 			t.Fatal(err)
 		}
 		feedback := &stubFeedback{}
-		router := handler.NewRouter("", []byte(demo), handler.Dependencies{Users: &testUserRepository{user: actor}, JWT: jwt, Feedback: feedback})
+		router := handler.NewRouter("", handler.Dependencies{Users: &testUserRepository{user: actor}, JWT: jwt, Feedback: feedback})
 		request := httptest.NewRequest(http.MethodPost, "/api/checklists/"+checklist.String()+"/feedback", strings.NewReader(`{"rating":5,"comment":"ok"}`))
 		request.Header.Set("Authorization", "Bearer "+token)
 		response := httptest.NewRecorder()

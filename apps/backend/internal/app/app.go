@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -24,14 +23,6 @@ func env(key, fallback string) string {
 }
 
 func Run() error {
-	data, err := os.ReadFile(env("DATA_DIR", "../../data") + "/onboarding.json")
-	if err != nil {
-		return fmt.Errorf("read onboarding data: %w", err)
-	}
-
-	if !json.Valid(data) {
-		return fmt.Errorf("invalid onboarding JSON")
-	}
 	corporateData, err := os.ReadFile(env("DATA_DIR", "../../data") + "/corporate_employees.json")
 	if err != nil {
 		return fmt.Errorf("read corporate mock: %w", err)
@@ -86,7 +77,6 @@ func Run() error {
 		Addr: ":8080",
 		Handler: handler.NewRouter(
 			env("AI_URL", "http://127.0.0.1:8001"),
-			data,
 			deps,
 		),
 		ReadHeaderTimeout: 5 * time.Second,

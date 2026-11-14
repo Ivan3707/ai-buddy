@@ -35,7 +35,6 @@ $config = Get-Content -LiteralPath $envFile | Where-Object { $_ -match '^LOAD_BA
 $port = if ($config) { ($config -split '=',2)[1].Trim() } else { '18080' }
 $health = Invoke-RestMethod -Uri "http://127.0.0.1:$port/health" -TimeoutSec 10
 if ($health.status -ne 'ok') { throw 'Backend health smoke test failed.' }
-$onboarding = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/onboarding?role=backend" -TimeoutSec 10
-if ($null -eq $onboarding) { throw 'Backend onboarding smoke test failed.' }
+if ($health.mode -ne 'mock') { throw 'Backend health mode smoke test failed.' }
 
 Write-Host "OK: database=$db; Goose version=$appliedText; volume=$mount; $dbHost; $dbName; API healthy on port $port"

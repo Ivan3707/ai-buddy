@@ -45,7 +45,7 @@ func TestTeamRoutesReturnPublicAssignedUsers(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	router := handler.NewRouter("", []byte(demo), handler.Dependencies{Users: &testUserRepository{user: actor}, JWT: jwt, Team: team})
+	router := handler.NewRouter("", handler.Dependencies{Users: &testUserRepository{user: actor}, JWT: jwt, Team: team})
 
 	for _, path := range []string{"/api/staff/interns", "/api/staff/teamleads"} {
 		w := httptest.NewRecorder()
@@ -63,7 +63,7 @@ func TestTeamleadsRouteRejectsTeamlead(t *testing.T) {
 	actor := &model.User{ID: uuid.New(), Email: "lead@example.com", Role: model.RoleTeamlead, CreatedAt: time.Now()}
 	jwt, _ := security.NewJWTService(testJWTSecret, 15*time.Minute)
 	token, _ := jwt.GenerateAccessToken(actor.ID)
-	router := handler.NewRouter("", []byte(demo), handler.Dependencies{Users: &testUserRepository{user: actor}, JWT: jwt, Team: &testTeamReader{}})
+	router := handler.NewRouter("", handler.Dependencies{Users: &testUserRepository{user: actor}, JWT: jwt, Team: &testTeamReader{}})
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, authorizedRequest(http.MethodGet, "/api/staff/teamleads", "", token))
 	if w.Code != http.StatusForbidden {
@@ -75,7 +75,7 @@ func TestBuddiesRouteForTeamlead(t *testing.T) {
 	actor := &model.User{ID: uuid.New(), Email: "lead@example.com", Role: model.RoleTeamlead, CreatedAt: time.Now()}
 	jwt, _ := security.NewJWTService(testJWTSecret, 15*time.Minute)
 	token, _ := jwt.GenerateAccessToken(actor.ID)
-	router := handler.NewRouter("", []byte(demo), handler.Dependencies{Users: &testUserRepository{user: actor}, JWT: jwt, Team: &testTeamReader{leads: []model.User{{ID: uuid.New(), Email: "buddy@example.com", Role: model.RoleBuddy, CreatedAt: time.Now()}}}})
+	router := handler.NewRouter("", handler.Dependencies{Users: &testUserRepository{user: actor}, JWT: jwt, Team: &testTeamReader{leads: []model.User{{ID: uuid.New(), Email: "buddy@example.com", Role: model.RoleBuddy, CreatedAt: time.Now()}}}})
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, authorizedRequest(http.MethodGet, "/api/staff/buddies", "", token))
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "buddy@example.com") {

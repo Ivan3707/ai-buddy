@@ -17,12 +17,6 @@ import (
 	"github.com/nvkmaksim/ai-buddy/backend/internal/service"
 )
 
-const demo = `[
-	{"id":"company","role":"all","tasks":[]},
-	{"id":"ml","role":"ml","tasks":[]},
-	{"id":"backend","role":"backend","tasks":[]}
-]`
-
 const testJWTSecret = "test-secret-that-is-at-least-32-bytes-long"
 const testPassword = "correct-password-123"
 
@@ -111,7 +105,6 @@ func newTestHandler(
 
 	handler := handler.NewRouter(
 		aiURL,
-		[]byte(demo),
 		handler.Dependencies{
 			Auth:  auth,
 			Users: users,
@@ -261,32 +254,6 @@ func TestAITimeoutUsesRequestContext(t *testing.T) {
 	}
 }
 
-func TestRoleFiltering(t *testing.T) {
-	handler, _, _ := newTestHandler(t, "")
-
-	w := httptest.NewRecorder()
-	handler.ServeHTTP(
-		w,
-		httptest.NewRequest("GET", "/api/onboarding?role=ml", nil),
-	)
-
-	if w.Code != 200 ||
-		strings.Contains(w.Body.String(), "backend") ||
-		!strings.Contains(w.Body.String(), "company") {
-		t.Fatal(w.Body.String())
-	}
-
-	w = httptest.NewRecorder()
-	handler.ServeHTTP(
-		w,
-		httptest.NewRequest("GET", "/api/onboarding?role=invalid", nil),
-	)
-
-	if w.Code != 400 {
-		t.Fatal(w.Code)
-	}
-}
-
 func TestAuthLogin(t *testing.T) {
 	handler, _, user := newTestHandler(t, "")
 
@@ -417,7 +384,6 @@ func newTeamleadHandler(t *testing.T) (http.Handler, string) {
 
 	handler := handler.NewRouter(
 		"",
-		[]byte(demo),
 		handler.Dependencies{
 			Auth:  auth,
 			Users: users,

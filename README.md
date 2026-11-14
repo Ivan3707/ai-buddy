@@ -66,6 +66,8 @@ npm run build
 
 Go-интеграционным тестам нужен `TEST_DATABASE_URL` с отдельной чистой БД `ai_buddy_verify_*` или свежей `ai_buddy_test`, созданной новой миграцией. Без этой переменной PostgreSQL-тесты будут пропущены. Для HTTP E2E задайте `RUN_E2E=1`. Browser E2E (`npx playwright test`) получает `E2E_CREDENTIALS_FILE`, указывающий на файл HR Sync вне репозитория; сначала нужен запущенный чистый стенд. AI-тесты: `python -m pip install -r apps/ai/requirements-dev.txt`, затем `python -m pytest -q apps/ai`. Не запускайте тесты против `app` или `ai_buddy_load`.
 
+Live-проверка контрактов (`CHECK_LIVE=1 python scripts/check_contracts.py`) использует тот же `E2E_CREDENTIALS_FILE`. В файле должна быть учётная запись `buddy@demo.example`; повторный `sync-hr` не выдаёт пароль уже существующего Buddy, поэтому сохраните файл первичной синхронизации. Проверка `/health` публичная, `/api/chat` требует Bearer JWT; рабочие чек-листы доступны через авторизованные `/api/checklists` и `/api/progress`.
+
 ## Структура
 
 - `apps/backend` — API, команды, миграция и SQL справочников.
