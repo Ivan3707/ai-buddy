@@ -132,8 +132,8 @@
 }
 .task-name { gap: 19px; background: var(--pink); color: #000; }
 .task-mark { width: 46px; height: 46px; }
-.task-row.is-locked .task-name { background: rgba(240, 156, 180, 0.58); color: #5e5c5c; font-weight: 500; }
-.task-row.is-locked .task-cell { background: rgba(217, 217, 217, 0.55); color: #252525; }
+.task-row.is-locked .task-name { padding: 20px 63px 20px 20px; background: rgba(240, 156, 180, 0.4); color: #5e5c5c; font-weight: 500; }
+.task-row.is-locked .task-cell { padding: 12px 20px; background: rgba(217, 217, 217, 0.4); color: #252525; }
 
 /* Кольцо прогресса: 255 px, число Aeroport Bold 52 */
 .ring-text { font-family: var(--font-title); font-size: 52px; font-weight: 700; }
@@ -185,8 +185,11 @@
 .notes-drawer .drawer-header { background: var(--pink); padding: 44px 21px 0; }
 .notes-drawer .drawer-icon img { display: block; }
 .notes-drawer .drawer-header h2 { line-height: normal; }
-.notes-body { width: 100%; background: var(--pink); padding: 20px; }
-.notes-body p { margin: 0; font-family: var(--font-text); font-size: 16px; font-weight: var(--w-light); color: #252525; }
+.notes-body { flex: none; width: 512px; height: 358px; background: #252525; padding: 0; position: relative; }
+.notes-actions { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; align-items: flex-end; padding: 0 24px 26px 33px; }
+.notes-action { display: block; width: 28px; height: 28px; padding: 0; border: 0; background: none; line-height: 0; cursor: pointer; }
+.notes-action-open { width: 23px; height: 23px; }
+.notes-action:hover { opacity: 0.7; }
 
 /* ───────── Обратная связь: панель начинается на 792 px ───────── */
 .shell:has(.feedback) { grid-template-columns: calc(var(--stage-w, 100vw) / 3 + 152px) 1fr; }
@@ -304,7 +307,7 @@
 .kanban-card h4 { margin: 0; font-family: var(--font-title); font-size: 18px; font-weight: 700; line-height: 1.2; }
 .kanban-card p { margin: 0; }
 .kanban-card-stage, .kanban-card-time { font-size: 14px; color: #808080; text-transform: none; }
-.kanban-card.is-unavailable { background: rgba(217, 217, 217, 0.55); }
+.kanban-card.is-unavailable { background: rgba(217, 217, 217, 0.4); }
 .kanban-card.is-active { background: var(--pink); color: #000; }
 .kanban-card.is-active .kanban-card-stage, .kanban-card.is-active .kanban-card-time { color: #252525; }
 .kanban-card.is-completed { background: #fff; }

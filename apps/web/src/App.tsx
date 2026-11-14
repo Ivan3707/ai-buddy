@@ -7,6 +7,7 @@ import { StaffShell } from './components/staff/StaffShell';
 import { PortalPage, parsePortalPath } from './pages/PortalPage';
 import { auth, currentUser, hasStoredSession } from './session';
 import { extensionPresent, handshake, notifySignedOut } from './sso';
+import { markOnboardingPending } from './lib/onboarding';
 
 type Session = { access: string; expiresAt: number };
 
@@ -96,6 +97,7 @@ export default function App() {
   }, [adopted, reset]);
 
   const login = async (result: LoginResponse) => {
+    if (result.is_first_login && result.user.role === 'intern') markOnboardingPending(result.user.id);
     await auth.adopt({ access_token: result.access_token, refresh_token: result.refresh_token, expires_in: result.expires_in }, { loginAt: Date.now() });
     setUser(result.user);
     await sync();

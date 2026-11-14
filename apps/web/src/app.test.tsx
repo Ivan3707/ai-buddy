@@ -69,6 +69,26 @@ describe('вход', () => {
     expect(api.getMe).not.toHaveBeenCalled();
   });
 
+  it('при первом входе стажёра показывает приветствие, после «Пропустить» — больше нет', async () => {
+    localStorage.clear();
+    api.login.mockResolvedValue({ ...loginResponse, access_token: 'tok', token_type: 'Bearer', expires_in: 3600, is_first_login: true, user: internUser });
+    render(<App />);
+    await signIn();
+    expect(await screen.findByRole('heading', { name: 'Добро пожаловать на стажировку в Авито!' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Пропустить' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(localStorage.getItem(`onboarding:${internUser.id}`)).toBeNull();
+  });
+
+  it('при обычном входе приветствия нет', async () => {
+    localStorage.clear();
+    api.login.mockResolvedValue({ ...loginResponse, access_token: 'tok', token_type: 'Bearer', expires_in: 3600, is_first_login: false, user: internUser });
+    render(<App />);
+    await signIn();
+    await screen.findByRole('heading', { name: 'Привет, Spike!' });
+    expect(screen.queryByRole('heading', { name: 'Добро пожаловать на стажировку в Авито!' })).not.toBeInTheDocument();
+  });
+
   it('показывает ошибку неверного пароля и блокирует кнопку на время запроса', async () => {
     api.login.mockRejectedValue(new ApiError(401, 'Неверный email или пароль'));
     render(<App />);
