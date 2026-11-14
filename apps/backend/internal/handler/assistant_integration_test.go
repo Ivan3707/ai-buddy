@@ -398,6 +398,22 @@ func TestAssistantFlowWithPostgres(t *testing.T) {
 	expect(lead, http.MethodGet, "/api/kb/lint", nil, http.StatusOK)
 	expect(intern, http.MethodGet, "/api/kb/lint", nil, http.StatusForbidden)
 	expect(intern, http.MethodGet, "/api/kb/docs/leave", nil, http.StatusOK)
+	// ---- request form in the chat window: same validation and policy as a confirmed action
+	form := func(typ string, params map[string]string) map[string]any {
+		return map[string]any{"type": typ, "params": params}
+	}
+	var created map[string]any
+	if err := json.Unmarshal(expect(intern, http.MethodPost, "/api/requests", form("leave_request",
+		map[string]string{"kind": "day_off", "date_from": "2026-12-05", "date_to": "2026-12-05"}), http.StatusCreated), &created); err != nil {
+		t.Fatal(err)
+	}
+	if num, _ := created["number"].(string); !strings.HasPrefix(num, "ABS-") {
+		t.Fatalf("form request number %v", created)
+	}
+	expect(intern, http.MethodPost, "/api/requests", form("access_request",
+		map[string]string{"system": "grafana", "resource": "ML", "access_level": "admin", "justification": "надо"}), http.StatusUnprocessableEntity)
+	expect(intern, http.MethodPost, "/api/requests", form("leave_request", map[string]string{"kind": "party"}), http.StatusUnprocessableEntity)
+	expect(intern, http.MethodPost, "/api/requests", form("mentor_question", map[string]string{"question": "x"}), http.StatusUnprocessableEntity)
 	expect(intern, http.MethodGet, "/api/kb/docs/nope", nil, http.StatusNotFound)
 	expect(intern, http.MethodGet, "/api/kb/docs/bad%20id", nil, http.StatusNotFound)
 	expect(intern, http.MethodGet, "/api/analytics/gaps", nil, http.StatusForbidden)
@@ -441,7 +457,7 @@ func TestAssistantFlowWithPostgres(t *testing.T) {
 	// ---- metrics for staff only
 	var metrics map[string]any
 	_ = json.Unmarshal(expect(buddy, http.MethodGet, "/api/metrics/chat", nil, http.StatusOK), &metrics)
-	if metrics["escalated_to_mentor"].(float64) != 1 || metrics["thumbs_up"].(float64) != 1 || metrics["actions_executed"].(float64) != 2 ||
+	if metrics["escalated_to_mentor"].(float64) != 1 || metrics["thumbs_up"].(float64) != 1 || metrics["actions_executed"].(float64) != 3 ||
 		metrics["questions_total"].(float64) != 6 || metrics["deflection_rate"] == nil {
 		t.Fatalf("metrics %v", metrics)
 	}

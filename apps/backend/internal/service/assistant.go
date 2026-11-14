@@ -662,6 +662,24 @@ func (s *AssistantService) leaveApprover(ctx context.Context, tx *sql.Tx, user *
 	return "Руководитель команды (демо)"
 }
 
+// CreateRequest creates a leave/access request from the form in the chat window. The form submit is the explicit
+// confirmation: the same validation, the same policy (no admin for interns) and the same numbering as a
+// confirmed chat action. It goes through an assistant action so the request keeps one audit trail.
+func (s *AssistantService) CreateRequest(ctx context.Context, user *model.User, kind string, params json.RawMessage) (ActionResult, error) {
+	if kind != "leave_request" && kind != "access_request" {
+		return ActionResult{}, ErrActionInvalid
+	}
+	if _, err := validateParams(kind, params); err != nil {
+		return ActionResult{}, err
+	}
+	proposal, _ := json.Marshal(map[string]any{"proposal": map[string]any{"type": kind, "params": params, "summary": "Заявка из формы"}})
+	a, err := s.storeProposal(ctx, user.ID, proposal)
+	if err != nil {
+		return ActionResult{}, err
+	}
+	return s.Confirm(ctx, user, a.ID)
+}
+
 func (s *AssistantService) Cancel(ctx context.Context, userID, actionID uuid.UUID) (PendingAction, error) {
 	var a PendingAction
 	err := withTransaction(ctx, s.db, func(tx *sql.Tx) error {

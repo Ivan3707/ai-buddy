@@ -501,7 +501,19 @@ backend_paths.update({
     "/api/requests": {"get": {
         "operationId": "listRequests", "security": BEARER,
         "description": "Current user's requests in corporate services (mock), newest first.",
-        "responses": {"200": json_resp("Success", {"type": "array", "items": ref("ServiceRequest")})}}},
+        "responses": {"200": json_resp("Success", {"type": "array", "items": ref("ServiceRequest")})}},
+        "post": {
+            "operationId": "createRequest", "security": BEARER,
+            "description": "Create a leave or access request from the form in the chat window. Submitting the form is the "
+                           "user's explicit confirmation; validation and policy are the same as for a confirmed chat action "
+                           "(e.g. interns never get admin access: 422).",
+            "requestBody": json_body({"type": "object", "required": ["type", "params"], "properties": {
+                "type": {"type": "string", "enum": ["leave_request", "access_request"]},
+                "params": {"type": "object", "additionalProperties": {"type": "string"},
+                           "description": "leave_request: kind (day_off|vacation), date_from, date_to, comment?; "
+                                          "access_request: system, resource, access_level (read|write), justification"}}}),
+            "responses": {"201": json_resp("Created", ref("ServiceRequest")),
+                          "422": json_resp("Invalid params or not allowed by policy", ERROR)}}},
     "/api/requests/{id}": {"get": {
         "operationId": "getRequest", "security": BEARER, "parameters": [UUID_PARAM],
         "responses": {"200": json_resp("Success", ref("ServiceRequest")), "404": json_resp("Not found", ERROR)}}},

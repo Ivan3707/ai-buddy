@@ -20,7 +20,7 @@
   const MIN = {w: 300, h: 340};
   const DEFAULT_SIZE = {
     compact: () => ({w: 380, h: 560}),
-    full: () => ({w: Math.min(960, innerWidth - 32), h: innerHeight - SIZE - 40}),
+    full: () => ({w: Math.min(980, innerWidth - 32), h: Math.min(740, innerHeight - 48)}),
   };
   const KEYS = {pos: 'buddyPos', mode: 'buddyChatMode', sizes: 'buddyChatSizes', greeting: 'buddyGreeting'};
 
@@ -44,24 +44,61 @@
         <button class="bubble-x" type="button" aria-label="Скрыть">×</button>
         <span class="bubble-text"></span><span class="bubble-detail"></span><div class="bubble-actions"></div>
       </div>
+      <div class="scrim" hidden></div>
       <section class="chat" role="dialog" aria-label="Чат с Бади" hidden>
-        <header><b>Бади</b><span class="tag">демо</span>
+        <header><b>Бади</b>
           <button class="ghost new" type="button" title="Новый диалог">Новый</button>
           <button class="ghost mode" type="button"></button>
           <button class="ghost close" type="button" aria-label="Свернуть">×</button></header>
+        <nav class="tabs" role="tablist" hidden>
+          <button type="button" role="tab" data-tab="chat">Чат</button>
+          <button type="button" role="tab" data-tab="notes">Заметки</button>
+          <button type="button" role="tab" data-tab="reqs">Заявки</button>
+        </nav>
         <div class="log" role="log" aria-live="polite"></div>
         <div class="reader" hidden>
           <div class="reader-bar"><button class="back" type="button">← К чату</button>
             <a class="open-full primary-link" target="_blank" rel="noreferrer">Открыть документ полностью ↗</a></div>
           <div class="reader-body"></div>
         </div>
+        <section class="panel notes" hidden>
+          <aside class="side"><button type="button" class="primary new-note">+ Новая заметка</button><div class="items"></div></aside>
+          <div class="editor">
+            <input class="n-title" maxlength="160" placeholder="Заголовок">
+            <textarea class="n-text" maxlength="8000" placeholder="Текст заметки…"></textarea>
+            <div class="bar"><span class="n-status muted"></span><button type="button" class="primary n-save">Сохранить</button></div>
+          </div>
+        </section>
+        <section class="panel reqs" hidden>
+          <div class="col">
+            <div class="reqs-head"><b>Мои заявки</b><button type="button" class="primary r-new">+ Новая заявка</button></div>
+            <form class="r-form" hidden>
+              <label>Что оформить
+                <select name="type"><option value="leave_request">Отгул или отпуск</option><option value="access_request">Доступ к системе</option></select></label>
+              <div class="f-leave">
+                <label>Вид <select name="kind"><option value="day_off">Отгул</option><option value="vacation">Отпуск</option></select></label>
+                <div class="two"><label>С <input type="date" name="date_from"></label><label>По <input type="date" name="date_to"></label></div>
+                <label>Комментарий <input name="comment" maxlength="300" placeholder="необязательно"></label>
+              </div>
+              <div class="f-access" hidden>
+                <label>Система <select name="system"><option>jira</option><option>confluence</option><option>gitlab</option><option>grafana</option><option>redash</option><option>kubernetes</option></select></label>
+                <label>Ресурс <input name="resource" maxlength="200" placeholder="проект, дашборд, репозиторий…"></label>
+                <label>Уровень <select name="access_level"><option value="read">read — чтение</option><option value="write">write — изменение</option></select></label>
+                <label>Зачем нужен доступ <textarea name="justification" rows="2" maxlength="500"></textarea></label>
+              </div>
+              <div class="bar"><span class="r-status muted"></span><button type="button" class="r-cancel">Отмена</button><button type="submit" class="primary">Отправить заявку</button></div>
+            </form>
+            <div class="r-list"></div>
+          </div>
+        </section>
         <form class="login" hidden>
-          <p>Войдите, чтобы Бади знал ваш онбординг.</p>
+          <h3>Привет! Я Бади</h3>
+          <p>Войдите, чтобы я знал ваш онбординг.</p>
           <input name="email" type="email" placeholder="Email" autocomplete="email" required>
           <input name="password" type="password" placeholder="Пароль" autocomplete="current-password" required>
           <button type="submit" class="primary">Войти</button><p class="login-error" role="alert"></p>
         </form>
-        <p class="expired" hidden>Сессия истекла. Обновите страницу и войдите снова.</p>
+        <div class="expired" hidden><h3>Сессия истекла</h3><p>Обновите страницу и войдите снова.</p></div>
         <div class="composer-wrap">
           <div class="chip" hidden><span class="chip-text"></span><button type="button" class="chip-x" aria-label="Не учитывать выделение">×</button></div>
           <label class="page"><input type="checkbox" class="use-page" checked> Учитывать эту страницу</label>
@@ -76,6 +113,7 @@
     const input = $('.composer textarea'), sendButton = $('.send'), loginForm = $('.login');
     const chip = $('.chip'), usePage = $('.use-page'), reader = $('.reader'), readerBody = $('.reader-body');
     const grip = $('.grip'), modeButton = $('.mode'), openFull = $('.open-full');
+    const scrim = $('.scrim'), tabsBar = $('.tabs'), notesPanel = $('.notes'), reqsPanel = $('.reqs');
     $('.hide').hidden = !opt.hide;
     $('.page').hidden = !opt.pageContext;
     if (!opt.pageContext) usePage.checked = false;
@@ -85,6 +123,7 @@
     let sizes = {};
     let anchor = {right: true, below: false};
     let busy = false, signedIn = null, user = null, selection = '', abortCurrent = null;
+    let tab = 'chat', readerOpen = false; // tabs exist only in the full mode
 
     const mountHost = () => { if (!host.isConnected) (document.body || document.documentElement).append(host); };
 
@@ -107,12 +146,17 @@
       const below = pos.y + SIZE / 2 < innerHeight / 2;
       anchor = {right, below};
       const {w, h} = chatSize();
-      const cx = right ? pos.x + SIZE - w : pos.x;
-      const cy = below ? pos.y + SIZE + 8 : pos.y - h - 8;
       chat.style.width = `${w}px`; chat.style.height = `${h}px`;
-      chat.style.transform = `translate(${Math.min(Math.max(cx, 8), innerWidth - w - 8)}px, ${Math.min(Math.max(cy, 8), innerHeight - h - 8)}px)`;
-      // the resize grip sits in the corner away from the character
-      grip.dataset.corner = `${below ? 'b' : 't'}${right ? 'l' : 'r'}`;
+      if (mode === 'full') { // fixed in the middle of the screen, grows from the centre
+        chat.style.transform = `translate(${Math.round((innerWidth - w) / 2)}px, ${Math.round((innerHeight - h) / 2)}px)`;
+        grip.dataset.corner = 'br';
+      } else {
+        const cx = right ? pos.x + SIZE - w : pos.x;
+        const cy = below ? pos.y + SIZE + 8 : pos.y - h - 8;
+        chat.style.transform = `translate(${Math.min(Math.max(cx, 8), innerWidth - w - 8)}px, ${Math.min(Math.max(cy, 8), innerHeight - h - 8)}px)`;
+        // the resize grip sits in the corner away from the character
+        grip.dataset.corner = `${below ? 'b' : 't'}${right ? 'l' : 'r'}`;
+      }
       const bw = Math.min(300, innerWidth - 16);
       bubble.style.maxWidth = `${bw}px`;
       const bx = right ? pos.x - bw - 6 : pos.x + SIZE + 6;
@@ -125,7 +169,9 @@
       modeButton.textContent = mode === 'full' ? '⤡' : '⤢';
       modeButton.title = mode === 'full' ? 'Компактный режим' : 'Развернуть';
       modeButton.setAttribute('aria-label', modeButton.title);
+      if (mode !== 'full') tab = 'chat';
       placeFloating();
+      layout();
       if (persist) void store.set(KEYS.mode, mode);
     }
     modeButton.onclick = () => setMode(mode === 'full' ? 'compact' : 'full');
@@ -150,10 +196,9 @@
     grip.addEventListener('pointermove', event => {
       if (!resizing) return;
       const dx = event.clientX - resizing.sx, dy = event.clientY - resizing.sy;
-      sizes = {...sizes, [mode]: {
-        w: resizing.w + (anchor.right ? -dx : dx),
-        h: resizing.h + (anchor.below ? dy : -dy),
-      }};
+      sizes = {...sizes, [mode]: mode === 'full'
+        ? {w: resizing.w + 2 * dx, h: resizing.h + 2 * dy}
+        : {w: resizing.w + (anchor.right ? -dx : dx), h: resizing.h + (anchor.below ? dy : -dy)}};
       sizes[mode] = chatSize();
       placeFloating();
     });
@@ -247,9 +292,10 @@
       chat.hidden = false;
       char.classList.add('open');
       placeFloating();
+      layout();
       await refreshSession();
       if (signedIn) {
-        if (reader.hidden) input.focus();
+        if (!readerOpen && tab === 'chat') input.focus();
         const key = `buddyBrief:${user?.id || ''}`;
         if (await store.get(key) !== today && !log.childElementCount) {
           await store.set(key, today);
@@ -257,15 +303,43 @@
         }
       }
     }
-    function closeChat() { chat.hidden = true; char.classList.remove('open'); setTimeout(showNext, 400); }
+    function closeChat() { chat.hidden = true; char.classList.remove('open'); layout(); setTimeout(showNext, 400); }
+    scrim.onclick = closeChat;
+
+    // One place decides what the window shows: login (not signed in), or - signed in - the chat / reader / notes / requests.
+    function layout() {
+      const full = mode === 'full';
+      if (!full) tab = 'chat';
+      const out = !signedIn;
+      scrim.hidden = !(full && !chat.hidden);
+      tabsBar.hidden = out || !full;
+      for (const b of tabsBar.querySelectorAll('button')) {
+        b.classList.toggle('on', b.dataset.tab === tab);
+        b.setAttribute('aria-selected', String(b.dataset.tab === tab));
+      }
+      loginForm.hidden = signedIn !== false || !opt.login;
+      $('.expired').hidden = signedIn !== false || opt.login;
+      log.hidden = out || tab !== 'chat' || readerOpen;
+      reader.hidden = out || tab !== 'chat' || !readerOpen;
+      $('.composer-wrap').hidden = out || tab !== 'chat' || readerOpen;
+      notesPanel.hidden = out || tab !== 'notes';
+      reqsPanel.hidden = out || tab !== 'reqs';
+    }
+    function showTab(next) {
+      tab = next;
+      readerOpen = false;
+      layout();
+      if (next === 'notes') void loadNotes();
+      if (next === 'reqs') void loadRequests();
+      if (next === 'chat') { scroll(); input.focus(); }
+    }
+    for (const b of tabsBar.querySelectorAll('button')) b.onclick = () => showTab(b.dataset.tab);
 
     async function refreshSession() {
       const state = await env.call({op: 'session'});
       signedIn = Boolean(state?.authenticated);
       user = state?.user || null;
-      loginForm.hidden = signedIn || !opt.login;
-      $('.expired').hidden = signedIn || opt.login;
-      $('.composer-wrap').hidden = !signedIn;
+      layout();
       if (!signedIn && state?.unavailable) $('.login-error').textContent = 'Backend недоступен. Проверьте, что стенд запущен.';
     }
 
@@ -393,7 +467,7 @@
     }
     async function openDoc(source) {
       setMode('full');
-      log.hidden = true; $('.composer-wrap').hidden = true; reader.hidden = false;
+      tab = 'chat'; readerOpen = true; layout();
       readerBody.replaceChildren(el('p', 'muted', 'Открываю документ…'));
       const fallback = fragmentUrl(source.url, source.snippet);
       openFull.href = fallback || '#'; openFull.hidden = !fallback;
@@ -420,10 +494,101 @@
       }
     }
     function closeDoc() {
-      reader.hidden = true; log.hidden = false; $('.composer-wrap').hidden = !signedIn;
+      readerOpen = false; layout();
       scroll();
     }
     $('.back').onclick = closeDoc;
+
+    // ---------- notes tab ----------
+    const when = iso => { try { return new Date(iso).toLocaleDateString('ru-RU', {day: '2-digit', month: '2-digit'}); } catch { return ''; } };
+    let notes = [], noteId = '';
+    const nTitle = $('.n-title'), nText = $('.n-text'), nStatus = $('.n-status'), nSave = $('.n-save');
+    function renderNotes() {
+      const box = $('.notes .items');
+      box.replaceChildren(...notes.map(n => {
+        const b = el('button', n.id === noteId ? 'item on' : 'item');
+        b.type = 'button';
+        b.append(el('b', '', n.title || 'Без названия'), el('small', 'muted', when(n.updated_at)));
+        b.onclick = () => { noteId = n.id; nTitle.value = n.title; nText.value = n.content; nStatus.textContent = ''; renderNotes(); };
+        return b;
+      }));
+      if (!notes.length) box.append(el('p', 'muted pad', 'Заметок пока нет.'));
+    }
+    async function loadNotes() {
+      const result = await env.call({op: 'notes'});
+      if (result?.notes) { notes = result.notes; renderNotes(); nStatus.textContent = ''; } else nStatus.textContent = result?.error || '';
+    }
+    $('.new-note').onclick = () => { noteId = ''; nTitle.value = ''; nText.value = ''; nStatus.textContent = ''; renderNotes(); nTitle.focus(); };
+    nSave.onclick = async () => {
+      nSave.disabled = true; nStatus.textContent = 'Сохраняю…';
+      const result = await env.call({op: 'note-save', id: noteId || undefined, title: nTitle.value, content: nText.value});
+      nSave.disabled = false;
+      if (!result?.note) { nStatus.textContent = result?.error || 'Не удалось сохранить.'; return; }
+      noteId = result.note.id;
+      nStatus.textContent = 'Сохранено';
+      await loadNotes();
+      nStatus.textContent = 'Сохранено';
+    };
+
+    // ---------- requests tab ----------
+    const STATUS = {pending_approval: 'на согласовании', approved: 'согласована', rejected: 'отклонена'};
+    const WORDS = {day_off: 'Отгул', vacation: 'Отпуск', read: 'чтение', write: 'изменение', admin: 'администрирование'};
+    const dayRu = iso => (iso || '').split('-').reverse().join('.');
+    function describeRequest(r) {
+      const p = r.params || {};
+      return r.type === 'leave_request'
+        ? `${WORDS[p.kind] || 'Отсутствие'}: ${dayRu(p.date_from)}${p.date_to && p.date_to !== p.date_from ? ` — ${dayRu(p.date_to)}` : ''}`
+        : `Доступ: ${p.system || ''} · ${p.resource || ''} · ${WORDS[p.access_level] || p.access_level || ''}`;
+    }
+    function renderRequests(list) {
+      const box = $('.r-list');
+      if (!list.length) { box.replaceChildren(el('p', 'muted pad', 'Заявок пока нет. Нажмите «Новая заявка» или попросите Бади в чате.')); return; }
+      box.replaceChildren(...list.map(r => {
+        const row = el('div', 'req');
+        const head = el('div', 'req-head');
+        head.append(el('b', '', r.number), el('span', `pill ${r.status}`, STATUS[r.status] || r.status));
+        row.append(head, el('div', '', describeRequest(r)));
+        if (r.params?.comment || r.params?.justification) row.append(el('small', 'muted', r.params.comment || r.params.justification));
+        if (r.approver) row.append(el('small', 'muted', `Согласует: ${r.approver}`));
+        return row;
+      }));
+    }
+    async function loadRequests() {
+      const result = await env.call({op: 'requests-list'});
+      if (result?.requests) renderRequests(result.requests); else $('.r-list').replaceChildren(el('p', 'err', result?.error || 'Не удалось загрузить заявки.'));
+    }
+    const rForm = $('.r-form'), rStatus = $('.r-status');
+    const toggleFields = () => {
+      const access = rForm.type.value === 'access_request';
+      $('.f-leave').hidden = access; $('.f-access').hidden = !access;
+    };
+    rForm.type.onchange = toggleFields;
+    $('.r-new').onclick = () => {
+      const iso = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+      rForm.reset(); rForm.date_from.min = rForm.date_to.min = iso; rForm.date_from.value = rForm.date_to.value = iso;
+      toggleFields(); rStatus.textContent = ''; rForm.hidden = false;
+    };
+    $('.r-cancel').onclick = () => { rForm.hidden = true; };
+    rForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      const f = new FormData(rForm);
+      const type = String(f.get('type'));
+      const params = type === 'leave_request'
+        ? {kind: f.get('kind'), date_from: f.get('date_from'), date_to: f.get('date_to') || f.get('date_from'), comment: f.get('comment')}
+        : {system: f.get('system'), resource: f.get('resource'), access_level: f.get('access_level'), justification: f.get('justification')};
+      if (type === 'access_request' && (!String(params.resource).trim() || !String(params.justification).trim())) { rStatus.textContent = 'Укажите ресурс и зачем нужен доступ.'; return; }
+      if (type === 'leave_request' && !params.date_from) { rStatus.textContent = 'Укажите даты.'; return; }
+      const submit = rForm.querySelector('[type=submit]');
+      submit.disabled = true; rStatus.textContent = 'Отправляю…';
+      const result = await env.call({op: 'request-create', type, params});
+      submit.disabled = false;
+      if (!result?.request) { rStatus.textContent = result?.error || 'Не удалось создать заявку.'; return; }
+      rForm.hidden = true;
+      await loadRequests();
+      const note = el('p', 'notice', `Заявка ${result.request.number} создана, статус: ${STATUS[result.request.status] || result.request.status}.`);
+      $('.r-list').prepend(note);
+      setTimeout(() => note.remove(), 8000);
+    });
 
     // ---------- asking ----------
     let queued = null; // question asked while the brief is still streaming: sent right after it
@@ -458,7 +623,8 @@
     function ask(text) {
       if (!text || !signedIn) return;
       if (busy) { queued = text; return; }
-      if (!reader.hidden) closeDoc();
+      if (readerOpen) closeDoc();
+      if (tab !== 'chat') showTab('chat');
       const page = pageContext();
       const userNode = el('div', 'msg user', text);
       if (page) userNode.append(el('span', 'ctx', page.selection ? '📄 страница + выделенный текст' : '📄 с учётом страницы'));
@@ -634,7 +800,7 @@
     .chat{position:fixed;left:0;top:0;display:flex;flex-direction:column;background:#fff;color:#1d2330;border-radius:16px;box-shadow:0 12px 40px rgba(0,0,0,.25);border:1px solid #e1e4ea;overflow:hidden;font-size:14px;line-height:1.45}
     .chat.full{font-size:15px}
     .chat header{display:flex;align-items:center;gap:6px;padding:10px 12px;background:#1f6f50;color:#fff}
-    .chat header b{font-size:15px}.tag{font-size:10px;text-transform:uppercase;background:#fff4cc;color:#5a4a00;border-radius:8px;padding:1px 6px;margin-right:auto}
+    .chat header b{font-size:15px;margin-right:auto}
     button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid #c5cad3;background:#fff;color:#1d2330;padding:4px 10px}
     button:disabled{opacity:.5;cursor:default}
     .primary{background:#1f6f50;border-color:#1f6f50;color:#fff}
@@ -667,8 +833,34 @@
     .doc-head h3{margin:0 0 2px;font-size:19px}.doc-head p{margin:0 0 12px;font-size:12px}
     .doc h4{margin:16px 0 4px;font-size:15px}.doc p{margin:0 0 8px}.doc ul{margin:0 0 8px;padding-left:20px}
     .hit{background:#fff3b0;border-radius:6px;box-shadow:0 0 0 4px #fff3b0}
-    .login{padding:16px;display:grid;gap:8px}.login p{margin:0}.login input{font:inherit;padding:7px 10px;border:1px solid #c5cad3;border-radius:8px}
-    .login-error{color:#a12a2a;font-size:12px}.expired{padding:16px;margin:0}
+    .login{flex:1;display:flex;flex-direction:column;justify-content:center;gap:10px;width:100%;max-width:340px;margin:0 auto;padding:24px}
+    .login h3,.expired h3{margin:0;font-size:21px;text-align:center}.login p,.expired p{margin:0;text-align:center;color:#68708a}
+    .login input{font:inherit;padding:9px 12px;border:1px solid #c5cad3;border-radius:10px}.login .primary{padding:9px}
+    .login-error{color:#a12a2a;font-size:12px}.login-error:empty{display:none}
+    .expired{flex:1;display:flex;flex-direction:column;justify-content:center;gap:8px;padding:24px}
+    .scrim{position:fixed;inset:0;background:rgba(15,20,25,.45)}
+    .tabs{display:flex;gap:2px;padding:6px 12px 0;background:#fff;border-bottom:1px solid #e6e9ee}
+    .tabs button{border:none;border-bottom:3px solid transparent;border-radius:0;background:transparent;padding:8px 16px;color:#68708a}
+    .tabs button.on{border-bottom-color:#1f6f50;color:#1f6f50;font-weight:600}
+    .panel{flex:1;min-height:0;display:flex;background:#f7f8fa}
+    .notes .side{width:240px;flex:none;display:flex;flex-direction:column;gap:8px;padding:12px;border-right:1px solid #e6e9ee;background:#fff;overflow-y:auto}
+    .item{display:flex;flex-direction:column;align-items:flex-start;gap:0;width:100%;text-align:left;margin-bottom:4px}
+    .item.on{border-color:#1f6f50;background:#eef6f2}.item small{font-size:11px}
+    .editor{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;padding:12px}
+    .editor input,.editor textarea,.r-form input,.r-form select,.r-form textarea{font:inherit;padding:8px 10px;border:1px solid #c5cad3;border-radius:10px;color:#1d2330;background:#fff;width:100%}
+    .editor textarea{flex:1;resize:none}
+    .bar{display:flex;align-items:center;justify-content:flex-end;gap:8px}.bar .muted{margin-right:auto;font-size:12px}
+    .reqs .col{flex:1;min-width:0;overflow-y:auto;padding:14px 18px;display:flex;flex-direction:column;gap:10px}
+    .reqs-head{display:flex;align-items:center;justify-content:space-between}
+    .r-form{display:grid;gap:8px;padding:12px;border:1px solid #d9dee6;border-radius:12px;background:#fff}
+    .r-form label{display:grid;gap:3px;font-size:12px;color:#68708a}.r-form .two{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+    .f-leave,.f-access{display:grid;gap:8px}
+    .req{display:flex;flex-direction:column;gap:2px;padding:10px 12px;border:1px solid #e6e9ee;border-radius:12px;background:#fff}
+    .req-head{display:flex;align-items:center;gap:8px}
+    .pill{font-size:11px;border-radius:999px;padding:1px 8px;background:#eef1f6;color:#556}
+    .pill.approved{background:#dff3e8;color:#1f6f50}.pill.rejected{background:#fbeaea;color:#a12a2a}.pill.pending_approval{background:#fff4cc;color:#5a4a00}
+    .notice{margin:0;padding:6px 10px;border-radius:8px;background:#dff3e8;color:#1f6f50;font-size:13px}
+    .pad{padding:8px 4px;margin:0}
     .composer-wrap{border-top:1px solid #e6e9ee;padding:6px 10px 10px;background:#fff}
     .page{display:flex;gap:6px;align-items:center;font-size:11px;color:#68708a;margin-bottom:4px}
     .chip{display:flex;align-items:center;gap:4px;background:#eef6f2;border-radius:8px;padding:3px 6px;font-size:11px;margin-bottom:4px}
@@ -684,7 +876,9 @@
     .grip[data-corner=bl]{bottom:0;left:0;cursor:nesw-resize}.grip[data-corner=bl]::before{border-bottom-width:2px;border-left-width:2px;border-bottom-left-radius:6px}
     .grip[data-corner=br]{bottom:0;right:0;cursor:nwse-resize}.grip[data-corner=br]::before{border-bottom-width:2px;border-right-width:2px;border-bottom-right-radius:6px}
     @media (prefers-color-scheme:dark){
-      .chat,.composer-wrap,.bubble,.reader-bar{background:#1c2027;color:#e6e8ee;border-color:#2c323c}
+      .chat,.composer-wrap,.bubble,.reader-bar,.tabs,.notes .side,.r-form,.req{background:#1c2027;color:#e6e8ee;border-color:#2c323c}
+      .panel{background:#14171c}.item.on{background:#1f3a2f}.editor input,.editor textarea,.r-form input,.r-form select,.r-form textarea{background:#14171c;color:#e6e8ee;border-color:#2c323c}
+      .pill{background:#2c323c;color:#c5cad3}.notice{background:#1f3a2f;color:#5fd0a0}.tabs button.on{color:#5fd0a0;border-bottom-color:#5fd0a0}
       .log,.reader{background:#14171c}.bot{background:#222830;border-color:#2c323c}.card{background:#1c2027;border-color:#2c323c}
       .composer textarea,.login input{background:#14171c;color:#e6e8ee;border-color:#2c323c}
       button{background:#222830;color:#e6e8ee;border-color:#2c323c}.primary,.primary-link{background:#2f9b70;border-color:#2f9b70;color:#fff}

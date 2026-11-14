@@ -30,6 +30,20 @@ export function createGateway({baseUrl, tokens, store, client, fetchImpl = globa
     return response.json();
   }
 
+  // Writes (notes, request form): the error text comes from the backend's JSON {error}.
+  async function sendJson(method, path, body) {
+    const {token} = await options();
+    const response = await fetchImpl(`${baseUrl}${path}`, {
+      method, headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
+      body: JSON.stringify(body), signal: AbortSignal.timeout(15000),
+    });
+    let data = null;
+    try { data = await response.json(); } catch { /* empty body */ }
+    if (!response.ok) throw new HttpError(response.status, data?.error || `HTTP ${response.status}`);
+    return data;
+  }
+  const failure = (error, fallback) => ({error: error?.status === 401 ? 'Сессия истекла. Обновите страницу.' : error?.message && error.status ? error.message : fallback});
+
   async function call(message) {
     const token = await tokens.get();
     switch (message?.op) {
@@ -86,6 +100,26 @@ export function createGateway({baseUrl, tokens, store, client, fetchImpl = globa
         } catch (error) {
           return {error: error?.status === 404 ? 'Документ не найден в базе знаний.' : 'Не удалось загрузить документ.'};
         }
+      }
+      // ---- full mode tabs: notes and requests
+      case 'notes':
+        try { return {notes: await getJson('/api/notes')}; } catch (error) { return failure(error, 'Не удалось загрузить заметки.'); }
+      case 'note-save': {
+        const input = {title: String(message.title || '').trim().slice(0, 160), content: String(message.content || '').slice(0, 8000)};
+        if (!input.title) return {error: 'Введите заголовок.'};
+        try {
+          const id = typeof message.id === 'string' ? message.id : '';
+          return {note: id ? await sendJson('PUT', `/api/notes/${encodeURIComponent(id)}`, input) : await sendJson('POST', '/api/notes', input)};
+        } catch (error) { return failure(error, 'Не удалось сохранить заметку.'); }
+      }
+      case 'requests-list':
+        try { return {requests: await getJson('/api/requests')}; } catch (error) { return failure(error, 'Не удалось загрузить заявки.'); }
+      case 'request-create': {
+        const kind = message.type === 'access_request' ? 'access_request' : 'leave_request';
+        const params = {};
+        for (const [key, value] of Object.entries(message.params || {})) if (typeof value === 'string') params[key] = value.slice(0, 500);
+        try { return {request: await sendJson('POST', '/api/requests', {type: kind, params})}; }
+        catch (error) { return failure(error, 'Не удалось создать заявку.'); }
       }
       default:
         return {error: 'unknown op'};

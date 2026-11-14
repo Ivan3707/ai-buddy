@@ -1409,6 +1409,75 @@
             }
           }
         }
+      },
+      "post": {
+        "operationId": "createRequest",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Create a leave or access request from the form in the chat window. Submitting the form is the user's explicit confirmation; validation and policy are the same as for a confirmed chat action (e.g. interns never get admin access: 422).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "params"
+                ],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "leave_request",
+                      "access_request"
+                    ]
+                  },
+                  "params": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "string"
+                    },
+                    "description": "leave_request: kind (day_off|vacation), date_from, date_to, comment?; access_request: system, resource, access_level (read|write), justification"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceRequest"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid params or not allowed by policy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/requests/{id}": {

@@ -40,6 +40,7 @@ func RegisterAssistantRoutes(mux *http.ServeMux, auth func(http.Handler) http.Ha
 	route("POST /api/actions/{id}/confirm", h.confirm)
 	route("POST /api/actions/{id}/cancel", h.cancel)
 	route("GET /api/requests", h.requests)
+	route("POST /api/requests", h.createRequest)
 	route("GET /api/requests/{id}", h.request)
 	route("GET /api/buddy/requests", h.staffRequests)
 	route("POST /api/buddy/requests/{id}/decision", h.decide)
@@ -255,6 +256,31 @@ func (h assistantHandler) requests(w http.ResponseWriter, r *http.Request, user 
 		return
 	}
 	send(w, http.StatusOK, list)
+}
+
+func (h assistantHandler) createRequest(w http.ResponseWriter, r *http.Request, user *model.User) {
+	var in struct {
+		Type   string          `json:"type"`
+		Params json.RawMessage `json:"params"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&in); err != nil {
+		send(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
+		return
+	}
+	result, err := h.s.CreateRequest(r.Context(), user, in.Type, in.Params)
+	if err != nil {
+		assistantError(w, err)
+		return
+	}
+	if result.Action.Status == "failed" {
+		msg := "invalid params"
+		if result.Action.Error != nil {
+			msg = *result.Action.Error
+		}
+		send(w, http.StatusUnprocessableEntity, map[string]string{"error": msg})
+		return
+	}
+	send(w, http.StatusCreated, result.Request)
 }
 
 func (h assistantHandler) request(w http.ResponseWriter, r *http.Request, user *model.User) {
