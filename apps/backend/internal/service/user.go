@@ -35,29 +35,6 @@ func (s *UserService) ListBuddies(ctx context.Context) ([]model.User, error) {
 	return repository.NewUserRepository(s.db).ListByRole(ctx, model.RoleBuddy)
 }
 
-func (s *UserService) AssignTeamlead(ctx context.Context, buddyID, internID, teamleadID uuid.UUID) error {
-	if buddyID == uuid.Nil || teamleadID == uuid.Nil {
-		return ErrInvalidProfile
-	}
-	return withTransaction(ctx, s.db, func(tx *sql.Tx) error {
-		users := repository.NewUserRepository(tx)
-		lead, err := users.GetByID(ctx, teamleadID)
-		if err != nil {
-			return err
-		}
-		if lead.Role != model.RoleTeamlead {
-			return ErrUserNotTeamlead
-		}
-		if err := users.AssignTeamlead(ctx, internID, buddyID, teamleadID); err != nil {
-			if err == repository.ErrNotFound {
-				return ErrInternNotAssigned
-			}
-			return err
-		}
-		return nil
-	})
-}
-
 func (s *UserService) CreateIntern(
 	ctx context.Context,
 	email string,

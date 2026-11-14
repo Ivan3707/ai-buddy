@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -34,12 +35,31 @@ func TestHRSynchronizerPostgres(t *testing.T) {
 		}
 	})
 	sync := NewHRSynchronizer(db)
-	credentials, err := sync.Sync(ctx, employees)
+	failing := append([]CorporateEmployee(nil), employees...)
+	for i := range failing {
+		failing[i].ID += "-rollback"
+		failing[i].Email = strings.Replace(failing[i].Email, "@", "-rollback@", 1)
+	}
+	failing[2].BuddyID = failing[1].ID
+	failing[2].ManagerID = failing[0].ID
+	if _, err := sync.Sync(ctx, failing, func([]InitialCredential) error { return errors.New("test publication failure") }); err == nil {
+		t.Fatal("accepted credentials publication failure")
+	}
+	var rolledBack int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM users WHERE corporate_id=$1`, failing[2].ID).Scan(&rolledBack); err != nil || rolledBack != 0 {
+		t.Fatal("new HR accounts committed after publication failure")
+	}
+	var credentials []InitialCredential
+	capture := func(generated []InitialCredential) error {
+		credentials = append([]InitialCredential(nil), generated...)
+		return nil
+	}
+	newAccounts, err := sync.Sync(ctx, employees, capture)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(credentials) != 3 {
-		t.Fatalf("new credentials=%d", len(credentials))
+	if newAccounts != 3 || len(credentials) != 3 {
+		t.Fatalf("new credentials=%d", newAccounts)
 	}
 	var id uuid.UUID
 	var hash string
@@ -57,9 +77,9 @@ func TestHRSynchronizerPostgres(t *testing.T) {
 	if _, err = db.ExecContext(ctx, `UPDATE user_checklist_progress SET status='completed',completed_at=now(),activated_at=NULL WHERE user_id=$1 AND checklist_item_id=$2`, id, fixture.commonItems[0].ID); err != nil {
 		t.Fatal(err)
 	}
-	second, err := sync.Sync(ctx, employees)
-	if err != nil || len(second) != 0 {
-		t.Fatalf("repeat: credentials=%d err=%v", len(second), err)
+	second, err := sync.Sync(ctx, employees, capture)
+	if err != nil || second != 0 {
+		t.Fatalf("repeat: credentials=%d err=%v", second, err)
 	}
 	employees[2].Email = "renamed-" + suffix + "@example.test"
 	// A new Buddy and lead replace the assignments without changing local ID.
@@ -67,7 +87,7 @@ func TestHRSynchronizerPostgres(t *testing.T) {
 	ids = append(ids, employees[3].ID, employees[4].ID)
 	employees[2].BuddyID = employees[3].ID
 	employees[2].ManagerID = employees[4].ID
-	if _, err = sync.Sync(ctx, employees); err != nil {
+	if _, err = sync.Sync(ctx, employees, capture); err != nil {
 		t.Fatal(err)
 	}
 	var current uuid.UUID
@@ -94,7 +114,7 @@ func TestHRSynchronizerPostgres(t *testing.T) {
 	}
 	changed := append([]CorporateEmployee(nil), employees...)
 	changed = append(changed[:2], changed[3:]...)
-	if _, err = sync.Sync(ctx, changed); err != nil {
+	if _, err = sync.Sync(ctx, changed, capture); err != nil {
 		t.Fatal(err)
 	}
 	if err = db.QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE corporate_id=$1`, ids[2]).Scan(&count); err != nil || count != 1 {
@@ -102,7 +122,7 @@ func TestHRSynchronizerPostgres(t *testing.T) {
 	}
 	duplicate := append([]CorporateEmployee(nil), employees...)
 	duplicate[2].Email = duplicate[1].Email
-	if _, err = sync.Sync(ctx, duplicate); err == nil {
+	if _, err = sync.Sync(ctx, duplicate, capture); err == nil {
 		t.Fatal("accepted conflicting email")
 	}
 }

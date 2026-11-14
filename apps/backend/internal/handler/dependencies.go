@@ -19,16 +19,6 @@ type UserRepository interface {
 	GetByID(ctx context.Context, id uuid.UUID) (*model.User, error)
 }
 
-type InternCreator interface {
-	CreateIntern(
-		ctx context.Context,
-		email string,
-		passwordHash string,
-		profession model.Profession,
-		buddyID uuid.UUID,
-	) (*model.User, error)
-}
-
 type TeamReader interface {
 	ListAssignedInterns(context.Context, uuid.UUID, model.UserRole) ([]model.User, error)
 	ListTeamleads(context.Context) ([]model.User, error)
@@ -70,11 +60,10 @@ type SessionService interface {
 }
 
 type Dependencies struct {
-	Feedback     FeedbackManager
+	Feedback      FeedbackManager
 	Auth          AuthService
 	Users         UserRepository
 	JWT           *security.JWTService
-	Interns       InternCreator
 	Team          TeamReader
 	Checklists    ChecklistReader
 	Items         ChecklistItemService

@@ -26,6 +26,10 @@ type InitialCredential struct {
 
 type HRSynchronizer struct{ db *sql.DB }
 
+// ErrHRCommitUncertain means PostgreSQL did not confirm whether COMMIT took
+// effect. The already published credentials must be retained.
+var ErrHRCommitUncertain = errors.New("HR sync commit outcome is uncertain; retain credentials file")
+
 func hrProfessionValue(profession *model.Profession) any {
 	if profession == nil {
 		return nil
@@ -90,20 +94,31 @@ func validateHRSnapshot(employees []CorporateEmployee) error {
 	return nil
 }
 
-// Sync applies the complete snapshot atomically. Missing HR entries are kept.
-// Existing password hashes, local IDs and progress are never overwritten.
-func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee) ([]InitialCredential, error) {
+// Sync publishes durable credentials before committing new accounts. The
+// publish callback must atomically create a complete file without replacing
+// an existing one. Missing HR entries, hashes, IDs and progress are kept.
+func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee, publish func([]InitialCredential) error) (newAccounts int, resultErr error) {
+	if publish == nil {
+		return 0, errors.New("credentials publisher is required")
+	}
 	if err := validateHRSnapshot(employees); err != nil {
-		return nil, err
+		return 0, err
 	}
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
-	defer tx.Rollback()
+	commitAttempted := false
+	defer func() {
+		if !commitAttempted {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil && !errors.Is(rollbackErr, sql.ErrTxDone) {
+				resultErr = errors.Join(resultErr, fmt.Errorf("HR sync rollback failed: %w", rollbackErr))
+			}
+		}
+	}()
 	// Serialize concurrent runs before any identity decisions.
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(80520263)`); err != nil {
-		return nil, err
+		return 0, err
 	}
 	type local struct {
 		id          uuid.UUID
@@ -113,13 +128,13 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
 	byCorp, byEmail := map[string]local{}, map[string]local{}
 	rows, err := tx.QueryContext(ctx, `SELECT id, COALESCE(corporate_id,''), email, role FROM users FOR UPDATE`)
 	if err != nil {
-		return nil, err
+		return 0, err
 	}
 	for rows.Next() {
 		var u local
 		if err = rows.Scan(&u.id, &u.corp, &u.email, &u.role); err != nil {
 			rows.Close()
-			return nil, err
+			return 0, err
 		}
 		if u.corp != "" {
 			byCorp[u.corp] = u
@@ -128,7 +143,7 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
 	}
 	if err = rows.Err(); err != nil {
 		rows.Close()
-		return nil, err
+		return 0, err
 	}
 	rows.Close()
 	// Resolve every identity before changing any row. Email is used only once
@@ -142,7 +157,7 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
 		}
 		if u, ok := byEmail[strings.ToLower(e.Email)]; ok && u.corp == "" && u.role == e.Role {
 			if other := used[u.id]; other != "" {
-				return nil, fmt.Errorf("identity conflict for %s", e.ID)
+				return 0, fmt.Errorf("identity conflict for %s", e.ID)
 			}
 			resolved[e.ID] = u.id
 			used[u.id] = e.ID
@@ -153,7 +168,7 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
 			// A pair of linked HR employees may exchange addresses. Their old
 			// addresses are freed before the final profile updates below.
 			if used[u.id] == "" {
-				return nil, fmt.Errorf("email %s belongs to another user", e.Email)
+				return 0, fmt.Errorf("email %s belongs to another user", e.Email)
 			}
 		}
 	}
@@ -166,7 +181,7 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
 			}
 			if !strings.EqualFold(u.email, e.Email) {
 				if _, err = tx.ExecContext(ctx, `UPDATE users SET email=$2 WHERE id=$1`, id, "hr-sync-"+id.String()+"@invalid.local"); err != nil {
-					return nil, err
+					return 0, err
 				}
 			}
 		}
@@ -178,19 +193,19 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
 		}
 		random := make([]byte, 32)
 		if _, err = rand.Read(random); err != nil {
-			return nil, err
+			return 0, err
 		}
 		password := base64.RawURLEncoding.EncodeToString(random)
 		hash, hashErr := security.HashPassword(password)
 		if hashErr != nil {
-			return nil, hashErr
+			return 0, hashErr
 		}
 		id := uuid.New()
 		resolved[e.ID] = id
 		_, err = tx.ExecContext(ctx, `INSERT INTO users(id,corporate_id,email,password_hash,role,profession,department,team,first_name,last_name,telegram_username,birth_date,employed_since)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, id, e.ID, strings.ToLower(e.Email), hash, e.Role, hrProfessionValue(e.Profession), e.Department, e.Team, e.FirstName, e.LastName, e.Telegram, e.BirthDate, e.EmployedSince)
 		if err != nil {
-			return nil, fmt.Errorf("create %s: %w", e.ID, err)
+			return 0, fmt.Errorf("create %s: %w", e.ID, err)
 		}
 		credentials = append(credentials, InitialCredential{e.ID, e.Email, password})
 	}
@@ -205,7 +220,7 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
           first_name=COALESCE($10,first_name),last_name=COALESCE($11,last_name),telegram_username=COALESCE($12,telegram_username),
           birth_date=COALESCE($13::date,birth_date),employed_since=COALESCE($14::date,employed_since) WHERE id=$1`, id, e.ID, strings.ToLower(e.Email), e.Role, hrProfessionValue(e.Profession), e.Department, e.Team, buddy, lead, e.FirstName, e.LastName, e.Telegram, e.BirthDate, e.EmployedSince)
 		if err != nil {
-			return nil, fmt.Errorf("update %s: %w", e.ID, err)
+			return 0, fmt.Errorf("update %s: %w", e.ID, err)
 		}
 		if e.Role != model.RoleIntern {
 			continue
@@ -215,10 +230,10 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
 			var checklist uuid.UUID
 			err = tx.QueryRowContext(ctx, `SELECT id FROM checklists WHERE type=$1 AND ($1='common' OR profession=$2)`, typ, hrProfessionValue(e.Profession)).Scan(&checklist)
 			if errors.Is(err, sql.ErrNoRows) {
-				return nil, fmt.Errorf("missing %s checklist for %s", typ, e.ID)
+				return 0, fmt.Errorf("missing %s checklist for %s", typ, e.ID)
 			}
 			if err != nil {
-				return nil, err
+				return 0, err
 			}
 			_, err = tx.ExecContext(ctx, `INSERT INTO user_checklist_progress(user_id,checklist_id,checklist_item_id,status,position,activated_at)
     SELECT $1,$2,i.id,CASE WHEN i.position=(SELECT MIN(position) FROM checklist_items WHERE checklist_id=$2 AND (assigned_user_id IS NULL OR assigned_user_id=$1))
@@ -228,12 +243,16 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
     FROM checklist_items i WHERE i.checklist_id=$2 AND (i.assigned_user_id IS NULL OR i.assigned_user_id=$1)
     AND NOT EXISTS(SELECT 1 FROM user_checklist_progress p WHERE p.user_id=$1 AND p.checklist_item_id=i.id)`, id, checklist)
 			if err != nil {
-				return nil, fmt.Errorf("initialize progress for %s: %w", e.ID, err)
+				return 0, fmt.Errorf("initialize progress for %s: %w", e.ID, err)
 			}
 		}
 	}
-	if err = tx.Commit(); err != nil {
-		return nil, err
+	if err = publish(credentials); err != nil {
+		return 0, fmt.Errorf("publish initial credentials: %w", err)
 	}
-	return credentials, nil
+	commitAttempted = true
+	if err = tx.Commit(); err != nil {
+		return 0, errors.Join(ErrHRCommitUncertain, err)
+	}
+	return len(credentials), nil
 }

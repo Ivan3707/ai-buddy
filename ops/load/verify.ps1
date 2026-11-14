@@ -12,7 +12,11 @@ $headFile = Get-ChildItem -LiteralPath (Join-Path $root 'apps/backend/migrations
 if (-not $headFile) { throw 'No Goose migration files found.' }
 $head = [int](($headFile.Name -split '_')[0])
 $appliedText = (& docker @compose exec -T postgres psql -U load_user -d ai_buddy_load -X -A -t -v ON_ERROR_STOP=1 -c 'SELECT COALESCE(MAX(version_id),0) FROM goose_db_version WHERE is_applied').Trim()
-if ($LASTEXITCODE -ne 0 -or [int]$appliedText -ne $head) { throw "Goose version $appliedText differs from repository head $head" }
+if ($LASTEXITCODE -ne 0 -or ([int]$appliedText -ne $head -and [int]$appliedText -ne 9)) { throw "Unsupported Goose version $appliedText (repository head $head)" }
+if ([int]$appliedText -eq 9) {
+  $fingerprint = (& docker @compose exec -T postgres psql -U load_user -d ai_buddy_load -X -A -t -v ON_ERROR_STOP=1 -c "SELECT to_regclass('public.checklist_feedback') IS NOT NULL AND to_regclass('public.corporate_access_requests') IS NOT NULL AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='corporate_id')").Trim()
+  if ($LASTEXITCODE -ne 0 -or $fingerprint -ne 't') { throw 'Legacy Goose v9 schema fingerprint mismatch' }
+}
 
 $postgresId = (& docker @compose ps -q postgres).Trim()
 if ($LASTEXITCODE -ne 0 -or -not $postgresId) { throw 'Load PostgreSQL container is missing.' }
@@ -34,4 +38,4 @@ if ($health.status -ne 'ok') { throw 'Backend health smoke test failed.' }
 $onboarding = Invoke-RestMethod -Uri "http://127.0.0.1:$port/api/onboarding?role=backend" -TimeoutSec 10
 if ($null -eq $onboarding) { throw 'Backend onboarding smoke test failed.' }
 
-Write-Host "OK: database=$db; Goose head=$head; volume=$mount; $dbHost; $dbName; API healthy on port $port"
+Write-Host "OK: database=$db; Goose version=$appliedText; volume=$mount; $dbHost; $dbName; API healthy on port $port"

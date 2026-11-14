@@ -1,5 +1,7 @@
 .env
 .env.*
+*credentials*.json
+**/credentials/
 !.env.example
 !.env.load.example
 node_modules/

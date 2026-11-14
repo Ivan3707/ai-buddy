@@ -86,7 +86,6 @@ func NewRouter(
 	Dependencies{
 		Auth:     deps.Auth,
 		Users:    deps.Users,
-		Interns:  deps.Interns,
 		Sessions: deps.Sessions,
 	}.RegisterAuthRoutes(mux, authenticated)
 
@@ -120,11 +119,6 @@ func NewRouter(
 		}.RegisterPersonalRoutes(mux, authenticated)
 	}
 
-	if deps.Interns != nil {
-		Dependencies{
-			Interns: deps.Interns,
-		}.RegisterAssignmentRoutes(mux, authenticated)
-	}
 	if deps.Team != nil {
 		Dependencies{Team: deps.Team}.RegisterTeamRoutes(mux, authenticated)
 	}

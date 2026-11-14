@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,7 +35,7 @@ type progressResponseDTO struct {
 	} `json:"professional"`
 }
 
-// Run explicitly with RUN_E2E=1 and TEST_DATABASE_URL pointing to ai_buddy_test.
+// Run explicitly with RUN_E2E=1 and TEST_DATABASE_URL pointing to an isolated database.
 // This test uses real HTTP requests, services, repositories and PostgreSQL.
 // It creates and cleans up only its own rows. Do not run in parallel with
 // other tests that create global common/backend checklists.
@@ -69,8 +70,8 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	if err := db.QueryRowContext(ctx, "SELECT current_database()").Scan(&dbName); err != nil {
 		t.Fatalf("read database name: %v", err)
 	}
-	if dbName != "ai_buddy_test" {
-		t.Fatalf("unsafe database %q: E2E requires ai_buddy_test", dbName)
+	if dbName != "ai_buddy_test" && !strings.HasPrefix(dbName, "ai_buddy_verify_") {
+		t.Fatalf("unsafe E2E database %q", dbName)
 	}
 	var version int
 	if err := db.QueryRowContext(ctx, `
@@ -79,8 +80,8 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	`).Scan(&version); err != nil {
 		t.Fatalf("read goose version: %v", err)
 	}
-	if version != 9 {
-		t.Fatalf("test database must be at Goose v9, got v%d", version)
+	if version != 1 {
+		t.Fatalf("test database must be at Goose v1, got v%d", version)
 	}
 
 	// Only one common and one backend professional checklist are permitted.
@@ -180,7 +181,6 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 		Auth:          service.NewAuthService(users, jwtService),
 		Users:         users,
 		JWT:           jwtService,
-		Interns:       userService,
 		Team:          userService,
 		PersonalTasks: service.NewPersonalTaskService(db),
 		Checklists:    service.NewChecklistService(db),
@@ -283,8 +283,7 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 		t.Fatalf("create E2E intern fixture: %v", err)
 	}
 	internID = created.ID
-	request(http.MethodPut, "/api/buddy/interns/"+internID.String()+"/teamlead", otherBuddyToken, map[string]string{"teamlead_id": teamleadID.String()}, http.StatusNotFound, nil)
-	request(http.MethodPut, "/api/buddy/interns/"+internID.String()+"/teamlead", buddyToken, map[string]string{"teamlead_id": teamleadID.String()}, http.StatusNoContent, nil)
+	request(http.MethodPut, "/api/buddy/interns/"+internID.String()+"/teamlead", buddyToken, map[string]string{"teamlead_id": teamleadID.String()}, http.StatusNotFound, nil)
 
 	request(http.MethodPost, "/api/auth/login", "", map[string]string{
 		"email": internEmail, "password": "wrong-password",

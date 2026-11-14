@@ -61,7 +61,7 @@ func Run() error {
 	progress := service.NewProgressService(db)
 	userService := service.NewUserService(db)
 	deps := handler.Dependencies{
-		Feedback:     service.NewFeedbackService(db, service.MockAnalytics{DB: db, Unavailable: os.Getenv("ANALYTICS_MOCK_UNAVAILABLE") == "1"}),
+		Feedback:      service.NewFeedbackService(db, service.MockAnalytics{DB: db, Unavailable: os.Getenv("ANALYTICS_MOCK_UNAVAILABLE") == "1"}),
 		Auth:          auth,
 		Sessions:      auth,
 		SessionCheck:  sessionRepo,
@@ -71,7 +71,6 @@ func Run() error {
 		Corporate:     service.NewCorporateService(db, directory),
 		Users:         users,
 		JWT:           jwtService,
-		Interns:       userService,
 		Team:          userService,
 		Checklists:    service.NewChecklistService(db),
 		Items:         progress,

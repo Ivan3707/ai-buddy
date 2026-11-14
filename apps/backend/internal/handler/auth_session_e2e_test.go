@@ -36,11 +36,11 @@ func TestAuthSessionsHTTPIntegration(t *testing.T) {
 	if err = db.QueryRowContext(ctx, `SELECT current_database()`).Scan(&dbName); err != nil {
 		t.Fatal(err)
 	}
-	if dbName != "ai_buddy_test" {
+	if dbName != "ai_buddy_test" && !strings.HasPrefix(dbName, "ai_buddy_verify_") {
 		t.Fatalf("unsafe DB %q", dbName)
 	}
-	if err = db.QueryRowContext(ctx, `SELECT max(version_id) FROM goose_db_version WHERE is_applied`).Scan(&version); err != nil || version != 9 {
-		t.Fatalf("expected Goose v9: %d %v", version, err)
+	if err = db.QueryRowContext(ctx, `SELECT max(version_id) FROM goose_db_version WHERE is_applied`).Scan(&version); err != nil || version != 1 {
+		t.Fatalf("expected Goose v1: %d %v", version, err)
 	}
 	hash, err := security.HashPassword("strong-password-123")
 	if err != nil {

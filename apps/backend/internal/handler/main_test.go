@@ -388,62 +388,7 @@ func TestAuthServiceRepositoryErrorIsNotExposed(t *testing.T) {
 	}
 }
 
-type testInternCreator struct {
-	user       *model.User
-	err        error
-	called     bool
-	email      string
-	profession model.Profession
-	buddyID    uuid.UUID
-}
-
-func (s *testInternCreator) CreateIntern(
-	ctx context.Context,
-	email string,
-	passwordHash string,
-	profession model.Profession,
-	buddyID uuid.UUID,
-) (*model.User, error) {
-	s.called = true
-	s.email = email
-	s.profession = profession
-	s.buddyID = buddyID
-
-	if profession != model.ProfessionBackend &&
-		profession != model.ProfessionFrontend &&
-		profession != model.ProfessionML {
-		return nil, service.ErrInvalidProfession
-	}
-
-	if s.err != nil {
-		return nil, s.err
-	}
-
-	user := &model.User{
-		ID:           uuid.New(),
-		Email:        email,
-		PasswordHash: passwordHash,
-		Role:         model.RoleIntern,
-		Profession:   &profession,
-		CreatedAt:    time.Now().UTC(),
-	}
-
-	s.user = user
-	return user, nil
-}
-
-func (s *testInternCreator) CreateInternWithAssignments(ctx context.Context, email, passwordHash string, profession model.Profession, buddyID, teamleadID uuid.UUID, birthDate, employedSince time.Time, firstName, lastName, telegram, department, team string) (*model.User, error) {
-	user, err := s.CreateIntern(ctx, email, passwordHash, profession, buddyID)
-	if err == nil {
-		user.TeamleadID = &teamleadID
-	}
-	return user, err
-}
-
-func newTeamleadHandler(
-	t *testing.T,
-	interns handler.InternCreator,
-) (http.Handler, string) {
+func newTeamleadHandler(t *testing.T) (http.Handler, string) {
 	t.Helper()
 
 	user := &model.User{
@@ -474,23 +419,21 @@ func newTeamleadHandler(
 		"",
 		[]byte(demo),
 		handler.Dependencies{
-			Auth:    auth,
-			Users:   users,
-			JWT:     jwtService,
-			Interns: interns,
+			Auth:  auth,
+			Users: users,
+			JWT:   jwtService,
 		},
 	)
 
 	return handler, token
 }
 func TestCreateInternHTTPRemoved(t *testing.T) {
-	internCreator := &testInternCreator{}
-	router, token := newTeamleadHandler(t, internCreator)
+	router, token := newTeamleadHandler(t)
 	for _, candidate := range []string{"", token} {
 		w := httptest.NewRecorder()
 		router.ServeHTTP(w, authorizedRequest(http.MethodPost, "/api/users", `{}`, candidate))
-		if w.Code != http.StatusNotFound || internCreator.called {
-			t.Fatalf("public creation: status=%d called=%v", w.Code, internCreator.called)
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("public creation: status=%d", w.Code)
 		}
 	}
 }

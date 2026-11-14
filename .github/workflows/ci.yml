@@ -13,8 +13,6 @@ jobs:
       DB_NAME: app
       JWT_SECRET: ci_only_jwt_secret_replace_in_real_environments_123456789
       TEST_DATABASE_URL: postgres://app:ci_only_database_password@127.0.0.1:5433/ai_buddy_test?sslmode=disable
-      BOOTSTRAP_BUDDY_EMAIL: buddy-ci@example.com
-      BOOTSTRAP_BUDDY_PASSWORD: ci_only_buddy_password_123456
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -65,29 +63,24 @@ jobs:
           npm test
           npm run build
 
-      - name: Seed application database
-        run: docker compose -p ai-buddy-ci exec -T postgres psql -U app -d app -v ON_ERROR_STOP=1 < apps/backend/scripts/seed_demo_checklists_v1.sql
-
-      - name: Start application stack
-        run: docker compose -p ai-buddy-ci up --build -d --wait
-
-      - name: Bootstrap CI buddy
+      - name: Initialize catalog and sync Mock HR
         working-directory: apps/backend
         env:
           DB_HOST: 127.0.0.1
           DB_PORT: "5433"
           DB_SSLMODE: disable
-          BOOTSTRAP_BUDDY_EMAIL: buddy-ci@example.com
-          BOOTSTRAP_BUDDY_PASSWORD: ci_only_buddy_password_123456
-        run: go run ./cmd/bootstrap-buddy
+        run: |
+          go run ./cmd/init-catalog
+          go run ./cmd/sync-hr -credentials "$RUNNER_TEMP/ai-buddy-ci-credentials.json"
+          echo "E2E_CREDENTIALS_FILE=$RUNNER_TEMP/ai-buddy-ci-credentials.json" >> "$GITHUB_ENV"
+
+      - name: Start application stack
+        run: docker compose -p ai-buddy-ci up --build -d --wait
 
       - name: Live contract checks
         run: CHECK_LIVE=1 python scripts/check_contracts.py
 
       - name: Browser tests
-        env:
-          E2E_BUDDY_EMAIL: ${{ env.BOOTSTRAP_BUDDY_EMAIL }}
-          E2E_BUDDY_PASSWORD: ${{ env.BOOTSTRAP_BUDDY_PASSWORD }}
         run: |
           npx playwright install --with-deps chromium
           npm run test:e2e

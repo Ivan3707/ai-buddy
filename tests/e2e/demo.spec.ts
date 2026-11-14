@@ -1,10 +1,14 @@
 import { test, expect, chromium, type Page } from '@playwright/test';
 import path from 'node:path';
+import { readFileSync } from 'node:fs';
 
-function requiredCredential(name: string) {
-  const value = process.env[name];
-  if (!value) throw new Error(`${name} must be set for authenticated E2E tests`);
-  return value;
+function initialPassword(email: string) {
+  const file = process.env.E2E_CREDENTIALS_FILE;
+  if (!file) throw new Error('E2E_CREDENTIALS_FILE must be set for authenticated E2E tests');
+  const credentials = JSON.parse(readFileSync(file, 'utf8')) as Array<{ email: string; password: string }>;
+  const account = credentials.find(item => item.email === email);
+  if (!account) throw new Error(`No initial credential for ${email}`);
+  return account.password;
 }
 
 async function loginWeb(page: Page, email: string, password: string) {
@@ -14,7 +18,6 @@ async function loginWeb(page: Page, email: string, password: string) {
 }
 
 test('role-oriented Web works for intern, buddy and teamlead', async ({ page }) => {
-  const password = requiredCredential('E2E_DEMO_PASSWORD');
   const cases = [
     { email: 'backend.intern@demo.example', heading: 'Мои чек-листы', route: 'checklists' },
     { email: 'buddy@demo.example', heading: 'Команда', route: 'team' },
@@ -22,7 +25,7 @@ test('role-oriented Web works for intern, buddy and teamlead', async ({ page }) 
   ];
   for (const item of cases) {
     await page.goto('/');
-    await loginWeb(page, item.email, password);
+    await loginWeb(page, item.email, initialPassword(item.email));
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await page.getByTestId(`nav-${item.route}`).click();
     await expect(page.getByRole('heading', { name: item.heading, level: 1 })).toBeVisible();
@@ -35,7 +38,7 @@ test('role-oriented Web works for intern, buddy and teamlead', async ({ page }) 
 
 test('intern opens calendar, notes, requests and mock AI', async ({ page }) => {
   await page.goto('/');
-  await loginWeb(page, 'ml.intern@demo.example', requiredCredential('E2E_DEMO_PASSWORD'));
+  await loginWeb(page, 'ml.intern@demo.example', initialPassword('ml.intern@demo.example'));
   for (const [route, heading] of [['calendar', 'Календарь'], ['notes', 'Заметки'], ['requests', 'Корпоративные инструменты'], ['chat', 'AI-помощник']]) {
     await page.getByTestId(`nav-${route}`).click();
     await expect(page.getByRole('heading', { name: heading, level: 1 })).toBeVisible();
@@ -46,9 +49,8 @@ test('intern opens calendar, notes, requests and mock AI', async ({ page }) => {
 });
 
 test('Web UX exposes task details, calendar, tools and role actions without writes', async ({ page }) => {
-  const password = requiredCredential('E2E_DEMO_PASSWORD');
   await page.goto('/');
-  await loginWeb(page, 'backend.intern@demo.example', password);
+  await loginWeb(page, 'backend.intern@demo.example', initialPassword('backend.intern@demo.example'));
   await page.getByTestId('nav-checklists').click();
   const firstTask = page.locator('.task-row').first();
   await expect(firstTask).toBeVisible();
@@ -62,13 +64,13 @@ test('Web UX exposes task details, calendar, tools and role actions without writ
   await expect(page.locator('.catalog-list article').first()).toBeVisible();
   await expect(page.locator('.catalog-list button:disabled').first()).toBeVisible();
   await page.getByTitle('Выйти').click();
-  await loginWeb(page, 'buddy@demo.example', password);
+  await loginWeb(page, 'buddy@demo.example', initialPassword('buddy@demo.example'));
   await page.getByTestId('nav-team').click();
   await expect(page.getByRole('button', { name: '+ Стажёр' })).toHaveCount(0);
   await page.getByTitle('Выйти').click();
-  await loginWeb(page, 'teamlead@demo.example', password);
+  await loginWeb(page, 'teamlead@demo.example', initialPassword('teamlead@demo.example'));
   await page.getByTestId('nav-team').click();
-  await expect(page.getByRole('button', { name: '+ Стажёр' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '+ Стажёр' })).toHaveCount(0);
   await page.getByRole('button', { name: '+ Задача' }).click();
   await expect(page.getByRole('dialog').getByLabel('Позиция в профессиональном чек-листе')).toBeVisible();
   await page.getByRole('button', { name: 'Закрыть' }).click();
@@ -79,8 +81,8 @@ test('Web UX exposes task details, calendar, tools and role actions without writ
 });
 
 test('real MV3 popup logs in and calls authenticated chat', async () => {
-  const buddyEmail = requiredCredential('E2E_BUDDY_EMAIL');
-  const buddyPassword = requiredCredential('E2E_BUDDY_PASSWORD');
+  const buddyEmail = 'buddy@demo.example';
+  const buddyPassword = initialPassword(buddyEmail);
   const extension = path.resolve('apps/extension/dist');
   const context = await chromium.launchPersistentContext('', {
     channel: 'chrome', headless: process.env.E2E_EXTENSION_HEADED !== '1',

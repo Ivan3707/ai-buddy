@@ -1,25 +1,21 @@
 -- AI-Buddy Demo Checklist v1 (DRAFT; not an official Avito onboarding program).
 -- Scope: one common and one backend-professional checklist; 3 stages and 12 items each.
--- Designed for PostgreSQL at Goose v3. Safe on repeated executions:
+-- Catalog data for fresh Goose v1. Safe on repeated executions:
 --   * if exact same content exists: no changes;
 --   * if another common/backend checklist exists: abort the transaction;
 --   * never UPDATE/DELETE existing content, users, progress, or submissions.
--- Run explicitly with psql -v ON_ERROR_STOP=1 -f seed_demo_checklists_v1.sql.
--- Transaction protects against partial writes. Use only on app or ai_buddy_test.
+-- Run through cmd/init-catalog so all profession scripts share one transaction.
 BEGIN;
 
 SELECT pg_advisory_xact_lock(20261111, 24001);
 
 DO $$
-DECLARE dbname text := current_database(); v integer;
+DECLARE v integer;
 BEGIN
-  IF dbname NOT IN ('app', 'ai_buddy_test') THEN
-    RAISE EXCEPTION 'Refusing seed in unexpected database: %', dbname;
-  END IF;
   SELECT COALESCE(MAX(version_id), 0) INTO v
   FROM goose_db_version WHERE is_applied;
-  IF v <> 3 THEN
-    RAISE EXCEPTION 'Goose schema version 3 required; current: %', v;
+  IF v <> 1 THEN
+    RAISE EXCEPTION 'Goose schema version 1 required; current: %', v;
   END IF;
 END $$;
 

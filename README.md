@@ -1,469 +1,75 @@
-# AI-buddy · Hack&Change 2026
+# AI-Buddy
 
-**AI-Buddy** — демонстрационная платформа адаптации стажёров: персональные чек-листы, этапы онбординга, отслеживание прогресса, отправка результатов заданий на проверку наставнику (*buddy*) и AI-чат с ответами по демонстрационной базе знаний.
+AI-Buddy — платформа адаптации стажёров: Go Backend, PostgreSQL, React Web, Python AI и расширение Chrome. Buddy проверяет задания; Teamlead видит профессиональный прогресс и добавляет персональные задания. Учётные записи и назначения Buddy/Teamlead приходят из Mock HR.
 
-> Проект — MVP для хакатона. Данные и сценарии адаптации демонстрационные; это не официальная программа онбординга Авито. Не размещайте систему в открытом интернете без дополнительной защиты.
+## Запуск с чистой БД
 
-## Технологии
+Нужны Go 1.26, Node.js 22, Docker Compose и Goose (`go install github.com/pressly/goose/v3/cmd/goose@v3.24.1`). `00001_init.sql` создаёт итоговую схему прежней v9, но имеет версию Goose 1. **Команды ниже предназначены только для новой пустой БД.** Не применяйте эту миграцию поверх существующих БД с историей v8/v9 и не удаляйте существующие БД или Docker volumes.
 
-### Backend API для следующего этапа Web
+Из корня проекта в Windows PowerShell:
 
-- `POST /api/users` — только Teamlead. Передать `email`, `password`, `profession` (`backend|frontend|ml`), `buddy_id`, `first_name`, `last_name`, `department`, `team`, `birth_date`, `employed_since`; `telegram_username` необязателен. Teamlead определяется по JWT. Ошибки: `400` некорректное поле, `403` роль/Buddy, `409` повтор email. Все ошибки — JSON `{"error":"..."}`.
-- `GET /api/staff/buddies` — Teamlead получает публичный список Buddy. `GET /api/staff/interns` возвращает только назначенных текущему сотруднику стажёров.
-- `POST /api/teamlead/interns/{internID}/checklist-items` — `position` с 1, `title`, `description`, `expected_result`, `estimated_minutes`, `requires_review`, необязательный `due_at` в RFC3339. Ответ `201` с `id`; `400` неверные данные/позиция, `404` чужой стажёр. `GET /api/checklists` и progress содержат `due_at` у задания.
-- `GET /api/auth/me` — публичный профиль с `profession`, назначениями, `age_years` и `tenure_months` при наличии исходных дат. Стаж рассчитывается от `employed_since`.
-- `GET /api/corporate/tools` — каталог `{tool,allowed}` для стажёра; `POST /api/corporate/access-requests` принимает `tool`, `idempotency_key` и `confirm: true` и повторно проверяет разрешение. `GET /api/corporate/access-requests` и `GET /api/corporate/access-requests/{id}` возвращают только заявки текущего пользователя.
-
-Для новой версии Backend требуется Goose `00008` после `00007`. `app` не обновлена в рамках этапа 1: перед применением миграций нужно отдельно подтвердить цель, резервную копию и окно работ.
-
-| Компонент | Стек |
-|---|---|
-| Backend | Go 1.26, стандартный `net/http`, `pgx`, JWT |
-| База данных | PostgreSQL 16 |
-| Миграции | Goose, SQL |
-| Web | React 19, TypeScript 5.8, Vite 6 |
-| AI | Python 3.12, FastAPI, демонстрационная KB |
-| Расширение | Chrome Extension Manifest V3 |
-| Инфраструктура | Docker Compose |
-| Тесты | Go tests, pytest, Node test runner, Playwright |
-
-## Быстрый запуск на чистой машине
-
-### 1. Установить инструменты
-
-Для приведённого ниже **текущего** сценария необходимы:
-
-1. **Git** — клонировать репозиторий.
-2. **Docker Desktop** (Windows/macOS) либо **Docker Engine + Compose v2** (Linux) — запустить PostgreSQL, AI, backend и web.
-3. **Go 1.26** — установить Goose и выполнить `bootstrap-buddy`.
-4. **Goose** — применить SQL-миграции.
-
-**Node.js 22.12+** нужен для локальной разработки web, сборки расширения и UI-тестов. **Python 3.12** нужен для локальной разработки AI и его тестов. Для запуска готовых Compose-сервисов отдельно устанавливать Node.js и Python не требуется.
-
-Проверьте установку:
-
-```bash
-git --version
-docker --version
-docker compose version
-go version
+```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+# Задайте DB_PASSWORD и JWT_SECRET в .env, затем загрузите переменные:
+Get-Content .env | Where-Object { $_ -match '^[A-Z_]+=' } | ForEach-Object {
+  $key, $value = $_ -split '=', 2
+  [Environment]::SetEnvironmentVariable($key, $value, 'Process')
+}
+docker compose up -d --wait postgres
+$history = docker compose exec -T postgres psql -U $env:DB_USER -d $env:DB_NAME -Atc "SELECT to_regclass('public.goose_db_version')"
+if ($LASTEXITCODE -ne 0 -or $history -match 'goose_db_version') { throw 'Нужна новая пустая БД; текущую не мигрировать' }
+$dsn = "host=127.0.0.1 port=5433 user=$env:DB_USER password=$env:DB_PASSWORD dbname=$env:DB_NAME sslmode=disable"
+goose -dir apps/backend/migrations postgres $dsn up
+Set-Location apps/backend
+$env:DB_HOST = '127.0.0.1'
+$env:DB_PORT = '5433'
+$env:DB_SSLMODE = 'disable'
+go run ./cmd/init-catalog
+$credentials = Join-Path $env:LOCALAPPDATA ('ai-buddy\credentials\hr-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.json')
+go run ./cmd/sync-hr -snapshot ../../data/corporate_employees.json -credentials $credentials
+Set-Location ../..
+docker compose up --build -d --wait
 ```
 
-Установите Goose (при наличии Go):
+Web: <http://127.0.0.1:5173>; Backend: <http://127.0.0.1:8080/health>. Если том PostgreSQL уже существует, выберите новую БД и создайте её отдельно до запуска команд; не меняйте историю миграций старой БД. `docker compose --env-file .env config --quiet` проверяет конфигурацию, `docker compose ps` показывает состояние сервисов. `docker compose stop` останавливает сервисы, сохраняя данные.
 
-```bash
-go install github.com/pressly/goose/v3/cmd/goose@latest
-```
+## Первичные пароли
 
-Убедитесь, что каталог бинарников Go (`$(go env GOPATH)/bin`) входит в `PATH`. Проверьте `goose -version`. На Windows Git Bash при необходимости используйте `"$(go env GOPATH)/bin/goose.exe" -version`.
+`cmd/sync-hr` генерирует случайные пароли только для новых сотрудников. В PostgreSQL сохраняются только Argon2id-хеши. JSON-файл создаётся по абсолютному пути `-credentials` вне Git-репозитория, с закрытыми правами и без замены существующего файла. Рекомендуемая папка Windows: `%LOCALAPPDATA%\ai-buddy\credentials\`. Повторная синхронизация сохраняет пароли и прогресс существующих пользователей; её новый файл содержит `[]`, если новых аккаунтов нет.
 
-### 2. Клонировать репозиторий
+Полный файл публикуется до `COMMIT`. При ошибке записи транзакция откатывается. Если результат `COMMIT` неизвестен, сохраните файл: в нём остаются первичные пароли на случай успешного commit. Проверьте состояние БД перед повторной синхронизацией. Не выводите содержимое файла в логи и не храните открытые пароли в `data/corporate_employees.json`, `.env` или репозитории.
 
-```bash
-git clone https://github.com/nvkmaksim/ai-buddy.git
-cd ai-buddy
-```
+## Инициализация и команды
 
-> README описывает изменения, которые ещё могут находиться в ветке `backend` и не быть опубликованы в основной ветке. После публикации используйте ветку/коммит, содержащие миграцию `00003`, seed и `bootstrap-buddy`.
+1. Goose создаёт только схему (`apps/backend/migrations/00001_init.sql`).
+2. `cmd/init-catalog` в одной транзакции применяет общий, Backend, Frontend и ML чек-листы из `apps/backend/scripts`. Точный повтор не меняет данные; конфликт приводит к отказу без сброса прогресса.
+3. `cmd/sync-hr` читает `data/corporate_employees.json`, создаёт и обновляет сотрудников, связывает Buddy/Teamlead и добавляет недостающий прогресс. Отсутствующие в новом снимке HR пользователи сохраняются.
+4. `cmd/api` запускает API. `cmd/retry-feedback` повторяет отправку обратной связи. `cmd/seed-load` и `cmd/cleanup-load` обслуживают отдельный нагрузочный стенд.
 
-### 3. Создать корневой `.env`
-
-```bash
-cp .env.example .env
-```
-
-В PowerShell: `Copy-Item .env.example .env`.
-
-Приведите **корневой** `.env` к следующему виду, задав собственные значения секретов:
-
-```dotenv
-WEB_PORT=5173
-BACKEND_PORT=8080
-DB_USER=app
-DB_PASSWORD=REPLACE_WITH_A_STRONG_LOCAL_PASSWORD
-DB_NAME=app
-JWT_SECRET=REPLACE_WITH_A_LONG_RANDOM_SECRET
-```
-
-Для генерации случайного JWT-секрета можно использовать Python:
-
-```bash
-python -c 'import secrets; print(secrets.token_hex(32))'
-```
-
-Или OpenSSL: `openssl rand -hex 32`.
-
-**Важно:** в текущем `.env.example` ранее находилось конкретное значение `JWT_SECRET`. Не используйте его как общий секрет при публикации. Для корректного запуска заполните собственные значения. Не коммитьте `.env`.
-
-Параметры `DB_HOST` и `DB_PORT` в корневом `.env` не нужны для Compose: backend внутри сети подключается к `postgres:5432`; с хост-машины PostgreSQL доступен на `127.0.0.1:5433`.
-
-### 4. Запустить PostgreSQL
-
-```bash
-docker compose -p ai-buddy up -d postgres
-docker compose -p ai-buddy ps
-```
-
-Дождитесь статуса `healthy`. Контейнер базы называется `ai-buddy-postgres`.
-
-### 5. Применить миграции Goose
-
-Из корня репозитория выполните команды в **Git Bash** (или другой POSIX-оболочке):
-
-```bash
-set -a
-source .env
-set +a
-
-export GOOSE_DRIVER=postgres
-export GOOSE_DBSTRING="host=127.0.0.1 port=5433 user=${DB_USER} password=${DB_PASSWORD} dbname=${DB_NAME} sslmode=disable"
-
-goose -dir apps/backend/migrations up
-goose -dir apps/backend/migrations status
-```
-
-Должны примениться миграции:
-
-- `00001_init.sql` — пользователи, чек-листы, задания, прогресс;
-- `00002_checklist_stages_and_buddy.sql` — этапы и роль buddy;
-- `00003_checklist_submissions_and_progress.sql` — результаты заданий, ревью и дополнительные ограничения.
-- `00004_profiles_sessions.sql` — поля профиля и refresh-сессии;
-- `00005_personal_tasks_hints.sql` — персональные задания, индивидуальный порядок и подсказки;
-- `00006_calendar_notes.sql` — личные события и заметки.
-- `00007_teamlead_profile_and_requests.sql` — отдельная роль teamlead, даты профиля и заявки на доступ.
-
-**Замечание по безопасности:** не публикуйте вывод команд с секретами; не сохраняйте строку подключения в Git. Если пароль содержит символы, значимые для синтаксиса строки подключения, потребуется корректное экранирование.
-
-### 6. Заполнить демонстрационные чек-листы
-
-Существующий seed рассчитан только на Goose v3 и откажется работать после миграции `00004`–`00007`. Не запускайте его на схеме v7. Отдельный `apps/backend/scripts/seed_demo_ml_checklist_v1.sql` подготовлен для Goose v7, но не загружается автоматически. Пример ниже сохраняется как историческая инструкция для стенда v3, а не как шаг обновления основной БД.
-
-```bash
-docker exec -i ai-buddy-postgres \
-  psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 \
-  < apps/backend/scripts/seed_demo_checklists_v1.sql
-```
-
-Ожидается два чек-листа: `common` и `professional/backend`, по 3 этапа и 12 заданий каждый. Скрипт повторно запускать можно при **точном совпадении** данных; если существующие чек-листы отличаются, он завершится ошибкой вместо перезаписи.
-
-### 7. Создать первую учётную запись buddy
-
-Команда `apps/backend/cmd/bootstrap-buddy` — необходимая административная утилита, а не временный тест.
-
-В Git Bash из корня проекта:
-
-```bash
-export DB_HOST=127.0.0.1
-export DB_PORT=5433
-export DB_USER DB_PASSWORD DB_NAME
-export DB_SSLMODE=disable
-
-read -r -p 'Buddy email: ' BOOTSTRAP_BUDDY_EMAIL
-read -r -s -p 'Buddy password (min 12 characters): ' BOOTSTRAP_BUDDY_PASSWORD
-echo
-export BOOTSTRAP_BUDDY_EMAIL BOOTSTRAP_BUDDY_PASSWORD
-
-(cd apps/backend && go run ./cmd/bootstrap-buddy)
-
-unset BOOTSTRAP_BUDDY_PASSWORD BOOTSTRAP_BUDDY_EMAIL
-```
-
-Пароль не выводится при вводе. Если пользователь с таким email уже существует, команда **не меняет** его пароль. Не добавляйте `BOOTSTRAP_BUDDY_PASSWORD` в `.env.example` или Git.
-
-### 8. Собрать и запустить приложение
-
-```bash
-docker compose -p ai-buddy up --build -d --wait
-docker compose -p ai-buddy ps
-```
-
-Адреса:
-
-| Сервис | URL |
-|---|---|
-| Web | http://127.0.0.1:5173 |
-| Backend health | http://127.0.0.1:8080/health |
-| PostgreSQL | `127.0.0.1:5433` (не HTTP) |
-| AI | Только внутри Docker-сети, `http://ai:8001` |
-
-Откройте Web, войдите под созданным buddy, создайте стажёра с профессией `backend`, затем проверьте отображение чек-листов, отправку задания и его ревью.
-
-Логи и остановка:
-
-```bash
-docker compose -p ai-buddy logs -f backend
-docker compose -p ai-buddy logs -f postgres
-docker compose -p ai-buddy down
-```
-
-`docker compose down` **не удаляет** именованный том БД. Команда `docker compose down -v` удалит данные PostgreSQL — используйте её только если осознанно хотите начать с чистой базы.
-
-## Переменные окружения
-
-| Переменная | Где используется | Назначение |
-|---|---|---|
-| `WEB_PORT` | Compose | Порт веб-интерфейса на хосте, по умолчанию `5173` |
-| `BACKEND_PORT` | Compose | Порт Go API на хосте, по умолчанию `8080` |
-| `DB_USER` | Compose / Go | Пользователь PostgreSQL |
-| `DB_PASSWORD` | Compose / Go | Пароль PostgreSQL |
-| `DB_NAME` | Compose / Go | Имя базы; demo seed ожидает `app` |
-| `DB_HOST` | Go | `postgres` внутри Compose, `127.0.0.1` локально |
-| `DB_PORT` | Go | `5432` внутри Compose, `5433` локально |
-| `DB_SSLMODE` | Go | Для локального Compose — `disable` |
-| `JWT_SECRET` | Backend | Ключ подписи JWT, обязателен |
-| `AI_URL` | Backend | Адрес AI-сервиса |
-| `DATA_DIR` | Backend / AI | Каталог демонстрационных JSON-данных |
-| `BOOTSTRAP_BUDDY_EMAIL` | Bootstrap | Email первоначального buddy |
-| `BOOTSTRAP_BUDDY_PASSWORD` | Bootstrap | Пароль первоначального buddy, минимум 12 символов |
-| `TEST_DATABASE_URL` | Интеграционные Go-тесты | DSN отдельной тестовой базы |
-
-**Два `.env`:** Docker Compose автоматически читает **корневой** `.env`; Go-приложение само по себе `.env` **не загружает**, а читает переменные процесса через `os.Getenv`. Поэтому `apps/backend/.env` необязателен: при локальном запуске экспортируйте переменные из корневого файла и задайте `DB_HOST=127.0.0.1`, `DB_PORT=5433`. Не дублируйте секреты без необходимости. `apps/backend/.env.test` также не требуется для Docker Compose; его использование зависит от способа запуска локальных тестов.
-
-**Предупреждение:** если PostgreSQL уже инициализирован, изменение `DB_USER`, `DB_PASSWORD` или `DB_NAME` в `.env` не перенастраивает автоматически существующий том. Сохраните прежние параметры или выполните осознанную миграцию конфигурации.
-
-## Локальная разработка
-
-### Go backend
-
-Запустите PostgreSQL через Compose и примените миграции (шаги выше). Затем в Git Bash из корня:
-
-```bash
-set -a
-source .env
-set +a
-export DB_HOST=127.0.0.1 DB_PORT=5433 DB_SSLMODE=disable
-export AI_URL=http://127.0.0.1:8001
-
-cd apps/backend
-go run .
-```
-
-При запуске без Docker backend ожидает доступный AI-сервис. Для него откройте отдельный терминал:
-
-### Python AI
-
-```bash
-python -m venv .venv
-# Git Bash на Windows:
-source .venv/Scripts/activate
-# Linux/macOS: source .venv/bin/activate
-python -m pip install -r apps/ai/requirements-dev.txt
-python -m uvicorn app.main:app --app-dir apps/ai --host 127.0.0.1 --port 8001
-```
-
-### React Web
-
-Из корня в отдельном терминале:
-
-```bash
-npm ci
-npm run dev --workspace @ai-buddy/web
-```
-
-Vite проксирует `/api` в backend. При локальном запуске сервисы должны быть доступны на согласованных портах.
-
-## Тестирование
-
-### Go
-
-```bash
-cd apps/backend
-go test ./...
-go vet ./...
-```
-
-Для интеграционных тестов нужна отдельная БД `ai_buddy_test` с актуальной схемой. Создайте её при работающем PostgreSQL:
-
-```bash
-# Из корня проекта, после загрузки переменных .env
-docker exec ai-buddy-postgres psql -U "$DB_USER" -d "$DB_NAME" \
-  -c 'CREATE DATABASE ai_buddy_test;'
-```
-
-Команда создания базы нужна только один раз; при повторном запуске PostgreSQL сообщит, что база существует.
-
-Примените миграции к тестовой БД:
-
-```bash
-export TEST_DATABASE_URL="host=127.0.0.1 port=5433 user=${DB_USER} password=${DB_PASSWORD} dbname=ai_buddy_test sslmode=disable"
-GOOSE_DBSTRING="$TEST_DATABASE_URL" goose -dir apps/backend/migrations up
-```
-
-Для Go-интеграционных тестов нужен Goose v6. Seed в `ai_buddy_test` не требуется: тесты создают собственные fixtures и удаляют их. Не запускайте тесты против основной базы `app`.
-
-```bash
-cd apps/backend
-RUN_E2E=1 go test -count=1 -p 1 ./...
-go vet ./...
-go build ./...
-```
-
-> Проверка тестов на чистой машине ещё не выполнена. Некоторые интеграционные тесты используют `TEST_DATABASE_URL`, а Dockerfile backend содержит `RUN go test ./...` во время сборки. Это нужно проверить отдельно: контейнер сборки не получает тестовую PostgreSQL автоматически.
-
-## Расширение Chrome (Manifest V3)
-
-```sh
-npm ci
-npm run build --workspace @ai-buddy/extension
-```
-
-В Chrome откройте `chrome://extensions`, включите режим разработчика → «Загрузить распакованное расширение» → выберите `apps/extension/dist`. Закрепите AI-buddy, нажмите иконку и отправьте вопрос. Backend должен быть запущен. Расширение не читает страницы, не запрашивает cookies, history или tabs. Только разрешение на локальный Backend. Popup и веб используют `packages/client`.
+Ручной `PUT /api/buddy/interns/{internID}/teamlead` удалён. На существующей нагрузочной БД v9 миграционный контейнер проверяет схему и не применяет новую историю; чистая нагрузочная БД получает v1. Рабочий нагрузочный стенд сейчас находится на v8: его данные не менялись, а новый запуск с этой кодовой базой безопасно остановится. Обновление до v9 разрешено **позже отдельной операцией** после backup и согласования окна. Не направляйте демо и тестовые команды на рабочее нагрузочное окружение.
 
 ## Проверки
 
-```sh
-# из apps/backend
-go test -race ./...
-go vet ./...
-# из apps/ai (Python-окружение активировано)
-python -m pytest -q
-# из корня
-python scripts/check_contracts.py
-npm test
-npm run build
-npx playwright install chromium
-# при работающем Compose-стенде
-npm run test:e2e
-```
-
-Live-проверка контрактов: `CHECK_LIVE=1 python scripts/check_contracts.py` (PowerShell: `$env:CHECK_LIVE='1'; python scripts/check_contracts.py`). E2E открывает веб и настоящее распакованное расширение в тестовом Chromium. Проверяет ответ по цепочке UI → Go → Python, роли и чекбоксы. CI выполняет unit-тесты, vet, сборки, валидацию OpenAPI, Compose, live-контракты и браузерные тесты. Падения AI и некорректный JSON отдельно проверяются Go-тестами.
-
-## Структура репозитория
-
-```text
-ai-buddy/
-├── apps/
-│   ├── ai/                    # Python / FastAPI, демо AI
-│   ├── backend/               # Go API
-│   │   ├── cmd/bootstrap-buddy/ # Первоначальное создание buddy
-│   │   ├── internal/          # model, repository, service, security, database
-│   │   ├── migrations/        # Goose 00001–00006
-│   │   └── scripts/           # SQL seed
-│   ├── web/                   # React / TypeScript / Vite
-│   └── extension/             # Chrome MV3
-├── packages/client/          # Общий HTTP-клиент
-├── contracts/                # OpenAPI
-├── data/                     # Синтетические данные
-├── docs/                     # Архитектура и сценарии
-├── tests/e2e/                # Playwright
-├── compose.yaml
-└── .env.example
-```
-
-## Основные модели PostgreSQL
-
-| Таблица | Назначение |
-|---|---|
-| `users` | Пользователи, роли, профессия, buddy, последний вход |
-| `checklists` | Общие и профессиональные чек-листы |
-| `checklist_stages` | Этапы адаптации |
-| `checklist_items` | Задания, критерии результата, необходимость ревью |
-| `user_checklist_progress` | Индивидуальные статусы заданий |
-| `checklist_item_submissions` | Попытки отправки результата и решения buddy |
-
-Детальное описание типов, полей и ограничений: [документация моделей](docs/models.md) (добавьте ранее подготовленный файл `AI_BUDDY_MODELS.md` по этому пути).
-
-## API (основные маршруты)
-
-| Метод | Маршрут | Назначение |
-|---|---|---|
-| `GET` | `/health` | Проверка backend |
-| `POST` | `/api/auth/login` | Вход |
-| `GET` | `/api/auth/me` | Текущий пользователь |
-| `POST` | `/api/users` | Создание стажёра (buddy) |
-| `GET` | `/api/checklists` | Чек-листы стажёра |
-| `POST` | `/api/checklist-items/{itemID}/complete` | Завершение задания |
-| `POST` | `/api/checklist-items/{itemID}/submissions` | Отправка результата |
-| `GET` | `/api/checklist-items/{itemID}/submissions` | История попыток |
-| `GET` | `/api/buddy/submissions` | Задания на проверке |
-| `POST` | `/api/buddy/submissions/{submissionID}/review` | Решение наставника |
-| `POST` | `/api/chat` | Демонстрационный AI-чат |
-| `GET` | `/api/onboarding` | Демонстрационные сценарии |
-
-Маршруты для ролей защищены JWT middleware и проверками прав доступа.
-
-## Типичные проблемы
-
-**`JWT_SECRET must be configured`** — проверьте корневой `.env` и переменную `JWT_SECRET`.
-
-**`connection refused` к PostgreSQL** — дождитесь `healthy`, проверьте порт: с хоста `5433`, из Compose `5432`.
-
-**`relation ... does not exist`** — миграции Goose не применены к нужной базе.
-
-**Seed отказался работать** — он требует имя БД `app` или `ai_buddy_test`, схему версии 3 и отсутствие конфликтующих чек-листов.
-
-**`user with email ... already exists`** — bootstrap не перезаписывает существующего пользователя. Войдите с уже созданной учётной записью.
-
-**Нет профессионального чек-листа** — базовый демо seed содержит профессиональные задания только для `backend`; отдельный ML-скрипт подготовлен для v7 и требует отдельного запуска на проверенной БД.
-
-**Сборка backend Dockerfile падает на тестах** — проверьте интеграционные тесты: в текущем Dockerfile тесты запускаются во время сборки без отдельной тестовой БД.
-
-**CI не поднимает Compose** — проверьте обязательные переменные, миграции и seed. Текущий workflow ещё не адаптирован к новой схеме.
-
-## Безопасность и ограничения MVP
-
-- Не коммитьте `.env`, пароли, JWT-секреты, реальные данные сотрудников и внутренние документы.
-- PostgreSQL, web и backend привязаны к `127.0.0.1` хост-машины; не считайте это полноценной защитой для production.
-- JWT-аутентификация и RBAC реализованы, но полноценные production-контроли (TLS, rate limiting, аудит, управление секретами, мониторинг и политики хранения данных) требуют отдельной работы.
-- AI использует демонстрационные данные; ответы не должны рассматриваться как официальные HR-инструкции.
-- Для production необходимы отдельные секреты, защищённая инфраструктура, проверка зависимостей и сценариев доступа.
-
-## Документация
-
-- [Архитектура](docs/architecture.md)
-- [Демо-сценарии](docs/demo-scenarios.md)
-- [Проверки](docs/verification.md)
-- [Контракты API](contracts/README.md)
-- [Модели данных](docs/models.md) — после добавления файла
-- [Backend: роли, прогресс, корпоративный mock и AI-контракт](docs/backend-corporate-integration.md)
-
----
-## Актуальный demo-стенд (Goose v7)
-
-Основная локальная БД `app` должна иметь версию Goose `7`. Перед обновлением существующего стенда обязательно сделайте `pg_dump` и проверьте восстановление в отдельную временную БД. Не применяйте команды к БД, имя которой не проверено явно.
-
-Для наполнения демонстрационного стенда после миграций используются идемпотентные seed-файлы:
-
-- `apps/backend/scripts/seed_demo_frontend_checklist_v1.sql`;
-- `apps/backend/scripts/seed_demo_ml_checklist_v1.sql`;
-- `go run ./cmd/seed-demo` из `apps/backend` с `DB_NAME=app` и секретом `DEMO_PASSWORD` в окружении.
-
-Команда `seed-demo` отказывается работать не с `app` и не с Goose v7. Повторный запуск проверяет существующие назначения и не перезаписывает несовпадающие данные. Пароль demo-аккаунтов в репозиторий не записывается.
-
-Demo email:
-
-- `buddy@demo.example`;
-- `teamlead@demo.example`;
-- `backend.intern@demo.example`;
-- `frontend.intern@demo.example`;
-- `ml.intern@demo.example`.
-
-Web доступен на `http://127.0.0.1:5173`. Реализованы отдельные экраны dashboard, чек-листов, команды, календаря, заметок, корпоративных заявок, профиля и mock AI-чата. Web хранит access/refresh-сессию в `sessionStorage`, обновляет JWT и вызывает серверный logout. Nginx проксирует `/api` в Backend и явно отдаёт UTF-8.
-
-Для проверки:
-
-```bash
-cd apps/backend
-TEST_DATABASE_URL=postgres://.../ai_buddy_test?sslmode=disable RUN_E2E=1 go test -count=1 -p 1 ./...
+```powershell
+Set-Location apps/backend
+go mod tidy
+go fmt ./...
 go vet ./...
 go build ./...
-
-cd ../..
+go test -count=1 -p 1 ./...
+Set-Location ../..
+python scripts/check_contracts.py
+npm ci
 npm test
-npm run build --workspace @ai-buddy/web
-npx playwright test
+npm run build
 ```
 
-Web Playwright требует `E2E_DEMO_PASSWORD`. MV3-сценарий дополнительно использует `E2E_BUDDY_EMAIL` и `E2E_BUDDY_PASSWORD` и требует браузер с поддержкой headless extensions.
-# Этап 3: HR и обратная связь
+Go-интеграционным тестам нужен `TEST_DATABASE_URL` с отдельной чистой БД `ai_buddy_verify_*` или свежей `ai_buddy_test`, созданной новой миграцией. Без этой переменной PostgreSQL-тесты будут пропущены. Для HTTP E2E задайте `RUN_E2E=1`. Browser E2E (`npx playwright test`) получает `E2E_CREDENTIALS_FILE`, указывающий на файл HR Sync вне репозитория; сначала нужен запущенный чистый стенд. AI-тесты: `python -m pip install -r apps/ai/requirements-dev.txt`, затем `python -m pytest -q apps/ai`. Не запускайте тесты против `app` или `ai_buddy_load`.
 
-Начиная с миграции `00009` аккаунты создаёт внутренняя HR-синхронизация; `POST /api/users` удалён. После применения миграции к отдельной тестовой БД команду запускают из `apps/backend` с явно заданными `DB_NAME=ai_buddy_test` и остальными `DB_*` переменными:
+## Структура
 
-```powershell
-go run ./cmd/sync-hr -snapshot ../../data/corporate_employees.json -credentials C:\private\new-hr-credentials.json
-go run ./cmd/retry-feedback
-```
-
-Файл учётных данных должен находиться вне репозитория и отсутствовать до запуска. Команда создаёт по одному случайному паролю для каждого нового аккаунта и сохраняет их в этом файле; HR snapshot паролей не содержит. На Windows ограничение доступа к файлу нужно дополнительно задать средствами ACL. Существующие Argon2id-хеши не меняются. Повторная синхронизация сохраняет локальные ID и прогресс; записи, исчезнувшие из HR snapshot, остаются в AI-Buddy. Backend загружает JSON справочника при старте, поэтому после замены snapshot его нужно перезапустить. Рабочую `app` сначала нужно отдельно мигрировать до `00009`, затем перезапустить Backend с актуальным HR snapshot. Здесь команда для `app` не запускалась.
-
-После завершения каждого чек-листа стажёр может отправить один отзыв через Web или `POST /api/checklists/{checklist_id}/feedback`. `GET` того же пути возвращает собственный отзыв либо `{"feedback":null}`. Отзыв сохраняется до доставки в mock аналитику. `cmd/retry-feedback` повторяет доставку `pending` и `failed`; `feedback_id` исключает дубли в mock. `ANALYTICS_MOCK_UNAVAILABLE=1` позволяет проверить отказ доставки. Полноценный корпоративный SSO/OIDC не входит в этот этап.
+- `apps/backend` — API, команды, миграция и SQL справочников.
+- `apps/web`, `apps/extension`, `apps/ai` — Web, Chrome MV3 и AI-сервис.
+- `packages/client` — клиент Backend API; `contracts` — OpenAPI.
+- `tests/e2e` — браузерные тесты; `ops/load` — нагрузка и мониторинг.
+- `data/corporate_employees.json` — Mock HR без паролей.

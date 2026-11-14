@@ -56,8 +56,19 @@ func run() error {
 		return err
 	}
 	version = strconv.Itoa(applied)
-	if applied != head {
+	if applied != head && applied != 9 {
 		return fmt.Errorf("Goose version %s differs from migration head %d", version, head)
+	}
+	if applied == 9 {
+		var compatible bool
+		if err := db.QueryRowContext(ctx, `SELECT to_regclass('public.checklist_feedback') IS NOT NULL
+			AND to_regclass('public.corporate_access_requests') IS NOT NULL
+			AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='users' AND column_name='corporate_id')`).Scan(&compatible); err != nil {
+			return err
+		}
+		if !compatible {
+			return errors.New("legacy Goose v9 schema fingerprint mismatch")
+		}
 	}
 	if err := ensureChecklists(ctx, db); err != nil {
 		return err

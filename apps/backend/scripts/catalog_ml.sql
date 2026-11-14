@@ -1,4 +1,4 @@
--- Synthetic ML onboarding content. Run explicitly only on a verified Goose v7 database.
+-- Synthetic ML onboarding content for fresh Goose v1; run through cmd/init-catalog.
 -- Safe on repeated executions when the existing ML checklist matches exactly.
 -- Never changes an existing checklist or any user's progress.
 BEGIN;
@@ -12,9 +12,8 @@ DECLARE
   actual jsonb;
   expected jsonb;
 BEGIN
-  IF current_database() NOT IN ('ai_buddy_test','app') THEN RAISE EXCEPTION 'Unexpected database'; END IF;
   SELECT COALESCE(MAX(version_id),0) INTO v FROM goose_db_version WHERE is_applied;
-  IF v<>7 THEN RAISE EXCEPTION 'Goose v7 required, found %',v; END IF;
+  IF v<>1 THEN RAISE EXCEPTION 'Goose v1 required, found %',v; END IF;
   SELECT id,name INTO target_checklist_id,existing_name
   FROM checklists WHERE type='professional' AND profession='ml';
   IF FOUND THEN

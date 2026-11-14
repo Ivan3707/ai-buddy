@@ -6,8 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/nvkmaksim/ai-buddy/backend/internal/database"
@@ -31,19 +29,13 @@ func run() error {
 	if os.Getenv("DB_NAME") == "" {
 		return fmt.Errorf("DB_NAME must be set explicitly")
 	}
-	if !filepath.IsAbs(*credentialsPath) {
-		return fmt.Errorf("-credentials must be an absolute path")
-	}
-	repoRoot, err := filepath.Abs("../..")
+	repoRoot, err := findRepositoryRoot()
 	if err != nil {
 		return err
 	}
-	rel, err := filepath.Rel(repoRoot, *credentialsPath)
+	credentialFile, err := privateCredentialsPath(*credentialsPath, repoRoot)
 	if err != nil {
 		return err
-	}
-	if rel == "." || (!strings.HasPrefix(rel, ".."+string(filepath.Separator)) && rel != "..") {
-		return fmt.Errorf("credential file must be outside the repository")
 	}
 	data, err := os.ReadFile(*snapshot)
 	if err != nil {
@@ -53,31 +45,19 @@ func run() error {
 	if err = json.Unmarshal(data, &employees); err != nil {
 		return err
 	}
-	file, err := os.OpenFile(*credentialsPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
 	db, err := database.OpenPostgres()
 	if err != nil {
-		os.Remove(*credentialsPath)
 		return err
 	}
 	defer db.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	credentials, err := service.NewHRSynchronizer(db).Sync(ctx, employees)
+	newAccounts, err := service.NewHRSynchronizer(db).Sync(ctx, employees, func(credentials []service.InitialCredential) error {
+		return publishCredentials(credentialFile, credentials)
+	})
 	if err != nil {
-		file.Close()
-		os.Remove(*credentialsPath)
 		return err
 	}
-	if err = json.NewEncoder(file).Encode(credentials); err != nil {
-		return fmt.Errorf("credentials file write failed after sync commit: %w", err)
-	}
-	if err = file.Sync(); err != nil {
-		return err
-	}
-	fmt.Printf("synchronized %d HR records; credentials for %d new accounts saved\n", len(employees), len(credentials))
+	fmt.Printf("synchronized %d HR records; credentials for %d new accounts saved\n", len(employees), newAccounts)
 	return nil
 }

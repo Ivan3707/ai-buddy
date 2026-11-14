@@ -8,6 +8,7 @@ import (
 	"github.com/nvkmaksim/ai-buddy/backend/internal/handler"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -35,7 +36,7 @@ func TestCorporateHTTPE2E(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	var name string
-	if err = db.QueryRowContext(ctx, `SELECT current_database()`).Scan(&name); err != nil || name != "ai_buddy_test" {
+	if err = db.QueryRowContext(ctx, `SELECT current_database()`).Scan(&name); err != nil || (name != "ai_buddy_test" && !strings.HasPrefix(name, "ai_buddy_verify_")) {
 		t.Fatalf("unsafe database %q: %v", name, err)
 	}
 	profession := model.ProfessionML

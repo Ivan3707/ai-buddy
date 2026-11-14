@@ -129,15 +129,6 @@ func (r *UserRepository) RecordLogin(
 	return isFirstLogin, nil
 }
 
-func (r *UserRepository) AssignTeamlead(ctx context.Context, internID, buddyID, teamleadID uuid.UUID) error {
-	var id uuid.UUID
-	err := r.db.QueryRowContext(ctx, `UPDATE users SET teamlead_id=$3 WHERE id=$1 AND buddy_id=$2 AND role='intern' RETURNING id`, internID, buddyID, teamleadID).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return ErrNotFound
-	}
-	return err
-}
-
 func (r *UserRepository) ListAssignedInterns(ctx context.Context, actorID uuid.UUID, role model.UserRole) ([]model.User, error) {
 	column := "buddy_id"
 	if role == model.RoleTeamlead {

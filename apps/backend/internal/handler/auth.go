@@ -6,16 +6,12 @@ import (
 	"errors"
 	"io"
 	"net/http"
-	"net/mail"
 	"strings"
 	"time"
-	"unicode/utf8"
 
-	"github.com/google/uuid"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/middleware"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/model"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/repository"
-	"github.com/nvkmaksim/ai-buddy/backend/internal/security"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/service"
 )
 
@@ -55,21 +51,6 @@ type loginResponse struct {
 	IsFirstLogin bool       `json:"is_first_login"`
 	User         publicUser `json:"user"`
 	RefreshToken string     `json:"refresh_token,omitempty"`
-}
-
-type createInternRequest struct {
-	Email            string           `json:"email"`
-	Password         string           `json:"password"`
-	Profession       model.Profession `json:"profession"`
-	FirstName        string           `json:"first_name"`
-	LastName         string           `json:"last_name"`
-	TelegramUsername string           `json:"telegram_username"`
-	Department       string           `json:"department"`
-	Team             string           `json:"team"`
-	TeamleadID       string           `json:"teamlead_id"`
-	BuddyID          string           `json:"buddy_id"`
-	BirthDate        string           `json:"birth_date"`
-	EmployedSince    string           `json:"employed_since"`
 }
 
 func toPublicUser(user *model.User) publicUser {
@@ -236,132 +217,5 @@ func (d Dependencies) logoutHandler() http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(204)
-	}
-}
-
-func (d Dependencies) createInternHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		r.Body = http.MaxBytesReader(w, r.Body, 4096)
-
-		decoder := json.NewDecoder(r.Body)
-		decoder.DisallowUnknownFields()
-
-		var body createInternRequest
-		if err := decoder.Decode(&body); err != nil {
-			send(w, http.StatusBadRequest, map[string]string{
-				"error": "invalid JSON",
-			})
-			return
-		}
-
-		if decoder.Decode(&struct{}{}) != io.EOF {
-			send(w, http.StatusBadRequest, map[string]string{
-				"error": "expected one JSON object",
-			})
-			return
-		}
-
-		body.Email = strings.ToLower(strings.TrimSpace(body.Email))
-		buddyID, err := uuid.Parse(body.BuddyID)
-		if err != nil {
-			send(w, 400, map[string]string{"error": "invalid buddy_id"})
-			return
-		}
-		birthDate, err := time.Parse("2006-01-02", body.BirthDate)
-		if err != nil || birthDate.After(time.Now().AddDate(-16, 0, 0)) {
-			send(w, 400, map[string]string{"error": "invalid birth_date"})
-			return
-		}
-		employedSince, err := time.Parse("2006-01-02", body.EmployedSince)
-		if err != nil || employedSince.After(time.Now()) {
-			send(w, 400, map[string]string{"error": "invalid employed_since"})
-			return
-		}
-		if strings.TrimSpace(body.FirstName) == "" || strings.TrimSpace(body.LastName) == "" || strings.TrimSpace(body.Department) == "" || strings.TrimSpace(body.Team) == "" {
-			send(w, http.StatusBadRequest, map[string]string{"error": "first_name, last_name, department and team are required"})
-			return
-		}
-
-		parsedEmail, err := mail.ParseAddress(body.Email)
-		if err != nil || parsedEmail.Address != body.Email ||
-			len(body.Email) > 255 {
-			send(w, http.StatusBadRequest, map[string]string{
-				"error": "invalid email",
-			})
-			return
-		}
-
-		if len(body.Password) > 256 ||
-			utf8.RuneCountInString(body.Password) < 12 {
-			send(w, http.StatusBadRequest, map[string]string{
-				"error": "password must contain at least 12 characters",
-			})
-			return
-		}
-
-		passwordHash, err := security.HashPassword(body.Password)
-		if err != nil {
-			send(w, http.StatusInternalServerError, map[string]string{
-				"error": "internal server error",
-			})
-			return
-		}
-
-		currentUser, ok := middleware.CurrentUser(r.Context())
-		if !ok || currentUser.Role != model.RoleTeamlead {
-			send(w, http.StatusForbidden, map[string]string{
-				"error": "forbidden",
-			})
-			return
-		}
-
-		var user *model.User
-		var errCreate error
-		if creator, ok := d.Interns.(interface {
-			CreateInternWithAssignments(context.Context, string, string, model.Profession, uuid.UUID, uuid.UUID, time.Time, time.Time, string, string, string, string, string) (*model.User, error)
-		}); ok {
-			user, errCreate = creator.CreateInternWithAssignments(r.Context(), body.Email, passwordHash, body.Profession, buddyID, currentUser.ID, birthDate, employedSince, strings.TrimSpace(body.FirstName), strings.TrimSpace(body.LastName), strings.TrimSpace(body.TelegramUsername), strings.TrimSpace(body.Department), strings.TrimSpace(body.Team))
-		} else {
-			send(w, http.StatusInternalServerError, map[string]string{"error": "intern creation unavailable"})
-			return
-		}
-		err = errCreate
-
-		switch {
-		case errors.Is(err, repository.ErrEmailAlreadyExists):
-			send(w, http.StatusConflict, map[string]string{
-				"error": "email already exists",
-			})
-			return
-
-		case errors.Is(err, service.ErrInvalidProfession):
-			send(w, http.StatusBadRequest, map[string]string{
-				"error": "invalid profession",
-			})
-			return
-
-		case errors.Is(err, service.ErrUserNotBuddy):
-			send(w, http.StatusForbidden, map[string]string{
-				"error": "user is not a buddy",
-			})
-			return
-		case errors.Is(err, service.ErrUserNotTeamlead):
-			send(w, 403, map[string]string{"error": "user is not a teamlead"})
-			return
-		case errors.Is(err, service.ErrInvalidProfile):
-			send(w, 400, map[string]string{"error": "invalid profile"})
-			return
-		case errors.Is(err, repository.ErrNotFound):
-			send(w, 400, map[string]string{"error": "assigned user not found"})
-			return
-
-		case err != nil:
-			send(w, http.StatusInternalServerError, map[string]string{
-				"error": "internal server error",
-			})
-			return
-		}
-
-		send(w, http.StatusCreated, toPublicUser(user))
 	}
 }
