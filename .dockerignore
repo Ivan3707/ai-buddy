@@ -7,7 +7,9 @@
 *credentials*.json
 **/credentials/
 **/.cache
-/load-results
+/load-results/
 /backups
 **/__pycache__
 secrets/
+load-results-*/
+.gitignore

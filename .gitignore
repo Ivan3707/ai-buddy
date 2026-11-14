@@ -15,10 +15,10 @@ coverage/
 playwright-report/
 test-results/
 .vscode
-# Local Go binaries
 /apps/backend/*.exe
 /backups/
-/load-results/
 apps/backend/.cache/
 /load-results-archive-20261114/
 /secrets/
+/load-results/
+/load-results-*/

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -135,4 +136,146 @@ func TestAuthSessionsHTTPIntegration(t *testing.T) {
 	if code, _ := call("POST", "/api/auth/refresh", `{"refresh_token":"`+refresh+`"}`, ""); code != 401 {
 		t.Fatalf("logout must revoke refresh, got %d", code)
 	}
+
+	t.Run("concurrent refresh replay revokes every token", func(t *testing.T) {
+		initialAccess, initialRefresh := login()
+		type result struct {
+			code int
+			body []byte
+		}
+		results := make(chan result, 2)
+		start := make(chan struct{})
+		var workers sync.WaitGroup
+		for i := 0; i < 2; i++ {
+			workers.Add(1)
+			go func() {
+				defer workers.Done()
+				<-start
+				code, body := call("POST", "/api/auth/refresh", `{"refresh_token":"`+initialRefresh+`"}`, "")
+				results <- result{code, body}
+			}()
+		}
+		close(start)
+		workers.Wait()
+		close(results)
+		var newAccess, newRefresh string
+		var accepted, rejected int
+		for got := range results {
+			switch got.code {
+			case 200:
+				accepted++
+				var tokens struct {
+					AccessToken  string `json:"access_token"`
+					RefreshToken string `json:"refresh_token"`
+				}
+				if e := json.Unmarshal(got.body, &tokens); e != nil {
+					t.Fatal(e)
+				}
+				newAccess, newRefresh = tokens.AccessToken, tokens.RefreshToken
+			case 401:
+				rejected++
+			default:
+				t.Fatalf("unexpected concurrent refresh status %d: %s", got.code, got.body)
+			}
+		}
+		if accepted != 1 || rejected != 1 || newAccess == "" || newRefresh == "" {
+			t.Fatalf("refresh outcomes: accepted=%d rejected=%d", accepted, rejected)
+		}
+		for _, token := range []string{initialAccess, newAccess} {
+			if code, _ := call("GET", "/api/auth/me", "", token); code != 401 {
+				t.Fatalf("replay left access token active: %d", code)
+			}
+		}
+		for _, token := range []string{initialRefresh, newRefresh} {
+			if code, _ := call("POST", "/api/auth/refresh", `{"refresh_token":"`+token+`"}`, ""); code != 401 {
+				t.Fatalf("replay left refresh token active: %d", code)
+			}
+		}
+		sessionID := sessionIDFromAccess(t, jwt, initialAccess)
+		if active, e := sessions.IsActive(ctx, sessionID, user.ID); e != nil || active {
+			t.Fatalf("session after replay: active=%v err=%v", active, e)
+		}
+	})
+
+	t.Run("concurrent refresh and logout", func(t *testing.T) {
+		initialAccess, initialRefresh := login()
+		type result struct {
+			kind string
+			code int
+			body []byte
+		}
+		results := make(chan result, 2)
+		start := make(chan struct{})
+		var workers sync.WaitGroup
+		workers.Add(2)
+		go func() {
+			defer workers.Done()
+			<-start
+			code, body := call("POST", "/api/auth/refresh", `{"refresh_token":"`+initialRefresh+`"}`, "")
+			results <- result{"refresh", code, body}
+		}()
+		go func() {
+			defer workers.Done()
+			<-start
+			code, body := call("POST", "/api/auth/logout", `{"refresh_token":"`+initialRefresh+`"}`, initialAccess)
+			results <- result{"logout", code, body}
+		}()
+		close(start)
+		workers.Wait()
+		close(results)
+		var refreshResult, logoutResult result
+		for got := range results {
+			if got.kind == "refresh" {
+				refreshResult = got
+			} else {
+				logoutResult = got
+			}
+		}
+		sessionID := sessionIDFromAccess(t, jwt, initialAccess)
+		if logoutResult.code == 204 {
+			if refreshResult.code != 401 {
+				t.Fatalf("logout won: refresh=%d", refreshResult.code)
+			}
+		} else if refreshResult.code == 200 && logoutResult.code == 400 {
+			var tokens struct {
+				AccessToken  string `json:"access_token"`
+				RefreshToken string `json:"refresh_token"`
+			}
+			if e := json.Unmarshal(refreshResult.body, &tokens); e != nil || tokens.AccessToken == "" || tokens.RefreshToken == "" {
+				t.Fatalf("rotated tokens: %v", e)
+			}
+			if code, _ := call("GET", "/api/auth/me", "", tokens.AccessToken); code != 200 {
+				t.Fatalf("rotated access unavailable before logout: %d", code)
+			}
+			if code, _ := call("POST", "/api/auth/logout", `{"refresh_token":"`+tokens.RefreshToken+`"}`, tokens.AccessToken); code != 204 {
+				t.Fatalf("logout with rotated token: %d", code)
+			}
+			if code, _ := call("GET", "/api/auth/me", "", tokens.AccessToken); code != 401 {
+				t.Fatalf("rotated access active after logout: %d", code)
+			}
+			if code, _ := call("POST", "/api/auth/refresh", `{"refresh_token":"`+tokens.RefreshToken+`"}`, ""); code != 401 {
+				t.Fatalf("rotated refresh active after logout: %d", code)
+			}
+		} else {
+			t.Fatalf("unexpected race outcomes: refresh=%d logout=%d", refreshResult.code, logoutResult.code)
+		}
+		if code, _ := call("GET", "/api/auth/me", "", initialAccess); code != 401 {
+			t.Fatalf("initial access active after race: %d", code)
+		}
+		if code, _ := call("POST", "/api/auth/refresh", `{"refresh_token":"`+initialRefresh+`"}`, ""); code != 401 {
+			t.Fatalf("initial refresh active after race: %d", code)
+		}
+		if active, e := sessions.IsActive(ctx, sessionID, user.ID); e != nil || active {
+			t.Fatalf("session after race: active=%v err=%v", active, e)
+		}
+	})
+}
+
+func sessionIDFromAccess(t *testing.T, jwt *security.JWTService, access string) uuid.UUID {
+	t.Helper()
+	_, id, err := jwt.ValidateSessionAccessToken(access)
+	if err != nil || id == uuid.Nil {
+		t.Fatalf("invalid session access token: %v", err)
+	}
+	return id
 }

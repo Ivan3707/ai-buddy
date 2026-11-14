@@ -11,8 +11,50 @@ root = Path(__file__).resolve().parents[1]
 specs = {s:json.loads((root / f"contracts/{s}.openapi.json").read_text()) for s in ("backend", "ai")}
 for spec in specs.values():
     validate_spec(spec)
-assert specs["backend"]["components"] == specs["ai"]["components"]
-print("OpenAPI documents valid; shared chat schemas agree")
+
+backend, ai = specs["backend"], specs["ai"]
+backend_schemas = backend["components"]["schemas"]
+ai_schemas = ai["components"]["schemas"]
+required_shared = {"ChatRequest", "ChatResponse"}
+if not required_shared <= backend_schemas.keys() or not required_shared <= ai_schemas.keys():
+    raise ValueError("ChatRequest and ChatResponse must exist in both contracts")
+shared_names = backend_schemas.keys() & ai_schemas.keys()
+for name in sorted(shared_names):
+    if backend_schemas[name] != ai_schemas[name]:
+        raise ValueError(f"shared schema differs: {name}")
+
+backend_chat = backend["paths"]["/api/chat"]["post"]
+ai_chat = ai["paths"]["/chat"]["post"]
+for label, operation in (("backend /api/chat", backend_chat), ("AI /chat", ai_chat)):
+    if not operation["requestBody"]["required"]:
+        raise ValueError(f"{label} must require a request body")
+for location in (("requestBody", "content", "application/json", "schema"),
+                 ("responses", "200", "content", "application/json", "schema")):
+    left, right = backend_chat, ai_chat
+    for key in location:
+        left, right = left[key], right[key]
+    if left != right:
+        raise ValueError(f"chat contract differs at {'/'.join(location)}")
+
+# The worker sends these four fields to AI /hint and consumes a nonempty hint.
+# /hint is an internal AI operation, so it has no matching backend API path.
+ai_hint = ai["paths"]["/hint"]["post"]
+hint_request = ai_hint["requestBody"]["content"]["application/json"]["schema"]
+hint_fields = {"title": "string", "description": "string",
+               "expected_result": "string", "estimated_minutes": "integer"}
+if any(hint_request["properties"].get(name, {}).get("type") != kind
+       for name, kind in hint_fields.items()):
+    raise ValueError("AI /hint request fields differ from the backend worker payload")
+Draft202012Validator(hint_request).validate({
+    "title": "Example task", "description": "", "expected_result": "",
+    "estimated_minutes": 1,
+})
+hint_response = ai_hint["responses"]["200"]["content"]["application/json"]["schema"]
+if "hint" not in hint_response.get("required", []) or hint_response.get("properties", {}).get("hint", {}).get("type") != "string":
+    raise ValueError("AI /hint must return a required string hint")
+Draft202012Validator(hint_response).validate({"hint": "Example hint"})
+
+print(f"OpenAPI documents valid; {', '.join(sorted(shared_names))} and chat/hint integrations agree")
 
 if os.getenv("CHECK_LIVE") == "1":
     base = os.getenv("BACKEND_URL", "http://127.0.0.1:8080")

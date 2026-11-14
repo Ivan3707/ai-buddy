@@ -12,7 +12,6 @@ jobs:
       DB_PASSWORD: ci_only_database_password
       DB_NAME: app
       JWT_SECRET: ci_only_jwt_secret_replace_in_real_environments_123456789
-      TEST_DATABASE_URL: postgres://app:ci_only_database_password@127.0.0.1:5433/ai_buddy_test?sslmode=disable
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -32,21 +31,50 @@ jobs:
       - name: Start PostgreSQL
         run: docker compose -p ai-buddy-ci up -d --wait postgres
 
-      - name: Create test database
-        run: docker compose -p ai-buddy-ci exec -T postgres psql -U app -d app -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ai_buddy_test;'
-
       - name: Install Goose
         run: go install github.com/pressly/goose/v3/cmd/goose@v3.24.1
 
-      - name: Apply migrations to application and test databases
+      - name: Apply application migrations
         run: |
-          goose -dir apps/backend/migrations postgres 'postgres://app:ci_only_database_password@127.0.0.1:5433/app?sslmode=disable' up
-          goose -dir apps/backend/migrations postgres "$TEST_DATABASE_URL" up
+          application_url="postgres://${DB_USER}:${DB_PASSWORD}@127.0.0.1:5433/${DB_NAME}?sslmode=disable"
+          goose -dir apps/backend/migrations postgres "$application_url" up
+
+      - name: Start isolated PostgreSQL for Go tests
+        run: |
+          test_db_container="ai-buddy-ci-go-db-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker run --rm -d --name "$test_db_container" \
+            --tmpfs /var/lib/postgresql/data:rw,size=256m \
+            -e POSTGRES_HOST_AUTH_METHOD=trust \
+            -e POSTGRES_DB=ai_buddy_verify_ci \
+            -p 127.0.0.1::5432 postgres:16-alpine >/dev/null
+          ready=0
+          for attempt in {1..30}; do
+            if docker exec "$test_db_container" pg_isready -U postgres -d ai_buddy_verify_ci >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          test "$ready" -eq 1
+          test_db_port="$(docker port "$test_db_container" 5432/tcp)"
+          test_db_port="${test_db_port##*:}"
+          [[ "$test_db_port" =~ ^[0-9]+$ ]]
+          test_database_url="postgres://postgres@127.0.0.1:${test_db_port}/ai_buddy_verify_ci?sslmode=disable"
+          test_catalog_database_url="postgres://postgres@127.0.0.1:${test_db_port}/ai_buddy_verify_catalog?sslmode=disable"
+          docker exec "$test_db_container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c 'CREATE DATABASE ai_buddy_verify_catalog' >/dev/null
+          goose -dir apps/backend/migrations postgres "$test_database_url" up
+          goose -dir apps/backend/migrations postgres "$test_catalog_database_url" up
+          printf 'TEST_DATABASE_URL=%s\nTEST_CATALOG_DATABASE_URL=%s\n' \
+            "$test_database_url" "$test_catalog_database_url" >> "$GITHUB_ENV"
 
       - name: Go tests and vet
         working-directory: apps/backend
         run: |
-          go test -race ./...
+          go version
+          gcc --version
+          go test -p 1 -count=1 ./...
+          CGO_ENABLED=1 RUN_E2E=1 go test -race -p 1 -count=1 ./...
           go vet ./...
           test -z "$(gofmt -l .)"
 
@@ -97,6 +125,10 @@ jobs:
       - name: Service logs on failure
         if: failure()
         run: docker compose -p ai-buddy-ci logs --no-color
+
+      - name: Stop temporary Go test PostgreSQL
+        if: always()
+        run: docker stop "ai-buddy-ci-go-db-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" 2>/dev/null || true
 
       - name: Stop test stack
         if: always()
