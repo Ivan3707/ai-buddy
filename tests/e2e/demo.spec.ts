@@ -80,7 +80,7 @@ test('Web UX exposes task details, calendar, tools and role actions without writ
   await expect(page.getByTestId('nav-calendar')).toBeVisible();
 });
 
-test('real MV3 popup logs in and calls authenticated chat', async ({}, testInfo) => {
+test('real MV3 side panel logs in and calls authenticated chat', async ({}, testInfo) => {
   const buddyEmail = 'buddy@demo.example';
   const buddyPassword = initialPassword(buddyEmail);
   const extension = path.resolve('apps/extension/dist');
@@ -107,9 +107,9 @@ test('real MV3 popup logs in and calls authenticated chat', async ({}, testInfo)
       id = new URL(worker.url()).host;
       expect(id).toBeTruthy();
     });
-    await stage('open popup', async () => {
+    await stage('open side panel', async () => {
       page = await context!.newPage();
-      await page.goto('chrome-extension://' + id + '/popup.html');
+      await page.goto('chrome-extension://' + id + '/sidepanel.html');
       await expect(page.locator('#login')).toBeVisible();
     });
     await stage('login', async () => {
@@ -118,10 +118,10 @@ test('real MV3 popup logs in and calls authenticated chat', async ({}, testInfo)
       await page!.locator('#login button').click();
       await expect(page!.locator('#logout')).toBeVisible();
     });
-    await stage('reopen popup', async () => {
+    await stage('reopen side panel', async () => {
       await page!.close();
       page = await context!.newPage();
-      await page.goto('chrome-extension://' + id + '/popup.html');
+      await page.goto('chrome-extension://' + id + '/sidepanel.html');
       await expect(page.locator('#logout')).toBeVisible();
       await expect.poll(() => page!.evaluate(async () => {
         const token = (await chrome.storage.session.get('accessToken')).accessToken;
@@ -148,7 +148,7 @@ test('real MV3 popup logs in and calls authenticated chat', async ({}, testInfo)
           const password = document.querySelector<HTMLInputElement>('#password');
           if (password) password.value = '';
         });
-        await testInfo.attach('mv3-popup-failure', {
+        await testInfo.attach('mv3-sidepanel-failure', {
           body: await page.screenshot({ timeout: 5_000 }), contentType: 'image/png',
         });
       } catch {
