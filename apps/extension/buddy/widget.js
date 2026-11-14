@@ -729,6 +729,7 @@
       remove() { abortCurrent?.(); for (const fn of cleanup) fn(); host.remove(); },
       isShown: () => host.isConnected,
       isOpen: () => !chat.hidden,
+      refresh: refreshSession, // the session changed outside the widget (single sign-on with the site)
       open: openChat,
       close: closeChat,
       toggle: toggleChat,

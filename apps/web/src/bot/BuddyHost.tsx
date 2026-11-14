@@ -55,6 +55,14 @@ export function BuddyHost({ token, user, onNavigate }: { token: string; user: Us
     return () => { api.remove(); widget.current = null; };
   }, [extension, user.id]);
 
+  // ---------- single sign-on: the extension is signed in as the same user ----------
+  // Only the short-lived access token is shared (the refresh token stays on the site), on every rotation,
+  // and an empty token on sign-out. The content script of the extension forwards it, only for this origin.
+  useEffect(() => {
+    if (extension) window.postMessage({ source: 'ai-buddy-web', op: 'auth', token }, location.origin);
+  }, [extension, token]);
+  useEffect(() => () => { window.postMessage({ source: 'ai-buddy-web', op: 'auth', token: '' }, location.origin); }, []);
+
   // ---------- nudges ----------
   const shown = useRef<Set<string>>(new Set());
   const pending = useRef<Map<string, Nudge>>(new Map());

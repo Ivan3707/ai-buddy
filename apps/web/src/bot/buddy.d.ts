@@ -30,6 +30,7 @@ interface BuddyApi {
   close(): void;
   toggle(): void;
   ask(text: string): Promise<void>;
+  refresh(): Promise<void>;
   say(text: string, options?: BuddySayOptions): Promise<void>;
 }
 interface Window {

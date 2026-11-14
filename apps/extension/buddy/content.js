@@ -57,6 +57,11 @@
     if (event.source !== window || event.origin !== location.origin) return;
     const m = event.data;
     if (!m || m.source !== 'ai-buddy-web') return;
+    if (m.op === 'auth') { // the site's session: the extension is signed in as the same user (and out when the site signs out)
+      const token = typeof m.token === 'string' ? m.token.slice(0, 4096) : '';
+      void call({op: token ? 'set-token' : 'clear-token', token}).then(() => buddy.refresh());
+      return;
+    }
     if (!buddy.isShown()) buddy.show();
     if (m.op === 'ask' && str(m.question, 500)) { void buddy.ask(str(m.question, 500)); return; }
     if (m.op !== 'say' || !str(m.text, 300)) return;

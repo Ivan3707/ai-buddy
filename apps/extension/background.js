@@ -9,7 +9,7 @@
 import { getMe, login } from './client.js';
 import { BACKEND_ORIGIN as backend } from './config.js';
 import { createGateway } from './lib/gateway.js';
-import { readToken, saveToken } from './popup-session.js';
+import { clearToken, readToken, saveToken } from './popup-session.js';
 
 chrome.sidePanel
   .setPanelBehavior({openPanelOnActionClick: false})
@@ -96,8 +96,35 @@ chrome.runtime.onConnect.addListener(port => {
   });
 });
 
+// ---------- single sign-on with the AI-buddy web app ----------
+// The web app pushes its access token through the content script on its own origin (content.js bridge); the
+// refresh token never leaves the site. Only that origin may set or clear the token.
+const WEB_ORIGINS = ['http://127.0.0.1:5173', 'http://localhost:5173'];
+const JWT_SHAPE = /^[\w-]+\.[\w-]+\.[\w-]+$/;
+const fromWebApp = sender => {
+  try { return Boolean(sender?.tab) && WEB_ORIGINS.includes(new URL(sender.url || '').origin); } catch { return false; }
+};
+function tokenSubject(token) {
+  try { return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))).sub || ''; } catch { return ''; }
+}
+async function adoptSiteToken(token) {
+  const subject = tokenSubject(token);
+  const stored = await session.get('authSubject');
+  if (stored.authSubject !== subject) await session.remove('conversationId'); // another user: start a fresh dialog
+  await saveToken(session, token);
+  await session.set({authSubject: subject});
+}
+
 async function handle(message, sender) {
   switch (message.op) {
+    case 'set-token':
+      if (!fromWebApp(sender) || typeof message.token !== 'string' || !JWT_SHAPE.test(message.token)) return {error: 'forbidden'};
+      await adoptSiteToken(message.token);
+      return {ok: true};
+    case 'clear-token':
+      if (!fromWebApp(sender)) return {error: 'forbidden'};
+      await Promise.all([clearToken(session), session.remove(['conversationId', 'authSubject'])]);
+      return {ok: true};
     case 'open-panel':
       // A click in the page is a user gesture that Chrome forwards with the message.
       await chrome.sidePanel.open({tabId: sender.tab.id});
