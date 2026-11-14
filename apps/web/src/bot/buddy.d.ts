@@ -41,6 +41,7 @@ interface Window {
       stream(payload: { op: string; [key: string]: unknown }, onMessage: (message: unknown) => void): () => void;
       storage: { get(key: string): Promise<unknown>; set(key: string, value: unknown): Promise<void> };
       features?: { login?: boolean; pageContext?: boolean; hide?: boolean; requests?: boolean };
+      installHint?: { url: string };
       onHide?(): void;
       portalUrl?(kind: string, id: string): string;
     }): BuddyApi;

@@ -9,6 +9,7 @@
 //   stream(payload, onMessage): () => void streams view models for {op: 'chat'|'brief'}; returns abort()
 //   storage: {get(key): Promise<any>, set(key, value): Promise<void>}   per-browser settings (position, sizes, mode)
 //   features: {login, pageContext, hide, requests}   what this host supports (all true in the extension)
+//   installHint?: {url}                    the host runs without the extension: show a "no extension" sign and install steps
 //   onHide?(): void                        the "×" on the character was clicked
 //   portalUrl?(kind, id): string           page of the corporate portal (mock) that shows one request
 // }
@@ -40,6 +41,7 @@
       <div class="char">
         <button class="body" type="button" aria-label="Бади: открыть чат (можно перетаскивать)">${MASCOT()}</button>
         <span class="badge" aria-hidden="true">!</span>
+        <span class="noext" aria-hidden="true" title="Расширение не установлено" hidden>⬇</span>
         <button class="hide" type="button" title="Скрыть на этой вкладке" aria-label="Скрыть помощника">×</button>
       </div>
       <div class="bubble" role="status" hidden>
@@ -49,6 +51,7 @@
       <div class="scrim" hidden></div>
       <section class="chat" role="dialog" aria-label="Чат с Бади" hidden>
         <header><b>Бади</b>
+          <button class="ghost ext" type="button" title="Расширение Chrome не установлено" hidden>⚠ Нет расширения</button>
           <button class="ghost mode" type="button"></button>
           <button class="ghost out" type="button" title="Выйти из аккаунта" hidden>Выйти</button>
           <button class="ghost close" type="button" aria-label="Свернуть">×</button></header>
@@ -983,6 +986,24 @@
       rotateTip();
       input.focus();
     };
+    // Without the extension Бади works only on this site: a sign in the header and on the character, with install steps.
+    if (env.installHint) {
+      const extBtn = $('.ext'), dot = $('.noext');
+      extBtn.hidden = false; dot.hidden = false;
+      extBtn.onclick = () => {
+        tab = 'chat'; layout();
+        const node = el('div', 'msg bot install');
+        node.append(el('b', '', 'Расширение Бади не установлено'));
+        node.append(el('p', '', 'Сейчас я работаю только на этом сайте. С расширением Chrome я появляюсь на любой странице (вики, Grafana, Jira), вижу выделенный текст и подсказываю по ней.'));
+        const steps = el('ol', 'install-steps');
+        for (const t of ['Нажми «Установить расширение» ниже.', 'Подтверди установку в Chrome (в демо вместо этого откроется страница-заглушка).', 'Закрепи значок AI-buddy на панели и обнови эту страницу: Бади станет общим для всех сайтов.']) steps.append(el('li', '', t));
+        node.append(steps);
+        const link = el('a', 'install-link', 'Установить расширение');
+        link.href = env.installHint.url; link.target = '_blank'; link.rel = 'noopener';
+        node.append(link);
+        log.append(node); scroll();
+      };
+    }
     $('.out').onclick = async () => { // signs out of the account everywhere (the site follows, see lib/sso.js)
       abortCurrent?.();
       setBusy(false);
@@ -1152,6 +1173,9 @@
     button:disabled{opacity:.5;cursor:default}
     .primary{background:var(--black);color:#fff;font-weight:700}
     .ghost{background:transparent;color:#fff;padding:2px 10px}.ghost:hover{background:rgba(255,255,255,.18)}
+    .noext{position:absolute;right:-2px;bottom:2px;width:20px;height:20px;border-radius:50%;background:#ffb020;color:#1a1a1a;font:800 12px/20px system-ui;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.3);pointer-events:none}.noext[hidden]{display:none}
+    .ext{font-size:12px;font-weight:700;background:#ffb020;color:#1a1a1a;border-radius:999px}.ext:hover{background:#ffc24d}.ext[hidden]{display:none}
+    .install ol{margin:6px 0 10px;padding-left:20px}.install li{margin:2px 0}.install-link{display:inline-block;padding:6px 14px;border-radius:999px;background:var(--ink);color:#fff;text-decoration:none;font-weight:700;font-size:13px}
     .mode{font-size:17px;line-height:1}.out{font-size:12px;font-weight:600}
     .tabs{display:flex;gap:2px;padding:10px 16px 0;background:var(--cream);border-bottom:1px solid var(--grey);overflow-x:auto}
     .tabs button{border-radius:0;background:transparent;border-bottom:3px solid transparent;padding:8px 14px;color:var(--muted);font-weight:700;white-space:nowrap}
