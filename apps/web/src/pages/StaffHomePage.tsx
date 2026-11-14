@@ -22,10 +22,11 @@ export function StaffHomePage({ user, token, onNavigate }: Props) {
       setInterns(list);
       const entries = await Promise.all(list.map(async intern => [intern.id, await getInternProgress('', token, intern.id)] as const));
       setProgress(Object.fromEntries(entries));
+      // вопросы стажёров только у наставника, заявки только у руководителя
       const [review, questions, requests] = await Promise.all([
         getPendingSubmissions('', token).catch(() => []),
-        bot.questions(token, 'open').catch(() => []),
-        bot.staffRequests(token).catch(() => []),
+        user.role === 'buddy' ? bot.questions(token, 'open').catch(() => []) : Promise.resolve([]),
+        user.role === 'teamlead' ? bot.staffRequests(token).catch(() => []) : Promise.resolve([]),
       ]);
       setStats({ review: review.length, questions: questions.length, requests: requests.filter(r => r.request.status === 'pending_approval').length });
       setError('');
@@ -34,7 +35,7 @@ export function StaffHomePage({ user, token, onNavigate }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, user.role]);
 
   useEffect(() => {
     void load();
@@ -46,8 +47,8 @@ export function StaffHomePage({ user, token, onNavigate }: Props) {
   const cards: { label: string; value: number; to: View; hint: string }[] = [
     { label: 'Стажёров', value: interns.length, to: 'team', hint: 'в вашей команде' },
     ...(user.role === 'buddy' ? [{ label: 'Ждут проверки', value: stats.review, to: 'team' as View, hint: 'задания с результатом' }] : []),
-    { label: 'Вопросов от бота', value: stats.questions, to: 'mentor', hint: 'ждут вашего ответа' },
-    { label: 'Заявок', value: stats.requests, to: 'mentor', hint: 'на согласование' },
+    ...(user.role === 'buddy' ? [{ label: 'Вопросов от бота', value: stats.questions, to: 'mentor' as View, hint: 'ждут вашего ответа' }] : []),
+    ...(user.role === 'teamlead' ? [{ label: 'Заявок', value: stats.requests, to: 'mentor' as View, hint: 'на согласование' }] : []),
   ];
 
   return (

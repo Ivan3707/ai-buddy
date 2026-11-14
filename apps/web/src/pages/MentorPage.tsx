@@ -1,14 +1,17 @@
+import type { User } from '@ai-buddy/client';
 import { MentorDesk } from '../bot/MentorDesk';
+import { RequestsDesk } from '../bot/RequestsDesk';
 
-/** Вопросы и заявки: что бот передал наставнику, AI-черновики ответов, согласование заявок и метрики эффекта. */
-export function MentorPage({ token }: { token: string }) {
+/** Наставнику: вопросы, переданные ботом, и AI-черновики ответов. Руководителю: заявки стажёров на согласование. */
+export function MentorPage({ user, token }: { user: User; token: string }) {
+  const lead = user.role === 'teamlead';
   return (
     <div className="home staff-page">
       <header className="greeting">
-        <h1>Вопросы и заявки</h1>
-        <p>Что бот передал вам: вопросы стажёров, заявки на согласование и эффект от Бади</p>
+        <h1>{lead ? 'Заявки' : 'Вопросы'}</h1>
+        <p>{lead ? 'Заявки стажёров на отгул, отпуск и доступ: согласование открывается в корпоративном портале' : 'Что бот передал вам: вопросы стажёров и эффект от Бади'}</p>
       </header>
-      <MentorDesk token={token} />
+      {lead ? <RequestsDesk token={token} /> : <MentorDesk token={token} />}
     </div>
   );
 }

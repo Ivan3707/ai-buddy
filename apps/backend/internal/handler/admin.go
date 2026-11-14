@@ -27,6 +27,8 @@ func RegisterAdminRoutes(mux *http.ServeMux, auth func(http.Handler) http.Handle
 		send(w, http.StatusOK, map[string]bool{"allowed": s.OpenForAll || (user != nil && user.Role == model.RoleTeamlead)})
 	})))
 	route("GET /api/admin/feedback", h.feedback)
+	route("GET /api/admin/kb/lint", h.kbLint)
+	route("GET /api/admin/kb/gaps", h.kbGaps)
 	route("GET /api/admin/accounts", h.accounts)
 	route("GET /api/admin/llm", h.llm)
 	route("POST /api/admin/llm/ping", h.llmPing)
@@ -60,6 +62,18 @@ func (h adminHandler) feedback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	send(w, http.StatusOK, out)
+}
+
+func (h adminHandler) kbLint(w http.ResponseWriter, r *http.Request) {
+	extendDeadline(w, 4*time.Minute)
+	raw, err := h.s.KBLint(r.Context())
+	sendRaw(w, raw, err)
+}
+
+func (h adminHandler) kbGaps(w http.ResponseWriter, r *http.Request) {
+	extendDeadline(w, 3*time.Minute)
+	raw, err := h.s.KBGaps(r.Context())
+	sendRaw(w, raw, err)
 }
 
 func (h adminHandler) llm(w http.ResponseWriter, r *http.Request) {

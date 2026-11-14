@@ -360,18 +360,26 @@ func TestAssistantFlowWithPostgres(t *testing.T) {
 	expect(intern, http.MethodGet, "/api/buddy/requests", nil, http.StatusForbidden)
 	expect(intern, http.MethodPost, "/api/buddy/requests/"+requestID+"/decision", map[string]string{"status": "approved"}, http.StatusForbidden)
 	expect(buddy, http.MethodPost, "/api/buddy/requests/"+requestID+"/decision", map[string]string{"status": "maybe"}, http.StatusBadRequest)
+	// only the teamlead approves: the buddy neither lists requests nor decides
+	expect(buddy, http.MethodGet, "/api/buddy/requests", nil, http.StatusForbidden)
+	expect(buddy, http.MethodPost, "/api/buddy/requests/"+requestID+"/decision", map[string]string{"status": "approved"}, http.StatusForbidden)
+	var asApprover map[string]any
+	_ = json.Unmarshal(expect(lead, http.MethodGet, "/api/requests/"+requestID, nil, http.StatusOK), &asApprover)
+	if asApprover["requester"] != "Аня Стажёрова" {
+		t.Fatalf("approver view %v", asApprover)
+	}
 	var staffList []map[string]any
 	_ = json.Unmarshal(expect(lead, http.MethodGet, "/api/buddy/requests", nil, http.StatusOK), &staffList)
 	if len(staffList) != 1 || staffList[0]["intern_name"] != "Аня Стажёрова" {
 		t.Fatalf("staff requests %v", staffList)
 	}
 	var decided map[string]any
-	_ = json.Unmarshal(expect(lead, http.MethodPost, "/api/buddy/requests/"+requestID+"/decision", map[string]string{"status": "approved"}, http.StatusOK), &decided)
-	if decided["status"] != "approved" {
+	_ = json.Unmarshal(expect(lead, http.MethodPost, "/api/buddy/requests/"+requestID+"/decision", map[string]string{"status": "approved", "comment": "Согласовано, хорошего отдыха"}, http.StatusOK), &decided)
+	if decided["status"] != "approved" || decided["decision_comment"] != "Согласовано, хорошего отдыха" || decided["approver"] != "Ирина Руководова" {
 		t.Fatalf("decision %v", decided)
 	}
-	expect(buddy, http.MethodPost, "/api/buddy/requests/"+requestID+"/decision", map[string]string{"status": "rejected"}, http.StatusConflict)
-	expect(buddy, http.MethodPost, "/api/buddy/requests/"+uuid.NewString()+"/decision", map[string]string{"status": "rejected"}, http.StatusNotFound)
+	expect(lead, http.MethodPost, "/api/buddy/requests/"+requestID+"/decision", map[string]string{"status": "rejected"}, http.StatusConflict)
+	expect(lead, http.MethodPost, "/api/buddy/requests/"+uuid.NewString()+"/decision", map[string]string{"status": "rejected"}, http.StatusNotFound)
 
 	// ---- escalation to the buddy, draft, answer
 	question := find(stream(intern, "/api/chat/stream", map[string]any{"message": "спроси наставника"}), "action")["action"].(map[string]any)
@@ -392,13 +400,10 @@ func TestAssistantFlowWithPostgres(t *testing.T) {
 	expect(buddy, http.MethodGet, "/api/buddy/questions/"+uuid.NewString()+"/draft", nil, http.StatusNotFound)
 	expect(buddy, http.MethodPost, "/api/buddy/questions/"+qid+"/answer", map[string]string{"answer": " "}, http.StatusBadRequest)
 	expect(buddy, http.MethodPost, "/api/buddy/questions/"+qid+"/answer", map[string]string{"answer": "Датасет в S3"}, http.StatusOK)
-	expect(lead, http.MethodPost, "/api/buddy/questions/"+qid+"/answer", map[string]string{"answer": "ещё"}, http.StatusConflict)
-	expect(buddy, http.MethodGet, "/api/analytics/gaps", nil, http.StatusOK)
-	if q := ai.requests["/v1/analytics/gaps"][0]["questions"].([]any); len(q) != 1 {
-		t.Fatalf("gaps payload %v", q)
-	}
-	expect(lead, http.MethodGet, "/api/kb/lint", nil, http.StatusOK)
-	expect(intern, http.MethodGet, "/api/kb/lint", nil, http.StatusForbidden)
+	expect(buddy, http.MethodPost, "/api/buddy/questions/"+qid+"/answer", map[string]string{"answer": "ещё"}, http.StatusConflict)
+	// the teamlead does not see interns' questions: they are the mentor's
+	expect(lead, http.MethodGet, "/api/buddy/questions", nil, http.StatusForbidden)
+	expect(lead, http.MethodPost, "/api/buddy/questions/"+qid+"/answer", map[string]string{"answer": "ещё"}, http.StatusForbidden)
 	expect(intern, http.MethodGet, "/api/kb/docs/leave", nil, http.StatusOK)
 	// ---- suggestions: a ready-made hint without the model, then a normal turn that sees it as history
 	expect(intern, http.MethodGet, "/api/suggestions", nil, http.StatusOK)
@@ -441,7 +446,6 @@ func TestAssistantFlowWithPostgres(t *testing.T) {
 	expect(intern, http.MethodPost, "/api/requests", form("mentor_question", map[string]string{"question": "x"}), http.StatusUnprocessableEntity)
 	expect(intern, http.MethodGet, "/api/kb/docs/nope", nil, http.StatusNotFound)
 	expect(intern, http.MethodGet, "/api/kb/docs/bad%20id", nil, http.StatusNotFound)
-	expect(intern, http.MethodGet, "/api/analytics/gaps", nil, http.StatusForbidden)
 
 	// ---- history and feedback
 	var history struct {
@@ -509,5 +513,4 @@ func TestAssistantFlowWithPostgres(t *testing.T) {
 	if e := find(stream(intern, "/api/chat/stream", map[string]any{"message": "что-нибудь"}), "error"); e["code"] != "llm_unavailable" {
 		t.Fatalf("error event %v", e)
 	}
-	expect(buddy, http.MethodGet, "/api/kb/lint", nil, http.StatusBadGateway)
 }

@@ -61,3 +61,19 @@ body:has(.portal) { min-width: 0; background: #eef1f6; }
   .portal-card h1 { font-size: 24px; }
   .portal-fields { grid-template-columns: 1fr; }
 }
+
+/* список заявок, решение руководителя */
+.portal-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.portal-list li { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 12px 14px; border: 1px solid #e6eaf1; border-radius: 10px; }
+.portal-list a { display: grid; gap: 1px; color: #1c2330; text-decoration: none; }
+.portal-list a:hover b { text-decoration: underline; }
+.portal-list a span { font-size: 14px; color: #5b6577; }
+.portal-decision { margin: 22px 0 0; padding: 16px 18px; border: 1px solid #d9dfe9; border-radius: 12px; background: #f7f9fc; }
+.portal-decision h2 { margin: 0 0 8px; }
+.portal-decision label { display: grid; gap: 6px; font-size: 13px; color: #5b6577; }
+.portal-decision textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #c3cbda; border-radius: 8px; font: inherit; color: #1c2330; resize: vertical; }
+.portal-decision-bar { display: flex; gap: 10px; margin-top: 12px; }
+.portal-btn { padding: 9px 22px; border: 0; border-radius: 8px; font: inherit; font-weight: 700; cursor: pointer; color: #fff; }
+.portal-btn.is-ok { background: #166534; }
+.portal-btn.is-no { background: #a12a2a; }
+.portal-btn:disabled { opacity: 0.6; cursor: default; }

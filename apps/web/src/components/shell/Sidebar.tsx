@@ -1,11 +1,10 @@
-export type View = 'home' | 'calendar' | 'tasks' | 'feedback' | 'team' | 'mentor' | 'buddy' | 'admin';
+export type View = 'home' | 'calendar' | 'tasks' | 'feedback' | 'team' | 'mentor' | 'admin';
 export type NavItem = { view: Exclude<View, 'feedback'>; label: string };
 
 export const NAV_ITEMS: NavItem[] = [
   { view: 'home', label: 'Главная' },
   { view: 'calendar', label: 'Календарь' },
   { view: 'tasks', label: 'Задачи' },
-  { view: 'buddy', label: 'Бади' },
 ];
 
 type Props = { view: View; onNavigate: (view: View) => void; onLogout: () => void; items?: NavItem[] };

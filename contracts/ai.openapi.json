@@ -942,6 +942,14 @@
             "type": "string",
             "description": "Роль/имя согласующего (руководитель, владелец проекта)"
           },
+          "decision_comment": {
+            "type": "string",
+            "description": "Комментарий руководителя к решению"
+          },
+          "requester": {
+            "type": "string",
+            "description": "Имя стажёра; приходит только руководителю, который открыл заявку"
+          },
           "params": {
             "oneOf": [
               {

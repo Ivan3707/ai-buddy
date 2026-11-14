@@ -9,7 +9,7 @@ export type PendingAction = {
 };
 export type ServiceRequest = {
   id: string; number: string; type: 'leave_request' | 'access_request';
-  status: 'pending_approval' | 'approved' | 'rejected'; approver?: string;
+  status: 'pending_approval' | 'approved' | 'rejected'; approver?: string; decision_comment?: string; requester?: string;
   params: Record<string, string>; created_at: string; updated_at: string;
 };
 export type MentorQuestion = {
@@ -110,10 +110,8 @@ export const bot = {
   draft: (token: string, id: string) => request<MentorDraft>(token, `/api/buddy/questions/${id}/draft`),
   answer: (token: string, id: string, answer: string) => post<MentorQuestion>(token, `/api/buddy/questions/${id}/answer`, { answer }),
   staffRequests: (token: string) => request<{ request: ServiceRequest; intern_id: string; intern_name: string }[]>(token, '/api/buddy/requests'),
-  decide: (token: string, id: string, status: 'approved' | 'rejected') => post<ServiceRequest>(token, `/api/buddy/requests/${id}/decision`, { status }),
+  decide: (token: string, id: string, status: 'approved' | 'rejected', comment?: string) => post<ServiceRequest>(token, `/api/buddy/requests/${id}/decision`, comment ? { status, comment } : { status }),
   metrics: (token: string) => request<ChatMetrics>(token, '/api/metrics/chat'),
-  gaps: (token: string) => request<GapsReport>(token, '/api/analytics/gaps'),
-  lint: (token: string) => request<KbLintReport>(token, '/api/kb/lint'),
 };
 
 export const REQUEST_STATUS: Record<ServiceRequest['status'], string> = {

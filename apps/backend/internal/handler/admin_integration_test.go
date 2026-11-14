@@ -86,6 +86,10 @@ func TestAdminRoutesWithPostgres(t *testing.T) {
 			_, _ = w.Write([]byte(`{"ok":true,"mode":"mock","latency_ms":0,"answer":"pong (mock)","input_tokens":0,"output_tokens":0,"error":""}`))
 		case "GET /v1/admin/kb":
 			_, _ = w.Write([]byte(`{"documents":3,"chunks":9,"source":"markdown"}`))
+		case "GET /v1/kb/lint":
+			_, _ = w.Write([]byte(`{"issues":[{"kind":"stale","doc_ids":["a"],"detail":"old"}]}`))
+		case "POST /v1/analytics/gaps":
+			_, _ = w.Write([]byte(`{"total_questions":0,"clusters":[]}`))
 		case "POST /v1/kb/reload":
 			_, _ = w.Write([]byte(`{"documents":3,"chunks":9,"source":"markdown"}`))
 		default:
@@ -123,7 +127,8 @@ func TestAdminRoutesWithPostgres(t *testing.T) {
 	routes := [][2]string{
 		{"GET", "/api/admin/accounts"}, {"GET", "/api/admin/llm"}, {"POST", "/api/admin/llm/ping"},
 		{"GET", "/api/admin/system"}, {"POST", "/api/admin/kb/reload"}, {"GET", "/api/admin/notifications"},
-		{"POST", "/api/admin/notifications/stuck_task/check"},
+		{"POST", "/api/admin/notifications/stuck_task/check"}, {"GET", "/api/admin/kb/lint"}, {"GET", "/api/admin/kb/gaps"},
+		{"GET", "/api/admin/feedback"},
 	}
 	for _, rt := range routes {
 		if code, _ := call(nil, rt[0], rt[1]); code != http.StatusUnauthorized {
@@ -169,6 +174,12 @@ func TestAdminRoutesWithPostgres(t *testing.T) {
 	}
 	if code, raw = call(lead, "POST", "/api/admin/llm/ping"); code != 200 || !strings.Contains(string(raw), `"ok":true`) {
 		t.Fatalf("ping: %d %s", code, raw)
+	}
+	if code, raw = call(lead, "GET", "/api/admin/kb/lint"); code != 200 || !strings.Contains(string(raw), `"stale"`) {
+		t.Fatalf("kb lint: %d %s", code, raw)
+	}
+	if code, raw = call(lead, "GET", "/api/admin/kb/gaps"); code != 200 || !strings.Contains(string(raw), `"clusters"`) {
+		t.Fatalf("kb gaps: %d %s", code, raw)
 	}
 	if code, raw = call(lead, "POST", "/api/admin/kb/reload"); code != 200 || !strings.Contains(string(raw), `"chunks":9`) {
 		t.Fatalf("reload: %d %s", code, raw)

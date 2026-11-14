@@ -265,7 +265,8 @@ describe('кабинет наставника', () => {
     expect(await screen.findByText('Ждут проверки')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Команда' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Вопросы' }));
-    expect(await screen.findByRole('heading', { name: 'Вопросы и заявки' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Вопросы' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Бади' })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Выйти' }));
     expect(await screen.findByRole('heading', { name: 'Вход' })).toBeInTheDocument();
     expect(stored()).toBeNull();

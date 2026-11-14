@@ -3,6 +3,7 @@ import {
   admin, type AdminAccount, type AnswerFeedback, type AdminLlm, type AdminNotification, type AdminPing, type AdminSystem,
   type KbCounts, type NotificationSample, type StuckCheck,
 } from '../bot/adminApi';
+import type { GapsReport, KbLintReport } from '../bot/api';
 import { personName, staffRoleLabel } from '../lib/format';
 
 /** Админ-панель руководителя: аккаунты, API и модель, оповещения Бади, состояние системы. Только чтение и проверки. */
@@ -12,6 +13,7 @@ const TABS = [
   { id: 'llm', label: 'API и модель' },
   { id: 'notifications', label: 'Оповещения' },
   { id: 'quality', label: 'Оценки ответов' },
+  { id: 'kb', label: 'База знаний' },
   { id: 'system', label: 'Система' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
@@ -325,6 +327,37 @@ function QualityTab({ token }: { token: string }) {
   );
 }
 
+function KbTab({ token }: { token: string }) {
+  const [gaps, setGaps] = useState<GapsReport | null>(null);
+  const [lint, setLint] = useState<KbLintReport | null>(null);
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const run = async (kind: 'gaps' | 'lint') => {
+    setBusy(kind); setError('');
+    try { if (kind === 'gaps') setGaps(await admin.kbGaps(token)); else setLint(await admin.kbLint(token)); }
+    catch (e) { setError(errorText(e)); } finally { setBusy(''); }
+  };
+  return (
+    <div className="admin-stack">
+      <section className="staff-card admin-block" aria-label="Качество базы знаний">
+        <h2>Качество базы знаний</h2>
+        <p className="muted">Где бот не справляется: темы вопросов без ответа и противоречия между документами.</p>
+        <div className="admin-actions">
+          <button className="pill pill-black pill-sm" disabled={busy === 'gaps'} onClick={() => void run('gaps')}>{busy === 'gaps' ? 'Считаю…' : 'Пробелы: темы вопросов без ответа'}</button>
+          <button className="pill pill-black pill-sm" disabled={busy === 'lint'} onClick={() => void run('lint')}>{busy === 'lint' ? 'Проверяю (до минуты)…' : 'Линтер: противоречия и устаревшее'}</button>
+        </div>
+        {error && <p className="notice error" role="alert">{error}</p>}
+        {gaps && (gaps.clusters.length
+          ? <ul>{gaps.clusters.map(c => <li key={c.label}><b>{c.label}</b> — {c.count}: <span className="muted">{c.examples.join(' / ')}</span></li>)}</ul>
+          : <p className="muted">Эскалированных вопросов пока нет.</p>)}
+        {lint && (lint.issues.length
+          ? <ul>{lint.issues.map((i, n) => <li key={n}><span className="chip">{i.kind === 'contradiction' ? 'противоречие' : i.kind === 'stale' ? 'устарело' : i.kind}</span> <b>{i.doc_ids.join(' ↔ ')}</b>: {i.detail}</li>)}</ul>
+          : <p className="muted">Проблем не найдено.</p>)}
+      </section>
+    </div>
+  );
+}
+
 function SystemTab({ token }: { token: string }) {
   const { data, error, loading, reload } = useLoad<AdminSystem>(useCallback(() => admin.system(token), [token]));
   const [reloading, setReloading] = useState(false);
@@ -396,6 +429,7 @@ export function AdminPage({ token }: { token: string }) {
         {tab === 'llm' && <LlmTab token={token} />}
         {tab === 'notifications' && <NotificationsTab token={token} />}
         {tab === 'quality' && <QualityTab token={token} />}
+        {tab === 'kb' && <KbTab token={token} />}
         {tab === 'system' && <SystemTab token={token} />}
       </div>
     </div>

@@ -32,6 +32,7 @@ var (
 	ErrActionInvalid     = errors.New("invalid action params")
 	ErrAIUnavailable     = errors.New("AI unavailable")
 	ErrNotBuddy          = errors.New("not a buddy")
+	ErrNotTeamlead       = errors.New("not a teamlead")
 	ErrQuestionAnswered  = errors.New("question already answered")
 	ErrInvalidDecision   = errors.New("status must be approved or rejected")
 	ErrRequestNotPending = errors.New("request already decided")
@@ -72,14 +73,17 @@ type PendingAction struct {
 }
 
 type ServiceRequest struct {
-	ID        uuid.UUID       `json:"id"`
-	Number    string          `json:"number"`
-	Type      string          `json:"type"`
-	Status    string          `json:"status"`
-	Approver  string          `json:"approver,omitempty"`
-	Params    json.RawMessage `json:"params"`
-	CreatedAt time.Time       `json:"created_at"`
-	UpdatedAt time.Time       `json:"updated_at"`
+	ID       uuid.UUID `json:"id"`
+	Number   string    `json:"number"`
+	Type     string    `json:"type"`
+	Status   string    `json:"status"`
+	Approver string    `json:"approver,omitempty"`
+	// DecisionComment is the teamlead's comment on the decision; Requester is filled for the approver's view only.
+	DecisionComment string          `json:"decision_comment,omitempty"`
+	Requester       string          `json:"requester,omitempty"`
+	Params          json.RawMessage `json:"params"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
 }
 
 type MentorQuestion struct {
@@ -720,11 +724,11 @@ func (s *AssistantService) Cancel(ctx context.Context, userID, actionID uuid.UUI
 
 // ---------------------------------------------------------------- requests (mock corporate services)
 
-const requestColumns = `id, number, type, status, COALESCE(approver, ''), params, created_at, updated_at`
+const requestColumns = `id, number, type, status, COALESCE(approver, ''), COALESCE(decision_comment, ''), params, created_at, updated_at`
 
 func scanRequest(row interface{ Scan(...any) error }) (ServiceRequest, error) {
 	var r ServiceRequest
-	err := row.Scan(&r.ID, &r.Number, &r.Type, &r.Status, &r.Approver, &r.Params, &r.CreatedAt, &r.UpdatedAt)
+	err := row.Scan(&r.ID, &r.Number, &r.Type, &r.Status, &r.Approver, &r.DecisionComment, &r.Params, &r.CreatedAt, &r.UpdatedAt)
 	return r, err
 }
 
@@ -745,33 +749,62 @@ func (s *AssistantService) ListRequests(ctx context.Context, userID uuid.UUID, l
 	return out, rows.Err()
 }
 
-func (s *AssistantService) GetRequest(ctx context.Context, userID, id uuid.UUID) (ServiceRequest, error) {
-	r, err := scanRequest(s.db.QueryRowContext(ctx, `SELECT `+requestColumns+` FROM service_requests WHERE id = $1 AND user_id = $2`, id, userID))
+// GetRequest returns a request to its owner or to the owner's teamlead (the approver, with the requester's name).
+func (s *AssistantService) GetRequest(ctx context.Context, viewer *model.User, id uuid.UUID) (ServiceRequest, error) {
+	r, err := scanRequest(s.db.QueryRowContext(ctx, `SELECT `+requestColumns+` FROM service_requests WHERE id = $1 AND user_id = $2`, id, viewer.ID))
+	if err == nil {
+		return r, nil
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		return r, err
+	}
+	if viewer.Role != model.RoleTeamlead {
+		return r, repository.ErrNotFound
+	}
+	var name string
+	r, err = scanRequest(s.db.QueryRowContext(ctx, `
+		SELECT r.id, r.number, r.type, r.status, COALESCE(r.approver, ''), COALESCE(r.decision_comment, ''), r.params, r.created_at, r.updated_at
+		FROM service_requests r JOIN users u ON u.id = r.user_id WHERE r.id = $1 AND u.teamlead_id = $2`, id, viewer.ID))
 	if errors.Is(err, sql.ErrNoRows) {
 		return r, repository.ErrNotFound
 	}
-	return r, err
+	if err != nil {
+		return r, err
+	}
+	_ = s.db.QueryRowContext(ctx, `
+		SELECT COALESCE(NULLIF(btrim(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.email)
+		FROM service_requests r JOIN users u ON u.id = r.user_id WHERE r.id = $1`, id).Scan(&name)
+	r.Requester = name
+	return r, nil
 }
 
-// DecideRequest is the mock corporate approval: the intern's buddy or teamlead approves or rejects a request.
-func (s *AssistantService) DecideRequest(ctx context.Context, staff *model.User, id uuid.UUID, status string) (ServiceRequest, error) {
+// DecideRequest is the mock corporate approval: only the intern's teamlead approves or rejects a request, with a comment.
+func (s *AssistantService) DecideRequest(ctx context.Context, staff *model.User, id uuid.UUID, status, comment string) (ServiceRequest, error) {
 	if status != "approved" && status != "rejected" {
 		return ServiceRequest{}, ErrInvalidDecision
 	}
-	if staff.Role == model.RoleIntern {
-		return ServiceRequest{}, ErrNotBuddy
+	if staff.Role != model.RoleTeamlead {
+		return ServiceRequest{}, ErrNotTeamlead
+	}
+	comment = strings.TrimSpace(comment)
+	if r := []rune(comment); len(r) > 500 {
+		comment = string(r[:500])
+	}
+	who := strings.TrimSpace(fullName(staff.FirstName, staff.LastName))
+	if who == "" {
+		who = staff.Email
 	}
 	r, err := scanRequest(s.db.QueryRowContext(ctx, `
-		UPDATE service_requests r SET status = $3, updated_at = now()
+		UPDATE service_requests r SET status = $3, approver = $4, decision_comment = NULLIF($5, ''), updated_at = now()
 		FROM users u
-		WHERE r.id = $1 AND u.id = r.user_id AND (u.buddy_id = $2 OR u.teamlead_id = $2) AND r.status = 'pending_approval'
-		RETURNING r.id, r.number, r.type, r.status, COALESCE(r.approver, ''), r.params, r.created_at, r.updated_at`,
-		id, staff.ID, status))
+		WHERE r.id = $1 AND u.id = r.user_id AND u.teamlead_id = $2 AND r.status = 'pending_approval'
+		RETURNING r.id, r.number, r.type, r.status, COALESCE(r.approver, ''), COALESCE(r.decision_comment, ''), r.params, r.created_at, r.updated_at`,
+		id, staff.ID, status, who, comment))
 	if errors.Is(err, sql.ErrNoRows) {
 		var exists bool
 		_ = s.db.QueryRowContext(ctx, `
 			SELECT true FROM service_requests r JOIN users u ON u.id = r.user_id
-			WHERE r.id = $1 AND (u.buddy_id = $2 OR u.teamlead_id = $2)`, id, staff.ID).Scan(&exists)
+			WHERE r.id = $1 AND u.teamlead_id = $2`, id, staff.ID).Scan(&exists)
 		if exists {
 			return r, ErrRequestNotPending
 		}
@@ -780,13 +813,16 @@ func (s *AssistantService) DecideRequest(ctx context.Context, staff *model.User,
 	return r, err
 }
 
-// StaffRequests lists requests of the interns assigned to a buddy/teamlead.
+// StaffRequests lists requests of the teamlead's interns for approval (buddies do not approve requests).
 func (s *AssistantService) StaffRequests(ctx context.Context, staff *model.User) ([]map[string]any, error) {
+	if staff.Role != model.RoleTeamlead {
+		return nil, ErrNotTeamlead
+	}
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT r.id, r.number, r.type, r.status, COALESCE(r.approver, ''), r.params, r.created_at, r.updated_at,
+		SELECT r.id, r.number, r.type, r.status, COALESCE(r.approver, ''), COALESCE(r.decision_comment, ''), r.params, r.created_at, r.updated_at,
 		       u.id, COALESCE(NULLIF(btrim(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.email), ''
 		FROM service_requests r JOIN users u ON u.id = r.user_id
-		WHERE u.buddy_id = $1 OR u.teamlead_id = $1 ORDER BY r.created_at DESC LIMIT 100`, staff.ID)
+		WHERE u.teamlead_id = $1 ORDER BY r.created_at DESC LIMIT 100`, staff.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -796,7 +832,7 @@ func (s *AssistantService) StaffRequests(ctx context.Context, staff *model.User)
 		var r ServiceRequest
 		var internID uuid.UUID
 		var first, last string
-		if err := rows.Scan(&r.ID, &r.Number, &r.Type, &r.Status, &r.Approver, &r.Params, &r.CreatedAt, &r.UpdatedAt, &internID, &first, &last); err != nil {
+		if err := rows.Scan(&r.ID, &r.Number, &r.Type, &r.Status, &r.Approver, &r.DecisionComment, &r.Params, &r.CreatedAt, &r.UpdatedAt, &internID, &first, &last); err != nil {
 			return nil, err
 		}
 		out = append(out, map[string]any{"request": r, "intern_id": internID, "intern_name": strings.TrimSpace(first + " " + last)})
@@ -877,15 +913,16 @@ func (s *AssistantService) Feedback(ctx context.Context, userID, messageID uuid.
 
 // ---------------------------------------------------------------- buddy side
 
+// Questions are the mentor's: escalated interns' questions go to the buddy only, the teamlead does not see them.
 func (s *AssistantService) Questions(ctx context.Context, staff *model.User, status string) ([]MentorQuestion, error) {
-	if staff.Role == model.RoleIntern {
+	if staff.Role != model.RoleBuddy {
 		return nil, ErrNotBuddy
 	}
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT q.id, q.intern_id, COALESCE(NULLIF(btrim(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '')), ''), u.email), q.question, q.context,
 		       q.status, q.escalation_level, q.answer, q.created_at, q.answered_at
 		FROM mentor_questions q JOIN users u ON u.id = q.intern_id
-		WHERE (q.buddy_id = $1 OR u.buddy_id = $1 OR u.teamlead_id = $1) AND ($2 = '' OR q.status = $2)
+		WHERE (q.buddy_id = $1 OR u.buddy_id = $1) AND ($2 = '' OR q.status = $2)
 		ORDER BY q.created_at DESC LIMIT 200`, staff.ID, status)
 	if err != nil {
 		return nil, fmt.Errorf("list questions: %w", err)
@@ -981,25 +1018,6 @@ func (s *AssistantService) Draft(ctx context.Context, staff *model.User, id uuid
 		}
 	}
 	return s.callAI(ctx, http.MethodPost, "/v1/mentor/draft", payload)
-}
-
-func (s *AssistantService) Gaps(ctx context.Context, staff *model.User) (json.RawMessage, error) {
-	qs, err := s.Questions(ctx, staff, "")
-	if err != nil {
-		return nil, err
-	}
-	items := make([]map[string]string, 0, len(qs))
-	for _, q := range qs {
-		items = append(items, map[string]string{"id": q.ID.String(), "text": q.Question})
-	}
-	return s.callAI(ctx, http.MethodPost, "/v1/analytics/gaps", map[string]any{"questions": items})
-}
-
-func (s *AssistantService) Lint(ctx context.Context, staff *model.User) (json.RawMessage, error) {
-	if staff.Role == model.RoleIntern {
-		return nil, ErrNotBuddy
-	}
-	return s.callAI(ctx, http.MethodGet, "/v1/kb/lint", nil)
 }
 
 // ---------------------------------------------------------------- suggestions (ready-made hints, no LLM)

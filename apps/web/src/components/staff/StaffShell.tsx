@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import type { User } from '@ai-buddy/client';
-import { BuddyInfoPage } from '../../bot/BuddyPages';
 import { useAdminAccess } from '../../hooks/useAdminAccess';
 import { isAdminPath } from '../../lib/adminPath';
 import { useStageScale } from '../../hooks/useStageScale';
@@ -19,8 +18,9 @@ const STAFF_ITEMS: NavItem[] = [
   { view: 'team', label: 'Команда' },
   { view: 'mentor', label: 'Вопросы' },
   { view: 'calendar', label: 'Календарь' },
-  { view: 'buddy', label: 'Бади' },
 ];
+// Заявки согласует руководитель, вопросы стажёров достаются наставнику.
+const itemsFor = (role: string): NavItem[] => STAFF_ITEMS.map(item => (item.view === 'mentor' && role === 'teamlead' ? { ...item, label: 'Заявки' } : item));
 
 type Props ={ user: User; token: string; onLogout: () => void };
 
@@ -34,7 +34,7 @@ export function StaffShell({ user, token, onLogout }: Props) {
   useEffect(() => {
     const open = (event: Event) => {
       const target = String((event as CustomEvent).detail);
-      if (['home', 'team', 'mentor', 'calendar', 'buddy'].includes(target)) setView(target as View);
+      if (['home', 'team', 'mentor', 'calendar'].includes(target)) setView(target as View);
     };
     window.addEventListener('ai-buddy:navigate', open);
     return () => window.removeEventListener('ai-buddy:navigate', open);
@@ -44,18 +44,17 @@ export function StaffShell({ user, token, onLogout }: Props) {
 
   return (
     <div className="shell">
-      <Sidebar view={view} items={STAFF_ITEMS} onNavigate={setView} onLogout={onLogout} />
+      <Sidebar view={view} items={itemsFor(user.role)} onNavigate={setView} onLogout={onLogout} />
       <main className="workspace staff">
         {view === 'home' && <StaffHomePage user={user} token={token} onNavigate={setView} />}
         {view === 'team' && <StaffTeamPage user={user} token={token} />}
-        {view === 'mentor' && <MentorPage token={token} />}
+        {view === 'mentor' && <MentorPage user={user} token={token} />}
         {view === 'calendar' && <CalendarPage />}
-        {view === 'buddy' && <BuddyInfoPage user={user} />}
         {view === 'admin' && (isAdmin ? <AdminPage token={token} /> : <p className="muted">Нет доступа к админ-панели.</p>)}
       </main>
       <SideTabs onProfile={() => setProfileOpen(true)} onNotes={() => setNotesOpen(true)} />
       <StaffProfileDrawer user={user} open={profileOpen} onClose={() => setProfileOpen(false)} />
-      <NotesDrawer open={notesOpen} onClose={() => setNotesOpen(false)} />
+      <NotesDrawer open={notesOpen} token={token} onClose={() => setNotesOpen(false)} />
     </div>
   );
 }

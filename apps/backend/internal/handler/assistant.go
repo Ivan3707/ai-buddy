@@ -49,8 +49,6 @@ func RegisterAssistantRoutes(mux *http.ServeMux, auth func(http.Handler) http.Ha
 	route("GET /api/buddy/questions", h.questions)
 	route("POST /api/buddy/questions/{id}/answer", h.answer)
 	route("GET /api/buddy/questions/{id}/draft", h.draft)
-	route("GET /api/analytics/gaps", h.gaps)
-	route("GET /api/kb/lint", h.lint)
 	route("GET /api/kb/docs/{id}", h.kbDoc)
 	route("GET /api/suggestions", h.suggestions)
 	route("POST /api/chat/hint", h.hintTurn)
@@ -63,7 +61,7 @@ func assistantError(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
 		send(w, http.StatusNotFound, map[string]string{"error": "not found"})
-	case errors.Is(err, service.ErrNotBuddy):
+	case errors.Is(err, service.ErrNotBuddy), errors.Is(err, service.ErrNotTeamlead):
 		send(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
 	case errors.Is(err, service.ErrActionCancelled), errors.Is(err, service.ErrActionExecuted),
 		errors.Is(err, service.ErrQuestionAnswered), errors.Is(err, service.ErrRequestNotPending):
@@ -292,7 +290,7 @@ func (h assistantHandler) request(w http.ResponseWriter, r *http.Request, user *
 	if !ok {
 		return
 	}
-	req, err := h.s.GetRequest(r.Context(), user.ID, id)
+	req, err := h.s.GetRequest(r.Context(), user, id)
 	if err != nil {
 		assistantError(w, err)
 		return
@@ -301,10 +299,6 @@ func (h assistantHandler) request(w http.ResponseWriter, r *http.Request, user *
 }
 
 func (h assistantHandler) staffRequests(w http.ResponseWriter, r *http.Request, user *model.User) {
-	if user.Role == model.RoleIntern {
-		assistantError(w, service.ErrNotBuddy)
-		return
-	}
 	list, err := h.s.StaffRequests(r.Context(), user)
 	if err != nil {
 		assistantError(w, err)
@@ -319,12 +313,13 @@ func (h assistantHandler) decide(w http.ResponseWriter, r *http.Request, user *m
 		return
 	}
 	var body struct {
-		Status string `json:"status"`
+		Status  string `json:"status"`
+		Comment string `json:"comment"`
 	}
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	req, err := h.s.DecideRequest(r.Context(), user, id, body.Status)
+	req, err := h.s.DecideRequest(r.Context(), user, id, body.Status, body.Comment)
 	if err != nil {
 		assistantError(w, err)
 		return
@@ -412,18 +407,6 @@ func (h assistantHandler) draft(w http.ResponseWriter, r *http.Request, user *mo
 	}
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(3 * time.Minute))
 	raw, err := h.s.Draft(r.Context(), user, id)
-	sendRaw(w, raw, err)
-}
-
-func (h assistantHandler) gaps(w http.ResponseWriter, r *http.Request, user *model.User) {
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(3 * time.Minute))
-	raw, err := h.s.Gaps(r.Context(), user)
-	sendRaw(w, raw, err)
-}
-
-func (h assistantHandler) lint(w http.ResponseWriter, r *http.Request, user *model.User) {
-	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(4 * time.Minute))
-	raw, err := h.s.Lint(r.Context(), user)
 	sendRaw(w, raw, err)
 }
 

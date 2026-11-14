@@ -1539,7 +1539,7 @@
             "bearerAuth": []
           }
         ],
-        "description": "Buddy only: questions escalated by the buddy's interns.",
+        "description": "Buddy only (not the teamlead): questions escalated by the buddy's interns.",
         "parameters": [
           {
             "name": "status",
@@ -1875,7 +1875,7 @@
             "bearerAuth": []
           }
         ],
-        "description": "Buddy/teamlead: requests of their interns, newest first.",
+        "description": "Teamlead only: requests of their interns for approval, newest first (buddies do not approve requests).",
         "responses": {
           "200": {
             "description": "Success",
@@ -1908,7 +1908,7 @@
             }
           },
           "403": {
-            "description": "Not a buddy",
+            "description": "Not a teamlead",
             "content": {
               "application/json": {
                 "schema": {
@@ -1947,7 +1947,7 @@
             }
           }
         ],
-        "description": "Mock corporate approval: the intern's buddy or teamlead approves or rejects a pending request. The intern sees the new status in /api/requests, the brief and the extension.",
+        "description": "Mock corporate approval: only the intern's teamlead approves or rejects a pending request, with a comment. The intern sees the new status in /api/requests, the brief and the extension.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1964,6 +1964,10 @@
                       "approved",
                       "rejected"
                     ]
+                  },
+                  "comment": {
+                    "type": "string",
+                    "maxLength": 500
                   }
                 }
               }
@@ -1983,6 +1987,24 @@
           },
           "400": {
             "description": "Invalid status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a teamlead",
             "content": {
               "application/json": {
                 "schema": {
@@ -3314,6 +3336,88 @@
           }
         }
       }
+    },
+    "/api/admin/kb/gaps": {
+      "get": {
+        "operationId": "adminKbGaps",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Admin panel: all escalated questions grouped by topic (AI /v1/analytics/gaps). Moved from /api/analytics/gaps.",
+        "responses": {
+          "200": {
+            "description": "Report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GapsReport"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/kb/lint": {
+      "get": {
+        "operationId": "adminKbLint",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Admin panel: knowledge-base contradictions and stale documents (AI /v1/kb/lint). Moved from /api/kb/lint.",
+        "responses": {
+          "200": {
+            "description": "Report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KbLintReport"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -3565,6 +3669,14 @@
           "approver": {
             "type": "string",
             "description": "Роль/имя согласующего (руководитель, владелец проекта)"
+          },
+          "decision_comment": {
+            "type": "string",
+            "description": "Комментарий руководителя к решению"
+          },
+          "requester": {
+            "type": "string",
+            "description": "Имя стажёра; приходит только руководителю, который открыл заявку"
           },
           "params": {
             "oneOf": [

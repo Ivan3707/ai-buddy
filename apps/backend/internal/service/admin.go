@@ -25,10 +25,10 @@ type HintTicker interface {
 type AdminService struct {
 	// OpenForAll lets every signed-in role into the admin panel (demo recording). Off by default: RBAC stays with the backend.
 	OpenForAll bool
-	db     *sql.DB
-	aiURL  string
-	client *http.Client
-	ticker HintTicker
+	db         *sql.DB
+	aiURL      string
+	client     *http.Client
+	ticker     HintTicker
 }
 
 func NewAdminService(db *sql.DB, aiURL string, ticker HintTicker) *AdminService {
@@ -117,6 +117,47 @@ func (s *AdminService) Accounts(ctx context.Context) ([]AdminAccount, error) {
 
 func (s *AdminService) aiCall(ctx context.Context, method, path string) (json.RawMessage, error) {
 	req, err := http.NewRequestWithContext(ctx, method, s.aiURL+path, bytes.NewReader(nil))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := s.client.Do(req)
+	if err != nil {
+		return nil, ErrAIUnavailable
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if err != nil || resp.StatusCode != http.StatusOK || !json.Valid(raw) {
+		return nil, ErrAIUnavailable
+	}
+	return raw, nil
+}
+
+// KBLint asks the AI service for contradictions and stale documents of the knowledge base.
+func (s *AdminService) KBLint(ctx context.Context) (json.RawMessage, error) {
+	return s.aiCall(ctx, http.MethodGet, "/v1/kb/lint")
+}
+
+// KBGaps clusters the questions the bot had to escalate (all of them): topics the knowledge base does not cover.
+func (s *AdminService) KBGaps(ctx context.Context) (json.RawMessage, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id::text, question FROM mentor_questions ORDER BY created_at DESC LIMIT 200`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []map[string]string{}
+	for rows.Next() {
+		var id, text string
+		if err := rows.Scan(&id, &text); err != nil {
+			return nil, err
+		}
+		items = append(items, map[string]string{"id": id, "text": text})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	payload, _ := json.Marshal(map[string]any{"questions": items})
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.aiURL+"/v1/analytics/gaps", bytes.NewReader(payload))
 	if err != nil {
 		return nil, err
 	}

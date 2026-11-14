@@ -9,7 +9,6 @@ import { CalendarPage } from '../../pages/CalendarPage';
 import { FeedbackPage } from '../../pages/FeedbackPage';
 import { HomePage } from '../../pages/HomePage';
 import { TasksPage } from '../../pages/TasksPage';
-import { BuddyInfoPage } from '../../bot/BuddyPages';
 import { finishOnboarding, isOnboardingPending } from '../../lib/onboarding';
 import { Onboarding } from '../onboarding/Onboarding';
 import { NotesDrawer } from './NotesDrawer';
@@ -34,7 +33,7 @@ export function AppShell({ user, token, onLogout }: Props) {
   useEffect(() => {
     const open = (event: Event) => {
       const target = String((event as CustomEvent).detail);
-      if (['home', 'calendar', 'tasks', 'buddy'].includes(target)) setView(target as View);
+      if (['home', 'calendar', 'tasks'].includes(target)) setView(target as View);
     };
     window.addEventListener('ai-buddy:navigate', open);
     return () => window.removeEventListener('ai-buddy:navigate', open);
@@ -78,7 +77,6 @@ export function AppShell({ user, token, onLogout }: Props) {
         {view === 'home' && <HomePage user={user} checklists={checklists} onOpenTasks={type => { setTasksChecklist(type); setView('tasks'); }} />}
         {view === 'calendar' && <CalendarPage />}
         {view === 'tasks' && <TasksPage token={token} checklists={checklists} selected={tasksChecklist} onSelect={setTasksChecklist} />}
-        {view === 'buddy' && <BuddyInfoPage user={user} />}
         {view === 'admin' && (isAdmin ? <AdminPage token={token} /> : <p className="muted">Нет доступа к админ-панели.</p>)}
       </main>
       <SideTabs onProfile={() => setProfileOpen(true)} onNotes={() => setNotesOpen(true)} />
@@ -88,7 +86,7 @@ export function AppShell({ user, token, onLogout }: Props) {
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
       />
-      <NotesDrawer open={notesOpen} onClose={() => setNotesOpen(false)} />
+      <NotesDrawer open={notesOpen} token={token} onClose={() => setNotesOpen(false)} />
       {onboarding && <Onboarding onNavigate={tourNavigate} onDone={endOnboarding} />}
     </div>
   );

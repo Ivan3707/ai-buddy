@@ -107,6 +107,8 @@ SHARED = {
             "type": {"type": "string", "enum": ["leave_request", "access_request"]},
             "status": {"type": "string", "enum": ["pending_approval", "approved", "rejected"]},
             "approver": {"type": "string", "description": "Роль/имя согласующего (руководитель, владелец проекта)"},
+            "decision_comment": {"type": "string", "description": "Комментарий руководителя к решению"},
+            "requester": {"type": "string", "description": "Имя стажёра; приходит только руководителю, который открыл заявку"},
             "params": {"oneOf": [ref("LeaveRequestParams"), ref("AccessRequestParams")]},
             "created_at": {"type": "string", "format": "date-time"},
             "updated_at": {"type": "string", "format": "date-time"},
@@ -629,7 +631,7 @@ backend_paths.update({
         "responses": {"200": json_resp("Success", ref("ServiceRequest")), "404": json_resp("Not found", ERROR)}}},
     "/api/buddy/questions": {"get": {
         "operationId": "buddyQuestions", "security": BEARER,
-        "description": "Buddy only: questions escalated by the buddy's interns.",
+        "description": "Buddy only (not the teamlead): questions escalated by the buddy's interns.",
         "parameters": [{"name": "status", "in": "query", "required": False,
                         "schema": {"type": "string", "enum": ["open", "answered"]}}],
         "responses": {"200": json_resp("Success", {"type": "array", "items": ref("MentorQuestion")}),
@@ -649,14 +651,14 @@ backend_paths.update({
         "description": "Buddy only: AI draft answer for an escalated question (AI /v1/mentor/draft).",
         "responses": {"200": json_resp("Draft", ref("MentorDraft")), "403": json_resp("Not this buddy's intern", ERROR),
                       "502": json_resp("AI unavailable", ERROR)}}},
-    "/api/analytics/gaps": {"get": {
-        "operationId": "knowledgeGaps", "security": BEARER,
-        "description": "Buddy only: escalated questions grouped by topic (AI /v1/analytics/gaps).",
-        "responses": {"200": json_resp("Report", ref("GapsReport")), "403": json_resp("Not a buddy", ERROR)}}},
-    "/api/kb/lint": {"get": {
-        "operationId": "kbLint", "security": BEARER,
-        "description": "Buddy only: knowledge-base contradictions and stale documents (AI /v1/kb/lint).",
-        "responses": {"200": json_resp("Report", ref("KbLintReport")), "403": json_resp("Not a buddy", ERROR)}}},
+    "/api/admin/kb/gaps": {"get": {
+        "operationId": "adminKbGaps", "security": BEARER,
+        "description": "Admin panel: all escalated questions grouped by topic (AI /v1/analytics/gaps). Moved from /api/analytics/gaps.",
+        "responses": {"200": json_resp("Report", ref("GapsReport")), "403": json_resp("Forbidden", ERROR)}}},
+    "/api/admin/kb/lint": {"get": {
+        "operationId": "adminKbLint", "security": BEARER,
+        "description": "Admin panel: knowledge-base contradictions and stale documents (AI /v1/kb/lint). Moved from /api/kb/lint.",
+        "responses": {"200": json_resp("Report", ref("KbLintReport")), "403": json_resp("Forbidden", ERROR)}}},
     "/api/kb/docs/{id}": {"get": {
         "operationId": "kbDocument", "security": BEARER,
         "parameters": [{"name": "id", "in": "path", "required": True, "schema": {"type": "string", "pattern": "^[A-Za-z0-9_.-]{1,128}$"}}],
@@ -679,19 +681,21 @@ backend_paths.update({
                           "422": json_resp("Empty question", ERROR)}}},
     "/api/buddy/requests": {"get": {
         "operationId": "staffRequests", "security": BEARER,
-        "description": "Buddy/teamlead: requests of their interns, newest first.",
+        "description": "Teamlead only: requests of their interns for approval, newest first (buddies do not approve requests).",
         "responses": {"200": json_resp("Success", {"type": "array", "items": {
             "type": "object", "required": ["request", "intern_id", "intern_name"],
             "properties": {"request": ref("ServiceRequest"), "intern_id": {"type": "string", "format": "uuid"},
                            "intern_name": {"type": "string"}}}}),
-            "403": json_resp("Not a buddy", ERROR)}}},
+            "403": json_resp("Not a teamlead", ERROR)}}},
     "/api/buddy/requests/{id}/decision": {"post": {
         "operationId": "decideRequest", "security": BEARER, "parameters": [UUID_PARAM],
-        "description": "Mock corporate approval: the intern's buddy or teamlead approves or rejects a pending request. "
+        "description": "Mock corporate approval: only the intern's teamlead approves or rejects a pending request, with a comment. "
                        "The intern sees the new status in /api/requests, the brief and the extension.",
         "requestBody": json_body({"type": "object", "required": ["status"], "properties": {
-            "status": {"type": "string", "enum": ["approved", "rejected"]}}}),
+            "status": {"type": "string", "enum": ["approved", "rejected"]},
+            "comment": {"type": "string", "maxLength": 500}}}),
         "responses": {"200": json_resp("Decided", ref("ServiceRequest")), "400": json_resp("Invalid status", ERROR),
+                      "403": json_resp("Not a teamlead", ERROR),
                       "404": json_resp("Not found / not this staff's intern", ERROR),
                       "409": json_resp("Already decided", ERROR)}}},
     "/api/admin/accounts": {"get": {

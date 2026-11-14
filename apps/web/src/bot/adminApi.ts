@@ -1,5 +1,5 @@
 // Admin panel API (teamlead only). Contract: contracts/backend.openapi.json, paths /api/admin/*.
-import { post, request } from './api';
+import { post, request, type GapsReport, type KbLintReport } from './api';
 
 export type AdminAccount = {
   id: string; email: string; first_name: string; last_name: string; role: 'intern' | 'buddy' | 'teamlead';
@@ -38,6 +38,8 @@ export type AnswerFeedback = { up: number; down: number; items: { message_id: st
 export const admin = {
   access: (token: string) => request<{ allowed: boolean }>(token, '/api/admin/access').then(r => r.allowed).catch(() => false),
   feedback: (token: string) => request<AnswerFeedback>(token, '/api/admin/feedback'),
+  kbGaps: (token: string) => request<GapsReport>(token, '/api/admin/kb/gaps'),
+  kbLint: (token: string) => request<KbLintReport>(token, '/api/admin/kb/lint'),
   accounts: (token: string) => request<{ accounts: AdminAccount[] }>(token, '/api/admin/accounts').then(r => r.accounts),
   llm: (token: string) => request<AdminLlm>(token, '/api/admin/llm'),
   ping: (token: string) => post<AdminPing>(token, '/api/admin/llm/ping'),
