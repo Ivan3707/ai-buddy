@@ -86,14 +86,18 @@
  * Плашка и все заглавия: Aeroport Medium 24; проценты: Aeroport Bold 36;
  * подзаглавия: Montserrat Medium 16; основные подписи: Montserrat Light 16;
  * значения «Возраст» и «Стаж»: Montserrat Light 32. */
-.drawer-header h2,
+.drawer-header h2 {
+  font-family: var(--font-title);
+  font-size: 24px;
+  font-weight: 500;
+}
 .person-card h3,
 .fact-card h3,
 .progress-card h3,
 .about-card h3 {
   font-family: var(--font-title);
   font-size: 24px;
-  font-weight: 500;
+  font-weight: 700; /* в макете заглавия карточек Aeroport Bold */
 }
 .progress-percent {
   font-family: var(--font-title);
@@ -111,9 +115,10 @@
 .about-card dd,
 .about-org {
   font-family: var(--font-text);
-  font-size: 16px;
+  font-size: 14px; /* в макете подписи карточек Montserrat Light 14 */
   font-weight: var(--w-light);
 }
+.progress-line span:last-child { font-size: 14px; font-weight: 500; color: #252525; }
 .fact-card p {
   font-family: var(--font-text);
   font-size: 32px;

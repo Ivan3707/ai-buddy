@@ -152,10 +152,31 @@ describe('кабинет стажёра', () => {
     expect(await screen.findByRole('heading', { name: 'Вход' })).toBeInTheDocument();
   });
 
-  it('обратная связь: отправка и сообщение об успехе', async () => {
+  it('заметки: вкладка открывает панель и закрывается по Esc', async () => {
     await openShell();
-    await userEvent.click(screen.getByRole('button', { name: 'Обратная связь' }));
-    expect(screen.getByRole('heading', { name: /Есть идеи/ })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Заметки' }));
+    const dialog = screen.getByRole('dialog', { name: 'Заметки' });
+    expect(within(dialog).getByRole('heading', { name: 'Заметки' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('обратная связь не показывается, пока чек-листы не завершены', async () => {
+    await openShell();
+    expect(screen.queryByRole('heading', { name: /Есть идеи/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Обратная связь' })).not.toBeInTheDocument();
+  });
+
+  it('обратная связь появляется после завершения обоих чек-листов: отправка и сообщение об успехе', async () => {
+    const done = checklistsResponse();
+    api.getChecklists.mockResolvedValue({
+      common: { ...done.common, completion_percent: 100 },
+      professional: { ...done.professional, completion_percent: 100 },
+    });
+    sessionStorage.setItem(TOKEN_KEY, 'saved');
+    api.getMe.mockResolvedValue(internUser);
+    render(<App />);
+    expect(await screen.findByRole('heading', { name: /Есть идеи/ })).toBeInTheDocument();
     await userEvent.type(screen.getByLabelText('Опиши свою идею или задай вопрос'), 'Добавьте тёмную тему');
     await userEvent.click(screen.getByRole('button', { name: 'Отправить' }));
     expect(await screen.findByRole('status')).toHaveTextContent('Сообщение отправлено');

@@ -18,14 +18,14 @@ describe('Sidebar', () => {
 });
 
 describe('SideTabs', () => {
-  it('открывает профиль и обратную связь', async () => {
+  it('открывает профиль и заметки', async () => {
     const onProfile = vi.fn();
-    const onFeedback = vi.fn();
-    render(<SideTabs onProfile={onProfile} onFeedback={onFeedback} />);
+    const onNotes = vi.fn();
+    render(<SideTabs onProfile={onProfile} onNotes={onNotes} />);
     await userEvent.click(screen.getByRole('button', { name: 'Профиль' }));
-    await userEvent.click(screen.getByRole('button', { name: 'Обратная связь' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Заметки' }));
     expect(onProfile).toHaveBeenCalled();
-    expect(onFeedback).toHaveBeenCalled();
+    expect(onNotes).toHaveBeenCalled();
   });
 });
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { User } from '@ai-buddy/client';
 import { useChecklists } from '../../hooks/useChecklists';
 import { overallProgress } from '../../lib/format';
@@ -7,6 +7,7 @@ import { FeedbackPage } from '../../pages/FeedbackPage';
 import { HomePage } from '../../pages/HomePage';
 import { TasksPage } from '../../pages/TasksPage';
 import { Assistant } from '../Assistant';
+import { NotesDrawer } from './NotesDrawer';
 import { ProfileDrawer } from './ProfileDrawer';
 import { SideTabs } from './SideTabs';
 import { Sidebar, type View } from './Sidebar';
@@ -17,7 +18,21 @@ type Props = { user: User; token: string; onLogout: () => void };
 export function AppShell({ user, token, onLogout }: Props) {
   const [view, setView] = useState<View>('home');
   const [profileOpen, setProfileOpen] = useState(false);
+  const [notesOpen, setNotesOpen] = useState(false);
   const checklists = useChecklists(token);
+
+  // Экран обратной связи появляется после завершения обоих чек-листов (один раз за сессию браузера)
+  const { data } = checklists;
+  const bothDone = !!data && data.common.completion_percent >= 100 && data.professional.completion_percent >= 100;
+  useEffect(() => {
+    if (!bothDone) return;
+    const key = `feedback-shown:${user.id}`;
+    try {
+      if (sessionStorage.getItem(key)) return;
+      sessionStorage.setItem(key, '1');
+    } catch { /* без хранилища показываем один раз за жизнь компонента */ }
+    setView('feedback');
+  }, [bothDone, user.id]);
 
   if (view === 'feedback') {
     return (
@@ -37,13 +52,14 @@ export function AppShell({ user, token, onLogout }: Props) {
         {view === 'calendar' && <CalendarPage />}
         {view === 'tasks' && <TasksPage token={token} checklists={checklists} />}
       </main>
-      <SideTabs onProfile={() => setProfileOpen(true)} onFeedback={() => setView('feedback')} />
+      <SideTabs onProfile={() => setProfileOpen(true)} onNotes={() => setNotesOpen(true)} />
       <ProfileDrawer
         user={user}
         progress={overallProgress(checklists.data)}
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
       />
+      <NotesDrawer open={notesOpen} onClose={() => setNotesOpen(false)} />
       <Assistant token={token} />
     </div>
   );

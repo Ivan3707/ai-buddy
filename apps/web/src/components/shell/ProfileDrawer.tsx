@@ -2,7 +2,6 @@ import { useEffect } from 'react';
 import type { User } from '@ai-buddy/client';
 import { internshipDuration, type OverallProgress } from '../../lib/format';
 import { PROFILE_STUB } from '../../lib/stubs';
-import { UserIcon } from '../icons';
 
 type Props = {
   user: User;
@@ -27,7 +26,7 @@ export function ProfileDrawer({ user, progress, open, onClose }: Props) {
     <div className="drawer-backdrop" onClick={onClose}>
       <aside className="drawer" role="dialog" aria-label="Профиль" onClick={event => event.stopPropagation()}>
         <header className="drawer-header">
-          <span className="drawer-icon"><UserIcon width={26} height={26} /></span>
+          <span className="drawer-icon"><img src="/icons/user.svg" alt="" width={33} height={33} /></span>
           <h2>Личный кабинет</h2>
         </header>
 
@@ -57,7 +56,7 @@ export function ProfileDrawer({ user, progress, open, onClose }: Props) {
               aria-valuemax={100}
               aria-valuenow={progress.percent}
             >
-              <span style={{ width: `${progress.percent}%` }} />
+              <span style={{ width: progress.percent > 0 ? `max(55px, ${progress.percent}%)` : 0 }} />
             </div>
             <div className="progress-edges"><span>Начало стажировки</span><span>Конец стажировки</span></div>
           </section>

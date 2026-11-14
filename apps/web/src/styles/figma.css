@@ -132,17 +132,52 @@
 /* Кольцо прогресса: 255 px, число Aeroport Bold 52 */
 .ring-text { font-family: var(--font-title); font-size: 52px; font-weight: 700; }
 
-/* ───────── Личный кабинет: шапка 570×137 ───────── */
-.drawer { width: 570px; height: calc(100% - 38px); margin-top: 38px; }
+/* ───────── Личный кабинет (кадры 2:331 и 2:339) ─────────
+ * Сверху тёмная шапка 570×137, под ней розовая панель 512 px, прижатая вправо. */
+.drawer { width: 570px; height: 100%; margin-top: 0; align-items: flex-end; }
 .drawer-header {
+  align-self: stretch;
   align-items: flex-start;
   gap: 24px;
   min-height: 137px;
   padding: 40px 16px 0;
   border-radius: 32px 0 0 32px;
 }
-.drawer-icon svg { width: 33px; height: 33px; }
+.drawer-icon { display: block; line-height: 0; opacity: 1; }
 .drawer-header h2 { line-height: 33px; }
+
+.drawer-body {
+  box-sizing: border-box;
+  width: 512px;
+  flex: 1;
+  gap: 16px;
+  margin: 0;
+  padding: 19px 44px 39px 20px;
+  border-radius: 0 0 0 32px;
+}
+.person-card, .fact-card { background: #fffff8; border-radius: 32px; }
+.person-card { height: 141px; gap: 20px; padding: 20px 16px 20px 20px; }
+.avatar { width: 129px; height: 129px; font-size: 52px; }
+.fact-row { grid-template-columns: 155fr 271fr; gap: 19px; }
+.fact-card { gap: 24px; align-content: start; min-height: 129px; padding: 20px; }
+.progress-card { height: 212px; padding: 12px 20px 20px; border-radius: 32px; }
+.progress-percent { margin: 0; line-height: 44px; }
+.progress-hint { color: #808080; }
+.progress-line { margin: 4px 0 16px; align-items: center; }
+.progress-edges { color: #808080; }
+.about-card { min-height: 357px; padding: 20px 28px 20px 20px; border-radius: 32px; }
+.about-card h3 { margin: 0 0 24px; }
+.about-card dl { gap: 12px; }
+.about-card dd { opacity: 1; }
+.about-org { color: #808080; opacity: 1; }
+
+/* Заметки: розовая шапка 606×137 и пустая панель (содержимое пока не нарисовано) */
+.notes-drawer { width: 606px; }
+.notes-drawer .drawer-header { background: var(--pink); padding: 44px 21px 0; }
+.notes-drawer .drawer-icon img { display: block; }
+.notes-drawer .drawer-header h2 { line-height: normal; }
+.notes-body { width: 100%; background: var(--pink); padding: 20px; }
+.notes-body p { margin: 0; font-family: var(--font-text); font-size: 16px; font-weight: var(--w-light); color: #252525; }
 
 /* ───────── Обратная связь: панель начинается на 792 px ───────── */
 .shell:has(.feedback) { grid-template-columns: calc(33.333vw + 152px) 1fr; }
