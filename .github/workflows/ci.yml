@@ -42,6 +42,14 @@ jobs:
       - name: Start isolated PostgreSQL for Go tests
         run: |
           test_db_container="ai-buddy-ci-go-db-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          report_test_db_failure() {
+            status=$?
+            echo "::group::Temporary PostgreSQL logs"
+            docker logs "$test_db_container" 2>&1 || true
+            echo "::endgroup::"
+            exit "$status"
+          }
+          trap report_test_db_failure ERR
           docker run --rm -d --name "$test_db_container" \
             --tmpfs /var/lib/postgresql/data:rw,size=256m \
             -e POSTGRES_HOST_AUTH_METHOD=trust \
@@ -49,7 +57,10 @@ jobs:
             -p 127.0.0.1::5432 postgres:16-alpine >/dev/null
           ready=0
           for attempt in {1..30}; do
-            if docker exec "$test_db_container" pg_isready -U postgres -d ai_buddy_verify_ci >/dev/null 2>&1; then
+            if docker logs "$test_db_container" 2>&1 \
+                | grep -q 'PostgreSQL init process complete; ready for start up.' \
+              && docker exec "$test_db_container" pg_isready -h 127.0.0.1 \
+                -U postgres -d ai_buddy_verify_ci >/dev/null 2>&1; then
               ready=1
               break
             fi
@@ -61,7 +72,8 @@ jobs:
           [[ "$test_db_port" =~ ^[0-9]+$ ]]
           test_database_url="postgres://postgres@127.0.0.1:${test_db_port}/ai_buddy_verify_ci?sslmode=disable"
           test_catalog_database_url="postgres://postgres@127.0.0.1:${test_db_port}/ai_buddy_verify_catalog?sslmode=disable"
-          docker exec "$test_db_container" psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+          docker exec "$test_db_container" psql -h 127.0.0.1 \
+            -U postgres -d postgres -v ON_ERROR_STOP=1 \
             -c 'CREATE DATABASE ai_buddy_verify_catalog' >/dev/null
           goose -dir apps/backend/migrations postgres "$test_database_url" up
           goose -dir apps/backend/migrations postgres "$test_catalog_database_url" up
