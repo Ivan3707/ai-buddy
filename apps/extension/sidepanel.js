@@ -358,22 +358,19 @@ async function refreshSiteToggle() {
     siteToggle.hidden = true;
     return;
   }
-  const builtIn = tab.url.startsWith(`${backend}/demo/`);
-  const {enabled = false} = builtIn ? {enabled: true} : await chrome.runtime.sendMessage({op: 'site-state', pattern});
+  const builtIn = /^http:\/\/(127\.0\.0\.1|localhost):5173\/(?!demo\/)/.test(tab.url); // web app: its own Бади widget
+  const {enabled = false} = builtIn ? {enabled: false} : await chrome.runtime.sendMessage({op: 'site-state', pattern});
   site = {pattern, tabId: tab.id, enabled, builtIn};
   siteBar.hidden = false;
   siteToggle.hidden = builtIn;
-  siteLabel.textContent = builtIn ? 'Бади уже на демо-страницах.' : `Бади на ${new URL(tab.url).hostname}`;
+  siteLabel.textContent = builtIn ? 'На сайте AI-buddy Бади встроен в страницу.' : `Бади на ${new URL(tab.url).hostname}`;
   siteToggle.textContent = enabled ? 'Убрать' : 'Показать';
 }
 
 siteToggle.addEventListener('click', async () => {
   if (!site) return;
   const enable = !site.enabled;
-  // permissions.request must run directly in the click handler (user gesture): asks only for this site.
-  if (enable && !(await chrome.permissions.request({origins: [site.pattern]}))) return;
   await chrome.runtime.sendMessage({op: 'set-site', pattern: site.pattern, enabled: enable, tabId: site.tabId});
-  if (!enable) await chrome.permissions.remove({origins: [site.pattern]}).catch(() => false);
   await refreshSiteToggle();
 });
 

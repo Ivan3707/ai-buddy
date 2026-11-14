@@ -197,11 +197,4 @@ UI ──POST /api/actions/{id}/confirm──> Backend ──> mock-адапте
 | C3. Лимиты | `RATE_LIMIT_PER_MINUTE` на пользователя, `LLM_DAILY_TOKEN_BUDGET` на сервис → `error: rate_limited` | `limits.py` | unit |
 | C5. Кэш ответов | Самостоятельные вопросы по KB без персональных данных в ответе; ключ — вопрос, роль, профессия, индекс KB; `done.cached` | `cache.py` | повтор вопроса 3.1 с → 0.00 с |
 
-**Плейграунд для ручной проверки** (`apps/ai/dev/playground.py`, только для разработки) реализует эндпоинты backend из контракта поверх настоящего AI:
-- стрим;
-- действия;
-- бриф;
-- отзывы;
-- страница наставника.
-
-Задача backend — реализовать то же самое по `contracts/backend.openapi.json`. Плейграунд — эталон поведения.
+**Интеграция.** Эндпоинты backend из контракта (стрим, действия, бриф, отзывы, вопросы наставнику, заявки) реализованы в Go: `apps/backend/internal/service/assistant.go`, таблицы — миграция `00002_assistant.sql`. Клиенты — веб (`apps/web/src/bot/`) и расширение. Ручная проверка — `docs/manual-testing.md`.

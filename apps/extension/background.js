@@ -1,9 +1,11 @@
 // MV3 service worker.
-// 1. Clicking the toolbar icon opens the side panel (it stays open while the user browses).
+// 1. Бади lives on every http(s) page. Clicking the toolbar icon opens/closes his chat on the current tab;
+//    on pages where scripts cannot run (chrome://, Web Store) it opens the side panel instead.
 // 2. Backend gateway for the on-page character "Бади" (buddy/content.js): the content script runs in
 //    the page, so it never sees the token and never calls the backend itself — it sends commands here
 //    and receives ready-to-render view models.
-// 3. Registers the character on the sites the user enabled (side panel button, per-site permission).
+// 3. Registers the character on all sites except the ones the user switched off (side panel "Убрать")
+//    The AI-buddy web app has its own Бади widget, so content.js skips it (except the /demo/ pages).
 import { getMe, login } from './client.js';
 import { BACKEND_ORIGIN as backend } from './config.js';
 import { describeActionError, describeResult } from './lib/actions.js';
@@ -13,33 +15,50 @@ import { applyStreamEvent, createAssistantState, failureCode, finalizeStream } f
 import { readToken, saveToken } from './popup-session.js';
 
 chrome.sidePanel
-  .setPanelBehavior({openPanelOnActionClick: true})
-  .catch(error => console.error('AI-buddy: cannot enable side panel', error));
+  .setPanelBehavior({openPanelOnActionClick: false})
+  .catch(error => console.error('AI-buddy: cannot configure side panel', error));
+
+chrome.action.onClicked.addListener(tab => {
+  if (!tab.id) return;
+  if (!/^https?:/.test(tab.url || '')) { void chrome.sidePanel.open({tabId: tab.id}); return; } // sync: keeps the user gesture
+  void (async () => {
+    try {
+      await chrome.tabs.sendMessage(tab.id, {op: 'toggle'});
+    } catch { // tab opened before install/reload, or a site switched off: inject now (activeTab allows it)
+      try {
+        await chrome.scripting.executeScript({target: {tabId: tab.id}, files: ['buddy/content.js']});
+        await chrome.tabs.sendMessage(tab.id, {op: 'toggle'});
+      } catch (error) { console.error('AI-buddy: cannot show Бади on this tab', error); }
+    }
+  })();
+});
 
 const session = chrome.storage.session;
-const SITES_KEY = 'buddySites';
+const OFF_KEY = 'buddyOffSites'; // sites where the user switched Бади off
+const ALL_SITES = ['http://*/*', 'https://*/*'];
 const SCRIPT_ID = 'ai-buddy-character';
-const DEMO_PAGES = `${backend}/demo/*`; // covered by host_permissions: no prompt for the demo pages
 
 // ---------- character registration ----------
 
-async function enabledSites() {
-  const stored = await chrome.storage.local.get(SITES_KEY);
-  return Array.isArray(stored[SITES_KEY]) ? stored[SITES_KEY] : [];
+async function offSites() {
+  const stored = await chrome.storage.local.get(OFF_KEY);
+  return Array.isArray(stored[OFF_KEY]) ? stored[OFF_KEY] : [];
 }
 
 async function syncRegistration() {
-  const matches = [DEMO_PAGES, ...await enabledSites()];
-  const script = {id: SCRIPT_ID, js: ['buddy/content.js'], matches, runAt: 'document_idle', persistAcrossSessions: true};
+  const script = {
+    id: SCRIPT_ID, js: ['buddy/content.js'], matches: ALL_SITES, excludeMatches: await offSites(), // web app pages are skipped by content.js itself
+    runAt: 'document_idle', persistAcrossSessions: true,
+  };
   const existing = await chrome.scripting.getRegisteredContentScripts({ids: [SCRIPT_ID]});
   if (existing.length) await chrome.scripting.updateContentScripts([script]);
   else await chrome.scripting.registerContentScripts([script]);
 }
 
 async function setSite(pattern, enabled, tabId) {
-  const sites = (await enabledSites()).filter(site => site !== pattern);
-  if (enabled) sites.push(pattern);
-  await chrome.storage.local.set({[SITES_KEY]: sites});
+  const sites = (await offSites()).filter(site => site !== pattern);
+  if (!enabled) sites.push(pattern);
+  await chrome.storage.local.set({[OFF_KEY]: sites});
   await syncRegistration();
   if (tabId === undefined) return;
   if (enabled) {
@@ -51,11 +70,6 @@ async function setSite(pattern, enabled, tabId) {
 
 chrome.runtime.onInstalled.addListener(() => { void syncRegistration(); });
 chrome.runtime.onStartup.addListener(() => { void syncRegistration(); });
-chrome.permissions.onRemoved.addListener(async ({origins = []}) => {
-  const sites = (await enabledSites()).filter(site => !origins.includes(site));
-  await chrome.storage.local.set({[SITES_KEY]: sites});
-  await syncRegistration();
-});
 
 // ---------- backend gateway ----------
 
@@ -169,7 +183,7 @@ async function handle(message, sender) {
     case 'hint':
       return {hint: pageHint({title: String(message.title || ''), url: String(message.url || '')})};
     case 'site-state':
-      return {enabled: (await enabledSites()).includes(message.pattern)};
+      return {enabled: !(await offSites()).includes(message.pattern)};
     case 'set-site':
       await setSite(message.pattern, message.enabled, message.tabId);
       return {ok: true};

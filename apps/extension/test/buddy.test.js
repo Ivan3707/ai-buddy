@@ -89,7 +89,7 @@ test('drag position is clamped to the viewport', () => {
 
 test('site match pattern: per host, http(s) only', () => {
   assert.equal(siteMatchPattern('https://wiki.example.com/a/b?x=1#y'), 'https://wiki.example.com/*');
-  assert.equal(siteMatchPattern('http://127.0.0.1:18090/demo/wiki'), 'http://127.0.0.1/*');
+  assert.equal(siteMatchPattern('http://127.0.0.1:5173/demo/wiki.html'), 'http://127.0.0.1/*');
   assert.equal(siteMatchPattern('chrome://extensions'), null);
   assert.equal(siteMatchPattern('not a url'), null);
 });

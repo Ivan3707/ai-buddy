@@ -1,0 +1,19 @@
+<!doctype html>
+<!-- Демо-страница «чужого» корпоративного сервиса для показа Бади из расширения. Данные синтетические, это не инструменты и не регламенты Авито. -->
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Jira — доска REC (демо)</title><style>
+:root{--bg:#f4f5f7;--card:#fff;--ink:#1d2330;--muted:#68708a;--line:#e1e4ea;--accent:#3b6fd8}
+@media (prefers-color-scheme:dark){:root{--bg:#121417;--card:#1b1e23;--ink:#e6e8ee;--muted:#9aa2b5;--line:#2a2f37;--accent:#7aa2ff}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
+nav{display:flex;gap:16px;align-items:center;padding:10px 24px;background:var(--card);border-bottom:1px solid var(--line);flex-wrap:wrap}
+nav a{color:var(--accent);text-decoration:none;font-weight:600}.demo{margin-left:auto;font-size:12px;color:var(--muted)}
+main{max-width:1100px;margin:0 auto;padding:24px 16px}h1{font-size:24px;margin:0 0 4px}.muted{color:var(--muted);font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+
+.board{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px;margin-top:16px}
+.col{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px}.col h2{font-size:13px;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+.t{border:1px solid var(--line);border-radius:8px;padding:8px;margin-bottom:8px;font-size:14px}.t b{color:var(--accent);font-size:12px;display:block}</style></head><body><nav><a href="/demo/wiki.html">Вики</a><a href="/demo/grafana.html">Дашборды</a><a href="/demo/jira.html">Задачи</a><a href="/">← AI-buddy</a>
+<span class="demo">демо-страницы, данные синтетические</span></nav>
+<main><h1>Доска команды «Рекомендации»</h1><p class="muted">Трекер задач (демо, данные синтетические)</p>
+<div class="board"><div class="col"><h2>К работе</h2><div class="t"><b>REC-214</b>Воспроизвести baseline модели рекомендаций</div><div class="t"><b>REC-219</b>Добавить метрику coverage в отчёт</div></div><div class="col"><h2>В работе</h2><div class="t"><b>REC-205</b>Обновить фичи пользователя в витрине</div></div><div class="col"><h2>Ревью</h2><div class="t"><b>REC-198</b>Ускорить инференс ранжирования</div></div><div class="col"><h2>Готово</h2><div class="t"><b>REC-190</b>Настроить алерт на рост 5xx</div></div></div>
+</main></body></html>

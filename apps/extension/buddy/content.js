@@ -6,12 +6,14 @@
 (() => {
   if (globalThis.__aiBuddyCharacter) return; // injected twice (registration + executeScript)
   globalThis.__aiBuddyCharacter = true;
+  // The AI-buddy web app has its own Бади widget; only its static demo pages (/demo/*.html) get this one.
+  if (/^(127\.0\.0\.1|localhost):5173$/.test(location.host) && !location.pathname.startsWith('/demo/')) return;
 
   const SIZE = 72;
   const POS_KEY = 'buddyPos';
   const HIDDEN_KEY = 'aiBuddyHidden';
   const today = new Date().toISOString().slice(0, 10);
-  if (sessionStorage.getItem(HIDDEN_KEY) === '1') return;
+  const hiddenOnTab = sessionStorage.getItem(HIDDEN_KEY) === '1'; // "×" on the character: until the tab closes
 
   // ---------- DOM ----------
   const host = document.createElement('ai-buddy-character');
@@ -43,7 +45,8 @@
           <button type="submit" class="primary send" aria-label="Отправить">➤</button></form>
       </div>
     </section>`;
-  (document.body || document.documentElement).append(host);
+  const mount = () => { if (!host.isConnected) (document.body || document.documentElement).append(host); };
+  if (!hiddenOnTab) mount();
 
   const $ = selector => root.querySelector(selector);
   const char = $('.char'), body = $('.body'), bubble = $('.bubble'), chat = $('.chat'), log = $('.log');
@@ -377,7 +380,13 @@
   });
 
   // ---------- proactive ----------
-  chrome.runtime.onMessage.addListener(message => { if (message?.op === 'remove') host.remove(); });
+  chrome.runtime.onMessage.addListener(message => {
+    if (message?.op === 'remove') host.remove();
+    if (message?.op === 'toggle') { // toolbar icon: show Бади (even if hidden with ×) and open/close the chat
+      sessionStorage.removeItem(HIDDEN_KEY);
+      if (!host.isConnected) { mount(); place(); void openChat(); } else toggleChat();
+    }
+  });
 
   async function greet() {
     await refreshSession();
