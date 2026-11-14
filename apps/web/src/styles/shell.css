@@ -1,0 +1,122 @@
+/* Каркас рабочего пространства: меню слева, зелёная сцена, вкладки справа */
+.shell {
+  position: relative;
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 146px 1fr;
+  background: var(--ink);
+}
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 0 28px 30px;
+  color: #fff;
+}
+.sidebar nav { display: grid; gap: 28px; margin: auto 0; }
+.nav-link { text-align: left; color: #fff; font-size: 19px; font-weight: 700; opacity: 0.8; }
+.nav-link:hover, .nav-link.is-active { opacity: 1; }
+.nav-link.is-active { text-decoration: underline; text-underline-offset: 6px; }
+.sidebar-pin { width: 28px; height: 28px; }
+
+.workspace {
+  min-height: 100vh;
+  padding: 26px clamp(72px, 10vw, 144px) 34px clamp(48px, 8vw, 117px);
+  border-radius: 36px 0 0 36px;
+  background: var(--green);
+}
+
+.page-heading { margin: 0 0 24px; font-size: 40px; font-weight: 800; }
+
+.side-tabs { position: fixed; top: 28px; right: 0; display: grid; gap: 16px; z-index: 5; }
+.side-tab {
+  display: grid;
+  place-content: center;
+  width: 46px;
+  height: 102px;
+  border-radius: 24px 0 0 24px;
+  color: #fff;
+  transition: width 0.15s;
+}
+.side-tab:hover { width: 54px; }
+.side-tab-dark { background: var(--ink); }
+.side-tab-pink { background: var(--pink); }
+
+.drawer-backdrop { position: fixed; inset: 0; z-index: 10; background: #00000040; display: flex; justify-content: flex-end; }
+.drawer { width: 440px; max-width: 100%; height: 100%; display: flex; flex-direction: column; overflow-y: auto; }
+.drawer-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex: none;
+  padding: 26px 24px 52px;
+  border-radius: 28px 0 0 28px;
+  background: var(--ink);
+  color: #fff;
+}
+.drawer-header h2 { margin: 0; font-size: 24px; font-weight: 800; }
+.drawer-icon { display: grid; justify-items: center; font-size: 10px; opacity: 0.85; }
+.drawer-close { position: absolute; top: 14px; right: 20px; color: #fff; font-size: 30px; line-height: 1; }
+.drawer-body {
+  flex: 1;
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  margin: -28px 0 0 48px;
+  padding: 18px 28px 28px 20px;
+  border-radius: 0 0 0 28px;
+  background: var(--pink);
+}
+.drawer-body h3 { margin: 0; }
+.person-card, .fact-card, .progress-card { border-radius: 26px; background: var(--cream); }
+.person-card { display: flex; align-items: center; gap: 20px; padding: 14px 20px; }
+.person-card h3 { display: grid; font-size: 20px; font-weight: 800; line-height: 1.35; }
+.avatar { display: grid; place-content: center; flex: none; width: 112px; height: 112px; overflow: hidden; border-radius: 50%; background: var(--ink); color: #fff; font-size: 44px; font-weight: 800; }
+.avatar img { width: 100%; height: 100%; object-fit: cover; }
+.fact-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.fact-card { display: grid; gap: 14px; padding: 18px 18px 16px; }
+.fact-card h3 { font-size: 17px; font-weight: 800; }
+.fact-card p { margin: 0; font-size: 22px; font-weight: 300; }
+.progress-card { padding: 18px 20px 14px; background: #fff; }
+.progress-card h3 { font-size: 18px; font-weight: 800; }
+.progress-percent { display: block; margin: 6px 0 0; font-size: 26px; font-weight: 800; }
+.progress-hint { display: block; text-align: right; font-size: 12px; color: var(--text-muted); }
+.progress-line { display: flex; justify-content: space-between; margin: 2px 0 6px; font-size: 13px; }
+.progress-bar { height: 32px; overflow: hidden; border-radius: var(--radius-pill); background: var(--pink); }
+.progress-bar span { display: block; height: 100%; border-radius: inherit; background: var(--ink); }
+.progress-edges { display: flex; justify-content: space-between; margin-top: 4px; font-size: 12px; color: var(--text-muted); }
+.about-card { display: flex; flex-direction: column; min-height: 250px; padding: 22px 20px 18px; border-radius: 26px; background: var(--ink); color: #fff; }
+.about-card h3 { margin-bottom: 18px; font-size: 20px; font-weight: 800; }
+.about-card dl { display: grid; gap: 12px; margin: 0; }
+.about-card dt { font-size: 15px; font-weight: 500; }
+.about-card dd { margin: 0; font-size: 13px; font-weight: 300; opacity: 0.85; }
+.about-org { margin: auto 0 0; padding-top: 24px; font-size: 13px; font-weight: 300; opacity: 0.45; }
+.drawer-account { margin: 4px 0 0; font-size: 13px; text-align: center; overflow-wrap: anywhere; }
+
+/* AI-помощник */
+.assistant { position: fixed; right: 28px; bottom: 28px; z-index: 6; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.assistant-toggle {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--grey);
+  color: var(--ink);
+  font-size: 22px;
+  box-shadow: 0 6px 18px #00000026;
+}
+.assistant-body { width: min(380px, 90vw); padding: 20px; border-radius: 22px; background: var(--cream); box-shadow: 0 10px 30px #00000033; }
+.assistant-body form { display: grid; gap: 12px; }
+.assistant-body label { display: grid; gap: 6px; font-weight: 700; font-size: 14px; }
+.assistant-body textarea { min-height: 90px; padding: 12px 14px; border: 1px solid var(--grey); border-radius: 16px; background: #fff; resize: vertical; }
+.assistant-body .pill { min-width: 0; height: 42px; font-size: 15px; }
+.assistant-error { margin: 12px 0 0; color: var(--danger); font-size: 14px; }
+.assistant-answer { margin-top: 14px; padding: 14px; border-radius: 14px; background: var(--pink-soft); font-size: 14px; }
+.assistant-answer p { margin-bottom: 8px; }
+.assistant-answer a { display: block; font-weight: 700; }
+
+/* Страница задач пока в прежнем оформлении, но на зелёной сцене без своего фона */
+.tasks-page.legacy { min-height: 0; background: none; }

@@ -9,7 +9,7 @@ function requiredCredential(name: 'E2E_BUDDY_EMAIL' | 'E2E_BUDDY_PASSWORD') {
 }
 
 async function login(page: Page, email: string, password: string) {
-  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Логин, почта, номер телефона').fill(email);
   await page.getByLabel('Пароль').fill(password);
   await page.getByRole('button', { name: 'Войти' }).click();
 }
@@ -34,6 +34,12 @@ test('buddy creates an intern, intern opens checklists and uses AI assistant', a
   await page.getByRole('button', { name: 'Выйти' }).click();
   await expect(page.getByRole('button', { name: 'Войти' })).toBeVisible();
   await login(page, internEmail, internPassword);
+
+  // Главная: карточки двух чек-листов с кольцами прогресса.
+  await expect(page.getByRole('heading', { name: /Привет/ })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Общий чек-лист' }).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
+  await expect(page.getByRole('region', { name: 'Профессиональный чек-лист' }).getByRole('progressbar')).toHaveAttribute('aria-valuenow', '0');
+  await page.getByRole('button', { name: 'Задачи' }).click();
 
   const commonChecklist = page.getByRole('region', { name: 'Общий чек-лист' });
   const professionalChecklist = page.getByRole('region', { name: 'Профессиональный чек-лист' });
