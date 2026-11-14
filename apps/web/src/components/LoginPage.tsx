@@ -1,19 +1,63 @@
 import { useState, type FormEvent } from 'react';
 import { login, type LoginResponse } from '@ai-buddy/client';
 
-export function LoginPage({ error: initialError, onLogin }: { error: string; onLogin: (result: LoginResponse) => void }) {
-  const [email, setEmail] = useState('');
+type Props = { error: string; onLogin: (result: LoginResponse) => void };
+
+export function LoginPage({ error: initialError, onLogin }: Props) {
+  const [identity, setIdentity] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(initialError);
+
   const submit = async (event: FormEvent) => {
-    event.preventDefault(); setBusy(true); setError('');
-    try { onLogin(await login('', email.trim(), password)); }
-    catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось войти'); }
-    finally { setBusy(false); }
+    event.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      const result = await login('', identity.trim(), password);
+      onLogin(result);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Не удалось войти');
+    } finally {
+      setBusy(false);
+    }
   };
-  return <main className="login-layout">
-    <section className="login-intro"><span className="brand">AI·BUDDY</span><h1>Первые недели<br/>без лишнего шума.</h1><p>Чек-листы, встречи, заметки и поддержка команды в одном рабочем пространстве.</p><div className="login-art" aria-hidden="true"><i/><i/><i/></div></section>
-    <section className="login-card"><div className="login-form"><span className="eyebrow">Рабочее пространство</span><h2>С возвращением</h2><p className="muted">Войдите с учётной записью стажёра, buddy или руководителя.</p><form onSubmit={submit}><label>Корпоративная почта<input data-testid="email" type="email" autoComplete="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder="name@company.ru"/></label><label>Пароль<input data-testid="password" type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} placeholder="Ваш пароль"/></label>{error && <p className="notice error" role="alert">{error}</p>}<button data-testid="login" disabled={busy}>{busy ? 'Входим…' : 'Войти'}</button></form></div>
-  </section></main>;
+
+  return (
+    <main className="auth">
+      <section className="auth-panel">
+        <span className="lang">RU</span>
+        <h1 className="auth-title">Вход</h1>
+        <form className="auth-form" onSubmit={submit}>
+          <label className="auth-field">
+            Логин, почта, номер телефона
+            <input
+              type="text"
+              autoComplete="username"
+              required
+              value={identity}
+              onChange={event => setIdentity(event.target.value)}
+            />
+          </label>
+          <label className="auth-field">
+            Пароль
+            <input
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={event => setPassword(event.target.value)}
+            />
+          </label>
+          {error && <p className="auth-error" role="alert">{error}</p>}
+          <button className="pill pill-light" disabled={busy}>{busy ? 'Входим…' : 'Войти'}</button>
+        </form>
+      </section>
+      <section className="auth-art" aria-hidden="true">
+        <span className="circle circle-green" />
+        <span className="circle circle-blue" />
+        <span className="circle circle-pink" />
+      </section>
+    </main>
+  );
 }

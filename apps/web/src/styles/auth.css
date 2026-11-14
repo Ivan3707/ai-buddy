@@ -1,0 +1,163 @@
+/*
+ * Экран входа (макет auth.png, кадр Figma 1920×1080).
+ * Все размеры заданы в «единицах дизайна»: 1 u = 1 px макета при ширине окна 1920,
+ * на других ширинах композиция масштабируется целиком.
+ */
+.auth {
+  --u: calc(100vw / 1920);
+  min-height: calc(1080 * var(--u));
+  height: 100vh;
+  display: grid;
+  grid-template-columns: calc(792 * var(--u)) 1fr;
+  background: var(--ink); /* #252525 */
+}
+
+/* Чёрная часть слева */
+.auth-panel { position: relative; color: #fff; }
+.auth-panel .lang {
+  position: absolute;
+  left: calc(40 * var(--u));
+  top: calc(38 * var(--u));
+  width: calc(35 * var(--u));
+  height: calc(33 * var(--u));
+  font-family: 'Aeroport', var(--font);
+  font-size: calc(24 * var(--u));
+  line-height: calc(33 * var(--u));
+  font-weight: 700;
+  color: #fff;
+}
+/* Шрифты из макета: файлы лежат в apps/web/public/fonts */
+@font-face {
+  font-family: 'Aeroport';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: local('Aeroport Bold'), url('/fonts/Aeroport-Bold.otf') format('opentype');
+}
+@font-face {
+  font-family: 'Aeroport';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: local('Aeroport'), url('/fonts/Aeroport-Regular.otf') format('opentype');
+}
+@font-face {
+  font-family: 'Aeroport';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: local('Aeroport Medium'), url('/fonts/Aeroport-Medium.otf') format('opentype');
+}
+@font-face {
+  font-family: 'Montserrat';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: local('Montserrat Regular'), local('Montserrat'), url('/fonts/Montserrat-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Montserrat';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: local('Montserrat Medium'), url('/fonts/Montserrat-Medium.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Montserrat';
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+  src: local('Montserrat Light'), url('/fonts/Montserrat-Light.ttf') format('truetype');
+}
+.auth-title {
+  position: absolute;
+  left: calc(40 * var(--u));
+  top: calc(274 * var(--u));
+  width: calc(168 * var(--u));
+  height: calc(82 * var(--u));
+  margin: 0;
+  font-family: 'Aeroport', var(--font);
+  font-size: calc(60 * var(--u));
+  line-height: calc(82 * var(--u));
+  letter-spacing: 0;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+/* Форма: поля и кнопка стоят там же, где в макете (left 40, top 480 / 571 / 691) */
+.auth-form { position: absolute; left: calc(40 * var(--u)); top: calc(480 * var(--u)); width: calc(600 * var(--u)); }
+.auth-field {
+  position: absolute;
+  left: 0;
+  width: calc(600 * var(--u));
+  height: calc(92 * var(--u));
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(4 * var(--u));
+  font-family: 'Montserrat Variable', 'Montserrat', var(--font);
+  font-size: calc(36 * var(--u));
+  line-height: calc(44 * var(--u));
+  font-weight: 300;
+}
+.auth-field:nth-of-type(1) { top: 0; }
+.auth-field:nth-of-type(2) { top: calc(91 * var(--u)); }
+.auth-field input {
+  width: 100%;
+  height: calc(44 * var(--u));
+  padding: 0 calc(24 * var(--u));
+  border: 1px solid #fff;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font-family: 'Montserrat', var(--font);
+  font-size: calc(24 * var(--u));
+  font-weight: 300;
+}
+.auth-field input:focus { border-color: #fff; outline: none; box-shadow: 0 0 0 3px #ffffff30; }
+
+/* Button/Variant4: 445×63, padding 12 164, радиус 32 */
+.auth-form .pill {
+  position: absolute;
+  left: 0;
+  top: calc(211 * var(--u)); /* 691 − 480 */
+  width: calc(445 * var(--u));
+  height: calc(63 * var(--u));
+  min-width: 0;
+  padding: calc(12 * var(--u)) calc(164 * var(--u));
+  border-radius: calc(32 * var(--u));
+  font-family: 'Montserrat', var(--font);
+  font-size: calc(32 * var(--u));
+  line-height: calc(39 * var(--u));
+  font-weight: 400;
+  letter-spacing: 0;
+  color: #252525;
+  white-space: nowrap;
+}
+.auth-error {
+  position: absolute;
+  left: 0;
+  top: calc(290 * var(--u));
+  width: calc(600 * var(--u));
+  margin: 0;
+  padding: calc(10 * var(--u)) calc(20 * var(--u));
+  border-radius: calc(20 * var(--u));
+  background: #ffe7e4;
+  color: var(--danger);
+  font-size: calc(22 * var(--u));
+}
+
+/* Frame 21: белая панель 1128×1080, радиус 32 слева */
+.auth-art {
+  position: relative;
+  overflow: hidden;
+  border-radius: calc(32 * var(--u)) 0 0 calc(32 * var(--u));
+  background: #fff;
+}
+.circle { position: absolute; border-radius: 50%; aspect-ratio: 1; }
+/* Ellipse 6 (зелёный): 858, left 361, top −91 */
+.circle-green { background: var(--green); width: calc(858 * var(--u)); left: calc(361 * var(--u)); top: calc(-91 * var(--u)); }
+/* Ellipse 8 (синий): 503, left 109, top 811; лежит поверх розового */
+.circle-blue { z-index: 1; background: var(--blue); width: calc(503 * var(--u)); left: calc(109 * var(--u)); top: calc(811 * var(--u)); }
+/* Ellipse 7 (розовый): 665, left 513, top 478 */
+.circle-pink { background: var(--pink); width: calc(665 * var(--u)); left: calc(513 * var(--u)); top: calc(478 * var(--u)); }

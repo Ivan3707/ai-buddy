@@ -1,0 +1,74 @@
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { describe, expect, it, vi } from 'vitest';
+import { internUser } from '../../test/fixtures';
+import { ProfileDrawer } from './ProfileDrawer';
+import { SideTabs } from './SideTabs';
+import { Sidebar } from './Sidebar';
+
+describe('Sidebar', () => {
+  it('отмечает текущий раздел и переключает разделы', async () => {
+    const onNavigate = vi.fn();
+    render(<Sidebar view="home" onNavigate={onNavigate} onLogout={() => undefined} />);
+    expect(screen.getByRole('button', { name: 'Главная' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('button', { name: 'Задачи' })).not.toHaveAttribute('aria-current');
+    await userEvent.click(screen.getByRole('button', { name: 'Календарь' }));
+    expect(onNavigate).toHaveBeenCalledWith('calendar');
+  });
+});
+
+describe('SideTabs', () => {
+  it('открывает профиль и заметки', async () => {
+    const onProfile = vi.fn();
+    const onNotes = vi.fn();
+    render(<SideTabs onProfile={onProfile} onNotes={onNotes} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Профиль' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Заметки' }));
+    expect(onProfile).toHaveBeenCalled();
+    expect(onNotes).toHaveBeenCalled();
+  });
+});
+
+describe('ProfileDrawer', () => {
+  const progress = { completed: 1, total: 20, active: 2, percent: 5 };
+
+  it('ничего не рисует, пока закрыт', () => {
+    render(<ProfileDrawer user={internUser} progress={progress} open={false} onClose={() => undefined} />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('показывает личный кабинет: ФИО, стаж, прогресс и данные о себе', () => {
+    render(<ProfileDrawer user={internUser} progress={progress} open onClose={() => undefined} />);
+    const dialog = screen.getByRole('dialog', { name: 'Профиль' });
+    expect(within(dialog).getByRole('heading', { name: 'Личный кабинет' })).toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: /Кузнецов/ })).toBeInTheDocument();
+    expect(within(dialog).getByText('25 лет')).toBeInTheDocument();
+    expect(within(dialog).getByText('5 %')).toBeInTheDocument();
+    expect(within(dialog).getByText('1/20')).toBeInTheDocument();
+    expect(within(dialog).getByText('в работе: 2')).toBeInTheDocument();
+    expect(within(dialog).getByRole('progressbar', { name: 'Общий прогресс стажировки' })).toHaveAttribute('aria-valuenow', '5');
+    const about = within(dialog).getByRole('region', { name: 'О себе' });
+    expect(about).toHaveTextContent('Бэкенд-разработчик');
+    expect(about).toHaveTextContent('Руководитель');
+    expect(about).toHaveTextContent('Наставник');
+    expect(dialog).not.toHaveTextContent(internUser.email);
+  });
+
+  it('показывает прочерк без профессии', () => {
+    render(<ProfileDrawer user={{ ...internUser, profession: null }} progress={progress} open onClose={() => undefined} />);
+    expect(within(screen.getByRole('region', { name: 'О себе' })).getByText('—')).toBeInTheDocument();
+  });
+
+  it('закрывается по Esc и по клику на фон, внутри панели не закрывается', async () => {
+    const onClose = vi.fn();
+    const { container } = render(<ProfileDrawer user={internUser} progress={progress} open onClose={onClose} />);
+    await userEvent.click(screen.getByRole('dialog'));
+    expect(onClose).not.toHaveBeenCalled();
+    await userEvent.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+    await userEvent.click(container.querySelector('.drawer-backdrop') as HTMLElement);
+    expect(onClose).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('button', { name: 'Закрыть профиль' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Личный')).not.toBeInTheDocument();
+  });
+});

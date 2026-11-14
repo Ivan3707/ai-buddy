@@ -1,0 +1,329 @@
+/*
+ * Размеры и положение из макетов Figma (файл «Авито»), кадр 1920×1080.
+ * Подключается последним: уточняет theme/shell/home/feedback и typography.
+ * Источники: Главная 2:389, Обратная связь 2:116, Личный кабинет 2:331.
+ */
+
+/* ───────── Каркас: боковое меню 194 px, зелёная сцена ───────── */
+.shell { grid-template-columns: 195px 1fr; }
+.workspace {
+  padding: 35px 195px 49px 156px;
+  border-radius: 32px 0 0 32px;
+}
+
+/* Боковое меню ("Шапка"): RU, три пункта, значок выхода */
+.sidebar { padding: 0; }
+.sidebar .lang {
+  position: absolute;
+  left: 40px;
+  top: 36px;
+  font-family: var(--font-title);
+  font-size: 24px;
+  font-weight: 700;
+}
+.sidebar nav { position: absolute; left: 40px; top: 428px; margin: 0; gap: 52px; }
+.nav-link.is-active { text-decoration: none; } /* в макете активный пункт не подчёркнут */
+.nav-link {
+  font-family: var(--font-title);
+  font-size: 24px;
+  font-weight: 700;
+  opacity: 1;
+  white-space: nowrap;
+}
+.sidebar-exit { position: absolute; left: 34px; bottom: 49px; width: 27px; height: 28px; padding: 0; line-height: 0; }
+.sidebar-exit img { display: block; }
+
+/* Вкладки справа: 64×137, верхняя на 38, нижняя на 195 */
+.side-tabs { top: 35px; gap: 24px; }
+.side-tab {
+  place-content: start start;
+  width: 64px;
+  height: 137px;
+  padding: 40px 16px;
+  border-radius: 32px 0 0 32px;
+}
+.side-tab svg { width: 33px; height: 33px; }
+.side-tab:hover { width: 72px; }
+
+/* Кнопка чата: серый квадрат 63×63 в правом нижнем углу */
+.assistant { right: 41px; bottom: 49px; }
+.assistant-toggle { width: 63px; height: 63px; border-radius: 0; background: #d9d9d9; box-shadow: none; }
+
+/* ───────── Главная ───────── */
+.home { gap: 20px; }
+.greeting {
+  min-height: 0;
+  margin-bottom: 15px;
+  padding: 56px 122px 20px 20px;
+  border-radius: 32px 32px 0 0;
+}
+.greeting h1, .greeting p { color: #000; }
+.greeting h1 { margin: 0 0 4px; font-size: 60px; line-height: normal; letter-spacing: 0; }
+
+/* Три блока в ряд: 599 / 289 / 445, зазор 20 */
+.home-top { grid-template-columns: minmax(0, 599fr) minmax(0, 289fr) minmax(0, 445fr); gap: 20px; align-items: start; }
+.home-top.is-professional { grid-template-columns: minmax(0, 289fr) minmax(0, 599fr) minmax(0, 445fr); }
+
+.checklist-card { height: 309px; min-height: 0; border-radius: 32px; }
+.checklist-card.is-selected { grid-template-columns: 289fr 310fr; }
+.checklist-card-info { padding: 20px; border-radius: 32px; }
+.checklist-card h2 { line-height: 33px; }
+.checklist-card-progress { place-content: center; padding: 0; } /* кольцо по центру розовой зоны */
+.ring-track { stroke: var(--cream); }
+.checklist-card:not(.is-selected) { grid-template-columns: 1fr; }
+.checklist-card:not(.is-selected) .checklist-card-progress { display: none; } /* в макете у второго чек-листа кольца нет */
+
+/* Календарь 445×313 */
+.mini-calendar {
+  display: flex;
+  flex-direction: column;
+  height: 313px;
+  margin-top: 0;
+  padding: 15px 20px 12px;
+  border-radius: 32px;
+}
+.mini-calendar h2 { line-height: normal; }
+.calendar-date { color: #252525; }
+.calendar-arrows { margin-right: -7px; width: 54px; height: 22px; padding: 4px 0 0 13px; box-sizing: border-box; align-items: flex-start; justify-content: flex-start; gap: 13px; margin-top: 5px; } /* стрелки 8×14: x 13 и 34, y 4 */
+.calendar-arrows button { width: 8px; height: 14px; padding: 0; line-height: 0; }
+.calendar-arrows button svg { display: block; }
+.mini-calendar header { flex: none; }
+/* Сетка по SVG макета: дни недели на y=83, первая неделя на y=105, шаг недель 42 px (6 недель сжимаются) */
+.calendar-grid {
+  flex: none;
+  height: 232px;
+  margin: 13.6px 0 0 -1px;
+  grid-template-rows: 22px;
+  grid-auto-rows: 1fr;
+  gap: 0;
+  grid-template-columns: repeat(7, 60.7px); /* шаг колонок в макете */
+  align-items: start;
+}
+.calendar-weekday { line-height: 19px; color: #d9d9d9; justify-self: start; text-align: left; }
+.calendar-day { place-content: start; width: 22px; height: 22px; margin: 0; justify-self: start; text-align: left; line-height: 22px; }
+.calendar-day.is-today { place-content: center; text-align: center; font-weight: 300; }
+
+/* Задачи: панель 1374×435, строки по 84 px */
+.task-table { margin-top: 2px; /* панель на y=596, как в макете */ display: flex; flex-direction: column; box-sizing: border-box; height: 435px; padding: 20px 20px 19px; border-radius: 32px; }
+.task-rows { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; } /* в макете три строки; остальные прокручиваются внутри панели */
+.task-rows::-webkit-scrollbar { display: none; }
+.task-table header { margin: 0 0 30px; align-items: center; }
+.task-table h2,
+.task-table header strong {
+  font-family: var(--font-title);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: normal;
+}
+.task-columns, .task-row { grid-template-columns: 430fr 206fr 206fr 431fr; gap: 20px; }
+.task-columns { margin-bottom: 21px; padding: 0; font-size: 16px; color: #252525; line-height: normal; }
+.task-columns span { padding-left: 20px; } /* подпись стоит над текстом ячейки, как в макете */
+.task-row { margin-top: 0; }
+.task-row + .task-row { margin-top: 20px; }
+.task-name, .task-cell {
+  height: 84px;
+  min-height: 0;
+  padding: 12px 20px;
+  border-radius: 32px;
+  background: #d9d9d9;
+  color: #252525;
+  font-size: 16px;
+  line-height: 1.2;
+}
+.task-name { gap: 19px; background: var(--pink); color: #000; }
+.task-mark { width: 46px; height: 46px; }
+.task-row.is-locked .task-name { background: rgba(240, 156, 180, 0.58); color: #5e5c5c; font-weight: 500; }
+.task-row.is-locked .task-cell { background: rgba(217, 217, 217, 0.55); color: #252525; }
+
+/* Кольцо прогресса: 255 px, число Aeroport Bold 52 */
+.ring-text { font-family: var(--font-title); font-size: 52px; font-weight: 700; }
+
+/* ───────── Личный кабинет (кадры 2:331 и 2:339) ─────────
+ * Сверху тёмная шапка 570×137, под ней розовая панель 512 px, прижатая вправо. */
+.drawer { width: 570px; height: 100%; margin-top: 0; align-items: flex-end; }
+.drawer-header {
+  align-self: stretch;
+  align-items: flex-start;
+  gap: 24px;
+  min-height: 137px;
+  padding: 40px 16px 0;
+  border-radius: 32px 0 0 32px;
+}
+.drawer-icon { display: block; line-height: 0; opacity: 1; }
+.drawer-header h2 { line-height: 33px; }
+
+.drawer-body {
+  box-sizing: border-box;
+  width: 512px;
+  flex: 1;
+  gap: 16px;
+  margin: 0;
+  padding: 19px 44px 39px 20px;
+  border-radius: 0 0 0 32px;
+}
+.person-card, .fact-card { background: #fffff8; border-radius: 32px; color: #000; }
+.person-card h3, .fact-card h3, .progress-card h3, .about-card h3 { line-height: 33px; }
+.person-card { height: 141px; gap: 20px; padding: 20px 16px 20px 20px; }
+.avatar { width: 129px; height: 129px; font-size: 52px; }
+.fact-row { grid-template-columns: 155px 271px; gap: 19px; }
+.fact-card { gap: 24px; align-content: start; box-sizing: border-box; height: 129px; padding: 20px; }
+.fact-card p { white-space: nowrap; line-height: 39px; }
+.progress-card { height: 212px; padding: 12px 20px 20px; border-radius: 32px; color: #000; }
+.progress-percent { margin: 0; line-height: 44px; }
+.progress-hint, .progress-edges, .progress-line, .about-card dt, .about-card dd { line-height: normal; }
+.progress-hint { color: #808080; }
+.progress-line { margin: 4px 0 16px; align-items: center; }
+.progress-edges { color: #808080; }
+.about-card { min-height: 357px; padding: 20px 28px 20px 20px; border-radius: 32px; }
+.about-card h3 { margin: 0 0 24px; }
+.about-card dl { gap: 12px; }
+.about-card dd { opacity: 1; }
+.about-org { color: #808080; opacity: 1; line-height: 17px; }
+
+/* Заметки: розовая шапка 606×137 и пустая панель (содержимое пока не нарисовано) */
+.notes-drawer { width: 606px; }
+.notes-drawer .drawer-header { background: var(--pink); padding: 44px 21px 0; }
+.notes-drawer .drawer-icon img { display: block; }
+.notes-drawer .drawer-header h2 { line-height: normal; }
+.notes-body { width: 100%; background: var(--pink); padding: 20px; }
+.notes-body p { margin: 0; font-family: var(--font-text); font-size: 16px; font-weight: var(--w-light); color: #252525; }
+
+/* ───────── Обратная связь: панель начинается на 792 px ───────── */
+.shell:has(.feedback) { grid-template-columns: calc(var(--stage-w, 100vw) / 3 + 152px) 1fr; }
+.shell:has(.feedback) .sidebar { width: 216px; }
+.feedback {
+  display: flex;
+  flex-direction: column;
+  padding: 124px 43px 0 22px;
+  border-radius: 32px 0 0 32px;
+}
+.feedback h1 { max-width: 1063px; margin: 0 0 8px; font-size: 64px; line-height: normal; }
+.feedback-lead { margin: 0 0 37px; font-size: 32px; color: #000; }
+.feedback form { width: 100%; max-width: 1063px; gap: 9px; }
+.feedback label { color: #000; line-height: normal; }
+.feedback input, .feedback textarea {
+  border: 1px solid #252525;
+  border-radius: 32px;
+  color: #252525;
+  font-family: var(--font-text);
+  font-size: 24px;
+  font-weight: var(--w-light);
+}
+.feedback input { height: 44px; }
+.feedback textarea { height: 210px; min-height: 0; padding-top: 12px; border-color: #000; resize: none; }
+.feedback label:nth-of-type(3) { margin-top: 16px; }
+.feedback .pill {
+  width: 445px;
+  height: 63px;
+  margin-top: 83px;
+  border-radius: 32px;
+  background: #000;
+  color: #fff;
+  font-family: var(--font-title); /* в макете кнопка отправки набрана Aeroport Regular */
+  font-size: 32px;
+  font-weight: 400;
+}
+
+/* Высота строки «normal», как в Figma */
+.greeting p, .card-weeks, .calendar-date, .task-empty { line-height: normal; }
+
+/* ───────── Календарь (страница): набросок, ждём макет дизайнера ───────── */
+.calendar-page {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: calc(100% + 1px); /* кадр макета: x=350, 1375×996 */
+  margin-left: -1px;
+  height: 100%;
+  min-height: 0;
+  padding: 20px;
+  border-radius: 32px;
+  background: var(--cream);
+  color: #252525;
+}
+.calendar-page-head { display: flex; justify-content: space-between; align-items: flex-start; flex: none; }
+.calendar-page-head h1 { margin: 0; font-family: var(--font-title); font-size: 24px; font-weight: 700; line-height: 33px; }
+.calendar-page-month { font-family: var(--font-text); font-size: 16px; font-weight: var(--w-light); }
+.calendar-page-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: 28px;
+  grid-auto-rows: 1fr;
+  gap: 10px;
+  margin-top: 16px;
+}
+.calendar-page-weekday { font-family: var(--font-text); font-size: 16px; font-weight: var(--w-light); color: #d9d9d9; }
+.calendar-page-cell { padding: 12px 16px; border-radius: 20px; background: #f3efef; font-family: var(--font-text); font-size: 16px; font-weight: var(--w-light); }
+.calendar-page-cell b { font-weight: inherit; }
+.calendar-page-cell.is-empty { background: transparent; }
+.calendar-page-cell.is-today { background: #252525; color: #fff; }
+
+/* ───────── Задачи: кадр check.png ─────────
+ * Белая вкладка с названием 599×138, выбор чек-листа (чёрная 289×107 / белая 289×93),
+ * под ними белая панель 1374×858 (в макете пустая). */
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.tasks-page { position: relative; height: calc(var(--stage-h, 100vh) - 84px); min-height: 0; } /* окно минус отступы рабочего поля 35+49 */
+.tasks-title {
+  position: absolute; left: 0; top: 0; z-index: 1;
+  box-sizing: border-box; width: 599px; height: 138px;
+  display: flex; align-items: center; padding: 20px;
+  border-radius: 32px 32px 0 0; background: #fff;
+}
+.tasks-title h2 { margin: 0; font-family: var(--font-title); font-size: 44px; font-weight: 700; line-height: 1.1; color: #000; }
+.tasks-switch { position: absolute; left: 619px; top: 0; display: flex; align-items: flex-start; gap: 21px; }
+.tasks-switch-btn {
+  display: flex; flex-direction: column; align-items: flex-start;
+  box-sizing: border-box; width: 289px; height: 93px; padding: 20px;
+  border-radius: 32px; background: #fff; color: #000;
+  font-family: var(--font-title); font-size: 22px; font-weight: 700; line-height: 30px; text-align: left;
+}
+.tasks-switch-btn.is-selected { height: 107px; background: #000; color: #fff; }
+.tasks-panel {
+  position: absolute; left: 0; right: 0; top: 138px; bottom: 0;
+  overflow-y: auto; padding: 20px; min-height: 0;
+  border-radius: 0 32px 32px 32px; background: #fff; color: #252525;
+  scrollbar-width: none;
+}
+.tasks-panel::-webkit-scrollbar { display: none; }
+.tasks-panel .checklist { border: 0; box-shadow: none; padding: 0; }
+
+/* Канбан-доска задач внутри белой панели: четыре колонки по статусам */
+.tasks-panel { display: flex; flex-direction: column; overflow: hidden; }
+.kanban { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.kanban-columns { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px; }
+.kanban-column { display: flex; flex-direction: column; min-height: 0; padding: 16px; border-radius: 32px; background: #f3efef; }
+.kanban-column-head { display: flex; align-items: center; justify-content: space-between; flex: none; margin-bottom: 16px; padding: 0 4px; }
+.kanban-column-head h3 { margin: 0; font-family: var(--font-title); font-size: 24px; font-weight: 700; line-height: 33px; color: #252525; }
+.kanban-column-head span { min-width: 28px; padding: 3px 10px; border-radius: 999px; background: #fff; text-align: center; font-family: var(--font-text); font-size: 16px; }
+.kanban-cards { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; scrollbar-width: none; }
+.kanban-cards::-webkit-scrollbar { display: none; }
+.kanban-empty { margin: 0; padding: 8px 4px; color: #808080; font-family: var(--font-text); font-size: 16px; font-weight: var(--w-light); }
+.kanban-card { display: flex; flex-direction: column; gap: 6px; padding: 16px 20px; border-radius: 24px; background: #fff; color: #252525; font-family: var(--font-text); font-size: 16px; font-weight: var(--w-light); line-height: 1.25; }
+.kanban-card h4 { margin: 0; font-family: var(--font-title); font-size: 18px; font-weight: 700; line-height: 1.2; }
+.kanban-card p { margin: 0; }
+.kanban-card-stage, .kanban-card-time { font-size: 14px; color: #808080; text-transform: none; }
+.kanban-card.is-unavailable { background: rgba(217, 217, 217, 0.55); }
+.kanban-card.is-active { background: var(--pink); color: #000; }
+.kanban-card.is-active .kanban-card-stage, .kanban-card.is-active .kanban-card-time { color: #252525; }
+.kanban-card.is-completed { background: #fff; }
+.kanban-card.is-verified { background: #252525; color: #fff; }
+.kanban-card.is-verified .kanban-card-stage, .kanban-card.is-verified .kanban-card-time { color: #d9d9d9; }
+.kanban-card button { align-self: flex-start; margin-top: 6px; }
+
+/* Состояния строки задачи (task.png). Активная: кружок белый → при наведении и нажатии чёрный.
+ * Выполненная: чёрное название, розовый кружок с белой галочкой; при наведении и нажатии кружок остаётся
+ * розовым, а галочка становится чёрной. Недоступная не реагирует. */
+.task-row:not(.is-locked) { cursor: pointer; }
+.task-check { display: none; }
+.task-check path { fill: #fff; }
+.task-row:not(.is-locked):hover .task-mark,
+.task-row:not(.is-locked):active .task-mark { background: #000; }
+.task-row.is-done .task-name { background: #000; color: #fff; }
+.task-row.is-done .task-mark,
+.task-row.is-done:hover .task-mark,
+.task-row.is-done:active .task-mark { background: var(--pink); }
+.task-row.is-done .task-check { display: block; }
+.task-row.is-done:hover .task-check path,
+.task-row.is-done:active .task-check path { fill: #000; }

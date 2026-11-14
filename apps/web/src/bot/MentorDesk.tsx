@@ -16,11 +16,11 @@ function Question({ q, token, reload }: { q: MentorQuestion; token: string; relo
   const makeDraft = async () => { setBusy('draft'); setError(''); try { const d = await bot.draft(token, q.id); setDraft(d); setText(d.draft); } catch (e) { setError(err(e)); } finally { setBusy(''); } };
   const send = async () => { setBusy('send'); setError(''); try { await bot.answer(token, q.id, text.trim()); reload(); } catch (e) { setError(err(e)); } finally { setBusy(''); } };
   return <article className="desk-item">
-    <header><b>{q.intern_name || 'Стажёр'}</b><span className={`pill ${q.status === 'open' ? 'pending' : 'completed'}`}>{q.status === 'open' ? 'ждёт ответа' : 'отвечен'}</span><small className="muted">{when(q.created_at)}</small></header>
+    <header><b>{q.intern_name || 'Стажёр'}</b><span className={`chip ${q.status === 'open' ? 'pending' : 'completed'}`}>{q.status === 'open' ? 'ждёт ответа' : 'отвечен'}</span><small className="muted">{when(q.created_at)}</small></header>
     <p className="desk-question">{q.question}</p>
     {q.context && <p className="muted desk-context">Контекст от бота: {q.context}</p>}
     {q.answer && <p className="notice success">Ваш ответ: {q.answer}</p>}
-    {q.status === 'open' && !draft && <button className="ghost" disabled={busy === 'draft'} onClick={() => void makeDraft()}>{busy === 'draft' ? 'Готовлю черновик…' : '✦ AI-черновик ответа'}</button>}
+    {q.status === 'open' && !draft && <button className="btn-ghost" disabled={busy === 'draft'} onClick={() => void makeDraft()}>{busy === 'draft' ? 'Готовлю черновик…' : '✦ AI-черновик ответа'}</button>}
     {q.status === 'open' && draft && <div className="desk-draft">
       <p className="muted">Уверенность: <b>{({ grounded: 'есть в базе знаний', partial: 'частично', none: 'в базе нет' } as const)[draft.confidence]}</b>
         {!!draft.sources.length && <> · источники: {draft.sources.map(s => s.title).join('; ')}</>}</p>
@@ -66,28 +66,28 @@ export function MentorDesk({ token }: { token: string }) {
       <div className="accent"><b>≈ {metrics.estimated_mentor_minutes_saved} мин</b><span>вашего времени сэкономлено</span></div>
     </section>}
 
-    <section className="panel">
-      <header className="desk-head"><div><span className="eyebrow">Эскалации от бота</span><h2>Вопросы стажёров {open > 0 && <span className="count">{open}</span>}</h2></div>
-        <div className="desk-tabs"><button className={tab === 'open' ? '' : 'ghost'} onClick={() => setTab('open')}>Ждут ответа</button><button className={tab === 'answered' ? '' : 'ghost'} onClick={() => setTab('answered')}>Отвеченные</button></div></header>
+    <section className="staff-card">
+      <header className="desk-head"><div><span className="eyebrow">Эскалации от бота</span><h2>Вопросы стажёров {open > 0 && <span className="count-badge">{open}</span>}</h2></div>
+        <div className="desk-tabs"><button className={tab === 'open' ? '' : 'btn-ghost'} onClick={() => setTab('open')}>Ждут ответа</button><button className={tab === 'answered' ? '' : 'btn-ghost'} onClick={() => setTab('answered')}>Отвеченные</button></div></header>
       {shown.length ? shown.map(q => <Question key={q.id} q={q} token={token} reload={() => void load()}/>) : <p className="muted">{tab === 'open' ? 'Новых вопросов нет — бот справляется сам.' : 'Пока нет отвеченных.'}</p>}
     </section>
 
-    <section className="panel">
-      <span className="eyebrow">Корпоративные сервисы (мок)</span><h2>Заявки стажёров {pending.length > 0 && <span className="count">{pending.length}</span>}</h2>
+    <section className="staff-card">
+      <span className="eyebrow">Корпоративные сервисы (мок)</span><h2>Заявки стажёров {pending.length > 0 && <span className="count-badge">{pending.length}</span>}</h2>
       {requests.length ? requests.map(({ request: r, intern_name }) => <div className="desk-request" key={r.id}>
         <div><b>{r.number}</b> · {intern_name || 'Стажёр'}<br/><small className="muted">{describe(r)}{r.params.justification ? ` · ${r.params.justification}` : ''}</small></div>
         {r.status === 'pending_approval'
-          ? <div className="desk-tabs"><button disabled={busy === r.id} onClick={() => void decide(r.id, 'approved')}>Согласовать</button><button className="ghost" disabled={busy === r.id} onClick={() => void decide(r.id, 'rejected')}>Отклонить</button></div>
-          : <span className={`pill ${r.status === 'approved' ? 'completed' : ''}`}>{REQUEST_STATUS[r.status]}</span>}
+          ? <div className="desk-tabs"><button disabled={busy === r.id} onClick={() => void decide(r.id, 'approved')}>Согласовать</button><button className="btn-ghost" disabled={busy === r.id} onClick={() => void decide(r.id, 'rejected')}>Отклонить</button></div>
+          : <span className={`chip ${r.status === 'approved' ? 'completed' : ''}`}>{REQUEST_STATUS[r.status]}</span>}
       </div>) : <p className="muted">Заявок пока нет. Стажёр оформляет их в чате с ботом.</p>}
     </section>
 
-    <section className="panel">
+    <section className="staff-card">
       <span className="eyebrow">Качество базы знаний</span><h2>Где бот не справляется</h2>
-      <div className="desk-tabs"><button className="ghost" disabled={busy === 'gaps'} onClick={() => void runGaps()}>{busy === 'gaps' ? 'Считаю…' : 'Пробелы: темы вопросов без ответа'}</button>
-        <button className="ghost" disabled={busy === 'lint'} onClick={() => void runLint()}>{busy === 'lint' ? 'Проверяю (до минуты)…' : 'Линтер: противоречия и устаревшее'}</button></div>
+      <div className="desk-tabs"><button className="btn-ghost" disabled={busy === 'gaps'} onClick={() => void runGaps()}>{busy === 'gaps' ? 'Считаю…' : 'Пробелы: темы вопросов без ответа'}</button>
+        <button className="btn-ghost" disabled={busy === 'lint'} onClick={() => void runLint()}>{busy === 'lint' ? 'Проверяю (до минуты)…' : 'Линтер: противоречия и устаревшее'}</button></div>
       {gaps && (gaps.clusters.length ? <ul>{gaps.clusters.map(c => <li key={c.label}><b>{c.label}</b> — {c.count}: <span className="muted">{c.examples.join(' / ')}</span></li>)}</ul> : <p className="muted">Эскалированных вопросов пока нет.</p>)}
-      {lint && (lint.issues.length ? <ul>{lint.issues.map((i, n) => <li key={n}><span className="pill">{i.kind === 'contradiction' ? 'противоречие' : i.kind === 'stale' ? 'устарело' : i.kind}</span> <b>{i.doc_ids.join(' ↔ ')}</b>: {i.detail}</li>)}</ul> : <p className="muted">Проблем не найдено.</p>)}
+      {lint && (lint.issues.length ? <ul>{lint.issues.map((i, n) => <li key={n}><span className="chip">{i.kind === 'contradiction' ? 'противоречие' : i.kind === 'stale' ? 'устарело' : i.kind}</span> <b>{i.doc_ids.join(' ↔ ')}</b>: {i.detail}</li>)}</ul> : <p className="muted">Проблем не найдено.</p>)}
     </section>
   </div>;
 }

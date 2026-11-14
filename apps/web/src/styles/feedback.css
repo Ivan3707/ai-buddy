@@ -1,0 +1,20 @@
+/* Обратная связь «Есть идеи?» (макет feedback.png) */
+.shell:has(.feedback) { grid-template-columns: minmax(300px, 41%) 1fr; }
+
+.feedback {
+  min-height: var(--stage-h, 100vh);
+  padding: 96px clamp(24px, 3vw, 44px) 40px 20px;
+  border-radius: 32px 0 0 32px;
+  background: var(--pink);
+}
+.feedback h1 { margin: 0 0 14px; max-width: 980px; color: #fff; font-size: clamp(30px, 3.4vw, 50px); font-weight: 800; line-height: 1.45; }
+.feedback-lead { margin: 0 0 22px; font-size: 22px; font-weight: 300; }
+.feedback form { display: grid; gap: 10px; }
+.feedback label { display: grid; gap: 4px; font-size: 22px; font-weight: 300; }
+.feedback input, .feedback textarea { padding: 0 20px; border: 1px solid var(--ink); border-radius: 22px; background: transparent; font-size: 18px; }
+.feedback input { height: 42px; border-radius: var(--radius-pill); }
+.feedback textarea { min-height: 150px; padding-top: 14px; resize: vertical; }
+.feedback input:focus, .feedback textarea:focus { outline: none; box-shadow: 0 0 0 3px #ffffff80; }
+.feedback .pill { width: 400px; max-width: 100%; margin-top: 12px; }
+.feedback-note { margin: 0; padding: 10px 16px; border-radius: 14px; background: #fff; font-size: 16px; }
+.feedback-error { color: var(--danger); }
