@@ -15,13 +15,27 @@
 /* Чёрная часть слева */
 .auth-panel { position: relative; color: #fff; }
 .auth-panel .lang { position: absolute; left: calc(40 * var(--u)); top: calc(40 * var(--u)); font-size: calc(24 * var(--u)); }
-/* Aeroport — шрифт из макета. Положите файл в apps/web/public/fonts/Aeroport-Bold.woff2 */
+/* Шрифты из макета: файлы лежат в apps/web/public/fonts */
 @font-face {
   font-family: 'Aeroport';
   font-weight: 700;
   font-style: normal;
   font-display: swap;
-  src: local('Aeroport Bold'), local('Aeroport-Bold'), url('/fonts/Aeroport-Bold.woff2') format('woff2');
+  src: local('Aeroport Bold'), url('/fonts/Aeroport-Bold.otf') format('opentype');
+}
+@font-face {
+  font-family: 'Montserrat';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: local('Montserrat Regular'), local('Montserrat'), url('/fonts/Montserrat-Regular.ttf') format('truetype');
+}
+@font-face {
+  font-family: 'Montserrat';
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+  src: local('Montserrat Light'), url('/fonts/Montserrat-Light.ttf') format('truetype');
 }
 .auth-title {
   position: absolute;

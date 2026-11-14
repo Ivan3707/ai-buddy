@@ -47,8 +47,9 @@ a { color: inherit; }
   height: 48px;
   padding: 0 28px;
   border-radius: var(--radius-pill);
+  font-family: 'Montserrat', var(--font); /* по макету все кнопки — Montserrat Regular */
   font-size: 20px;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: 0.02em;
   text-transform: uppercase;
   transition: transform 0.15s, opacity 0.15s;
