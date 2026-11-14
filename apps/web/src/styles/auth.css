@@ -150,7 +150,7 @@
 .circle { position: absolute; border-radius: 50%; aspect-ratio: 1; }
 /* Ellipse 6 (зелёный): 858, left 361, top −91 */
 .circle-green { background: var(--green); width: calc(858 * var(--u)); left: calc(361 * var(--u)); top: calc(-91 * var(--u)); }
-/* Ellipse 8 (синий): 503, left 109, top 811 */
-.circle-blue { background: var(--blue); width: calc(503 * var(--u)); left: calc(109 * var(--u)); top: calc(811 * var(--u)); }
+/* Ellipse 8 (синий): 503, left 109, top 811; лежит поверх розового */
+.circle-blue { z-index: 1; background: var(--blue); width: calc(503 * var(--u)); left: calc(109 * var(--u)); top: calc(811 * var(--u)); }
 /* Ellipse 7 (розовый): 665, left 513, top 478 */
 .circle-pink { background: var(--pink); width: calc(665 * var(--u)); left: calc(513 * var(--u)); top: calc(478 * var(--u)); }
