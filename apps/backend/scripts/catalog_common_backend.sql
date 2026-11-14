@@ -14,8 +14,8 @@ DECLARE v integer;
 BEGIN
   SELECT COALESCE(MAX(version_id), 0) INTO v
   FROM goose_db_version WHERE is_applied;
-  IF v <> 1 THEN
-    RAISE EXCEPTION 'Goose schema version 1 required; current: %', v;
+  IF v < 1 THEN
+    RAISE EXCEPTION 'Goose schema version 1 or newer required; current: %', v;
   END IF;
 END $$;
 

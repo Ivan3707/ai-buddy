@@ -389,8 +389,8 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	afterSubmit := getChecklists(internToken)
 	assertStatus(itemState(afterSubmit.Professional.Stages, professionalItems[0]), model.StatusCompleted)
 	assertStatus(itemState(afterSubmit.Professional.Stages, professionalItems[1]), model.StatusActive)
-	if afterSubmit.Professional.CompletedItems != 1 {
-		t.Fatalf("review-pending task should count as completed: %+v", afterSubmit.Professional)
+	if afterSubmit.Professional.CompletedItems != 0 || afterSubmit.Professional.CompletionPercent != 0 {
+		t.Fatalf("review-pending task should not count as confirmed: %+v", afterSubmit.Professional)
 	}
 
 	var pending []pendingSubmissionDTO

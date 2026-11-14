@@ -46,6 +46,38 @@ func getProgressForTest(
 	return progress
 }
 
+func TestProgressService_OldProfessionTrackIsReadOnly(t *testing.T) {
+	db, ctx := openChecklistTestDB(t)
+	fixture := createChecklistTestFixture(t, db, ctx, model.ProfessionBackend, 1, 2)
+	user := createChecklistTestIntern(t, db, ctx, model.ProfessionBackend)
+	setRequiresReview(t, db, ctx, fixture.profItems[0].ID, fixture.profItems[1].ID)
+	svc := NewProgressService(db)
+	text := "submitted work"
+	submission, err := svc.SubmitItem(ctx, user.ID, fixture.profItems[0].ID, &text, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `UPDATE users SET profession=$1 WHERE id=$2`, model.ProfessionFrontend, user.ID); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.CompleteItem(ctx, user.ID, fixture.profItems[1].ID); !errors.Is(err, ErrOutdatedProfessionTrack) {
+		t.Fatalf("complete old track: %v", err)
+	}
+	if _, err := svc.SubmitItem(ctx, user.ID, fixture.profItems[1].ID, &text, nil); !errors.Is(err, ErrOutdatedProfessionTrack) {
+		t.Fatalf("submit old track: %v", err)
+	}
+	if err := svc.ReviewSubmission(ctx, uuid.New(), submission.ID, true, nil); !errors.Is(err, ErrOutdatedProfessionTrack) {
+		t.Fatalf("review old track: %v", err)
+	}
+	progress := getProgressForTest(t, db, ctx, user.ID, fixture.profItems[0].ID)
+	if progress.Status != model.StatusCompleted {
+		t.Fatalf("historical progress changed: %s", progress.Status)
+	}
+	if err := svc.CompleteItem(ctx, user.ID, fixture.commonItems[0].ID); err != nil {
+		t.Fatalf("common checklist should remain independent: %v", err)
+	}
+}
+
 func TestProgressService_CompleteItem_Success(t *testing.T) {
 	db, ctx := openChecklistTestDB(t)
 

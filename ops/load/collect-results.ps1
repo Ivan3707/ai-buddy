@@ -49,8 +49,45 @@ foreach ($key in $queries.Keys) {
     $uri = "$PrometheusURL/api/v1/query_range?query=$([uri]::EscapeDataString($query))&start=$start&end=$end&step=5"
     $response = Invoke-RestMethod -Uri $uri -TimeoutSec 30
     if ($response.status -ne 'success') { throw "Prometheus query failed: $key" }
-    if (-not $response.data.result -or -not $response.data.result[0].values) { throw "Prometheus returned no samples: $key" }
-    $series[$key] = [ordered]@{ source = 'Prometheus backend'; query = $query; data = $response.data.result }
+    $hasSamples = (
+        $response.data.result -and
+        $response.data.result[0].values
+    )
+
+    $optionalPublicMetrics = @(
+        'backend_latency_p50_seconds',
+        'backend_latency_p95_seconds',
+        'backend_latency_p99_seconds'
+    )
+
+    $isOptional = (
+        $RunId -match '^public-' -and
+        $key -in $optionalPublicMetrics
+    )
+
+    if (-not $hasSamples) {
+        if (-not $isOptional) {
+            throw "Prometheus returned no samples: $key"
+        }
+
+        Write-Warning "No API traffic for $key in public scenario"
+
+        $series[$key] = [ordered]@{
+            source = 'Prometheus backend'
+            query = $query
+            data = @()
+            note = 'No matching user API requests'
+        }
+
+        continue
+    }
+
+    $series[$key] = [ordered]@{
+        source = 'Prometheus backend'
+        query = $query
+        data = $response.data.result
+    }
+
 }
 $series | ConvertTo-Json -Depth 100 | Set-Content -LiteralPath (Join-Path $dir 'server-series.json') -Encoding utf8
 [ordered]@{

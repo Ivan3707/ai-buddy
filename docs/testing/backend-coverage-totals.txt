@@ -1,0 +1,6 @@
+﻿Profile: test-results/backend-coverage-improved/coverage.out
+Distinct blocks: 1726
+Covered statements: 2085
+Total statements: 2568
+Statement coverage: 81.19%
+Additional covered statements needed for 80% at current denominator: 0

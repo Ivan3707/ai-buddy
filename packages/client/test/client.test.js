@@ -42,7 +42,7 @@ test('401 and 403 remain distinct and 401 signals session refresh', async () => 
   const originalDispatch = globalThis.dispatchEvent;
   let signals = 0;
   try {
-    globalThis.dispatchEvent = event => { if (event.type === 'ai-buddy:unauthorized') signals++; return true; };
+    globalThis.dispatchEvent = event => { if (event.type === 'ai-buddy:unauthorized') { assert.equal(event.detail.token, 'token'); signals++; } return true; };
     globalThis.fetch = async () => new Response(JSON.stringify({error:'unauthorized'}), {status:401});
     await assert.rejects(getBuddies('', 'token'), error => error instanceof ApiError && error.status === 401);
     assert.equal(signals, 1);

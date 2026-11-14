@@ -13,7 +13,7 @@ DECLARE
   expected jsonb;
 BEGIN
   SELECT COALESCE(MAX(version_id),0) INTO v FROM goose_db_version WHERE is_applied;
-  IF v<>1 THEN RAISE EXCEPTION 'Goose v1 required, found %',v; END IF;
+  IF v<1 THEN RAISE EXCEPTION 'Goose v1 or newer required, found %',v; END IF;
   SELECT id,name INTO target_checklist_id,existing_name
   FROM checklists WHERE type='professional' AND profession='ml';
   IF FOUND THEN

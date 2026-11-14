@@ -148,6 +148,7 @@ func (r *ChecklistRepository) GetItems(
 			requires_review,
 			estimated_minutes,
 			due_at,
+			assigned_user_id,
 			position,
 			created_at
 		FROM checklist_items
@@ -160,7 +161,7 @@ func (r *ChecklistRepository) GetItems(
 
 func (r *ChecklistRepository) GetItemsForUser(ctx context.Context, checklistID, userID uuid.UUID) ([]model.ChecklistItem, error) {
 	query := `SELECT i.id,i.checklist_id,i.stage_id,i.title,i.description,i.expected_result,
-	 i.requires_review,i.estimated_minutes,i.due_at,COALESCE(p.position,i.position),i.created_at
+	 i.requires_review,i.estimated_minutes,i.due_at,i.assigned_user_id,COALESCE(p.position,i.position),i.created_at
 	 FROM checklist_items i LEFT JOIN user_checklist_progress p ON p.checklist_item_id=i.id AND p.user_id=$2
 	 WHERE i.checklist_id=$1 AND (i.assigned_user_id IS NULL OR i.assigned_user_id=$2)
 	 ORDER BY COALESCE(p.position,i.position),i.id`
@@ -182,6 +183,7 @@ func (r *ChecklistRepository) queryItems(ctx context.Context, query string, args
 		var expectedResult sql.NullString
 		var estimatedMinutes sql.NullInt64
 		var dueAt sql.NullTime
+		var assignedUserID uuid.NullUUID
 
 		if err := rows.Scan(
 			&item.ID,
@@ -193,6 +195,7 @@ func (r *ChecklistRepository) queryItems(ctx context.Context, query string, args
 			&item.RequiresReview,
 			&estimatedMinutes,
 			&dueAt,
+			&assignedUserID,
 			&item.Position,
 			&item.CreatedAt,
 		); err != nil {
@@ -212,6 +215,9 @@ func (r *ChecklistRepository) queryItems(ctx context.Context, query string, args
 		}
 		if dueAt.Valid {
 			item.DueAt = &dueAt.Time
+		}
+		if assignedUserID.Valid {
+			item.AssignedUserID = &assignedUserID.UUID
 		}
 
 		items = append(items, item)

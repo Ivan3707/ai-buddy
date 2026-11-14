@@ -4,10 +4,18 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/model"
 )
+
+type timeoutAnalytics struct{}
+
+func (timeoutAnalytics) Receive(ctx context.Context, _ AnalyticsEvent) error {
+	<-ctx.Done()
+	return ctx.Err()
+}
 
 func TestFeedbackPostgresDelivery(t *testing.T) {
 	db, ctx := openChecklistTestDB(t)
@@ -66,6 +74,16 @@ func TestFeedbackPostgresDelivery(t *testing.T) {
 	other, err := sender.Get(ctx, id, fixture.professionalID)
 	if err != nil || other != nil {
 		t.Fatalf("other checklist feedback: %+v %v", other, err)
+	}
+	sender.analytics = timeoutAnalytics{}
+	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Millisecond)
+	if err = sender.Deliver(timeoutCtx, feedback.ID); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("analytics timeout: %v", err)
+	}
+	cancel()
+	var retryable string
+	if err = db.QueryRowContext(ctx, `SELECT delivery_status FROM checklist_feedback WHERE id=$1`, feedback.ID).Scan(&retryable); err != nil || retryable != "failed" {
+		t.Fatalf("timed out feedback not retryable: status=%s err=%v", retryable, err)
 	}
 	sender.analytics = MockAnalytics{DB: db}
 	sent, err := sender.Retry(ctx)

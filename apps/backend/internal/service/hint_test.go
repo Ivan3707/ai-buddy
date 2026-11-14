@@ -64,3 +64,13 @@ func TestHintTickAIAndFallback(t *testing.T) {
 		})
 	}
 }
+
+func TestHintTickUnavailableAI(t *testing.T) {
+	fake := &fakeHintStore{due: &repository.DueHint{ID: uuid.New(), Title: "Task", Minutes: 30}}
+	if err := NewHintService(fake, "http://127.0.0.1:0").Tick(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if fake.text != fallbackHint || fake.success || fake.attempts != 1 {
+		t.Fatalf("unexpected unavailable AI result: %+v", fake)
+	}
+}

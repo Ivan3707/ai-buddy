@@ -38,6 +38,9 @@ func (s *ProgressService) CompleteItem(
 	return withTransaction(ctx, s.db, func(tx *sql.Tx) error {
 		progressRepo := repository.NewProgressRepository(tx)
 		checklistRepo := repository.NewChecklistRepository(tx)
+		if err := lockProgressOwner(ctx, tx, userID); err != nil {
+			return err
+		}
 
 		currentProgress, err := progressRepo.GetByUserAndItem(
 			ctx,
@@ -46,6 +49,9 @@ func (s *ProgressService) CompleteItem(
 		)
 		if err != nil {
 			return fmt.Errorf("get current item progress: %w", err)
+		}
+		if err := ensureCurrentTrack(ctx, tx, userID, currentProgress.ChecklistID); err != nil {
+			return err
 		}
 
 		items, currentIndex, err := getChecklistItemContext(
@@ -112,6 +118,9 @@ func (s *ProgressService) SubmitItem(
 	var created model.ChecklistItemSubmission
 
 	err := withTransaction(ctx, s.db, func(tx *sql.Tx) error {
+		if err := lockProgressOwner(ctx, tx, userID); err != nil {
+			return err
+		}
 		userRepo := repository.NewUserRepository(tx)
 		progressRepo := repository.NewProgressRepository(tx)
 		checklistRepo := repository.NewChecklistRepository(tx)
@@ -132,6 +141,9 @@ func (s *ProgressService) SubmitItem(
 		)
 		if err != nil {
 			return fmt.Errorf("get submission progress: %w", err)
+		}
+		if err := ensureCurrentTrack(ctx, tx, userID, currentProgress.ChecklistID); err != nil {
+			return err
 		}
 		if currentProgress.Status != model.StatusActive {
 			return ErrItemNotActive
@@ -238,6 +250,13 @@ func (s *ProgressService) ReviewSubmission(
 		if err != nil {
 			return fmt.Errorf("get submission: %w", err)
 		}
+		var ownerID, checklistID uuid.UUID
+		if err := tx.QueryRowContext(ctx, `SELECT user_id, checklist_id FROM user_checklist_progress WHERE id=$1`, unlockedSubmission.ProgressID).Scan(&ownerID, &checklistID); err != nil {
+			return fmt.Errorf("get submission owner: %w", err)
+		}
+		if err := lockProgressOwner(ctx, tx, ownerID); err != nil {
+			return err
+		}
 
 		currentProgress, err := progressRepo.GetByIDForUpdate(
 			ctx,
@@ -245,6 +264,12 @@ func (s *ProgressService) ReviewSubmission(
 		)
 		if err != nil {
 			return fmt.Errorf("lock submission progress: %w", err)
+		}
+		if currentProgress.UserID != ownerID || currentProgress.ChecklistID != checklistID {
+			return ErrProgressIncomplete
+		}
+		if err := ensureCurrentTrack(ctx, tx, ownerID, checklistID); err != nil {
+			return err
 		}
 
 		submission, err := submissionRepo.GetByIDForUpdate(ctx, submissionID)
@@ -471,11 +496,17 @@ func openNextChecklistItem(
 	items []model.ChecklistItem,
 	currentIndex int,
 ) error {
-	if currentIndex+1 >= len(items) {
+	if items[currentIndex].AssignedUserID != nil {
 		return nil
 	}
-
-	nextItem := items[currentIndex+1]
+	nextIndex := currentIndex + 1
+	for nextIndex < len(items) && items[nextIndex].AssignedUserID != nil {
+		nextIndex++
+	}
+	if nextIndex >= len(items) {
+		return nil
+	}
+	nextItem := items[nextIndex]
 	nextProgress, err := progressRepo.GetByUserAndItem(
 		ctx,
 		userID,
@@ -527,4 +558,33 @@ func openNextChecklistItem(
 
 func hasNonEmptyValue(value *string) bool {
 	return value != nil && strings.TrimSpace(*value) != ""
+}
+
+// Lock the owner before progress rows so HR profession changes and personal
+// task insertion cannot race with a progress transition.
+func lockProgressOwner(ctx context.Context, tx *sql.Tx, userID uuid.UUID) error {
+	var id uuid.UUID
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE id=$1 FOR SHARE`, userID).Scan(&id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return repository.ErrNotFound
+		}
+		return fmt.Errorf("lock progress owner: %w", err)
+	}
+	return nil
+}
+
+func ensureCurrentTrack(ctx context.Context, tx *sql.Tx, userID, checklistID uuid.UUID) error {
+	var checklistType string
+	var checklistProfession, userProfession sql.NullString
+	err := tx.QueryRowContext(ctx, `SELECT c.type, c.profession, u.profession
+		FROM checklists c JOIN users u ON u.id=$1 WHERE c.id=$2`, userID, checklistID).
+		Scan(&checklistType, &checklistProfession, &userProfession)
+	if err != nil {
+		return fmt.Errorf("check current profession track: %w", err)
+	}
+	if checklistType == string(model.ChecklistTypeProfessional) &&
+		(!checklistProfession.Valid || !userProfession.Valid || checklistProfession.String != userProfession.String) {
+		return ErrOutdatedProfessionTrack
+	}
+	return nil
 }

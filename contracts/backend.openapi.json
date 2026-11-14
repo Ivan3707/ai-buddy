@@ -13,6 +13,7 @@
   "paths": {
     "/api/auth/refresh": {
       "post": {
+        "security": [],
         "operationId": "refreshSession",
         "requestBody": {
           "required": true,
@@ -36,8 +37,14 @@
           "200": {
             "description": "Rotated tokens"
           },
+          "400": {
+            "description": "Invalid JSON"
+          },
           "401": {
             "description": "Invalid or replayed refresh token"
+          },
+          "500": {
+            "description": "Session store error"
           }
         }
       }
@@ -67,6 +74,15 @@
         "responses": {
           "204": {
             "description": "Session revoked"
+          },
+          "400": {
+            "description": "Invalid JSON or refresh token"
+          },
+          "401": {
+            "description": "Invalid access token"
+          },
+          "500": {
+            "description": "Session service unavailable"
           }
         }
       }
@@ -96,8 +112,7 @@
                   "position",
                   "title",
                   "expected_result",
-                  "estimated_minutes",
-                  "requires_review"
+                  "estimated_minutes"
                 ],
                 "properties": {
                   "position": {
@@ -695,14 +710,21 @@
     },
     "/api/auth/login": {
       "post": {
+        "security": [],
         "operationId": "login",
         "description": "Returns access_token, refresh_token, token_type, expires_in, is_first_login and user.",
         "responses": {
           "200": {
             "description": "Authenticated"
           },
+          "400": {
+            "description": "Invalid JSON or email/password"
+          },
           "401": {
             "description": "Invalid credentials"
+          },
+          "500": {
+            "description": "Internal error"
           }
         }
       }
@@ -815,6 +837,7 @@
     },
     "/health": {
       "get": {
+        "security": [],
         "operationId": "health",
         "responses": {
           "200": {
@@ -936,10 +959,10 @@
         }
       }
     },
-    "/api/checklists/{checklist_id}/feedback": {
+    "/api/checklists/{checklistID}/feedback": {
       "parameters": [
         {
-          "name": "checklist_id",
+          "name": "checklistID",
           "in": "path",
           "required": true,
           "schema": {
@@ -987,7 +1010,7 @@
                   },
                   "comment": {
                     "type": "string",
-                    "maxLength": 4000
+                    "description": "Maximum 4000 UTF-8 bytes, enforced by backend service"
                   }
                 }
               }
@@ -1385,6 +1408,232 @@
         }
       }
     },
+    "/api/suggestions": {
+      "get": {
+        "operationId": "chatSuggestions",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Ready-made questions the chat shows as the placeholder of the empty input (AI /v1/suggestions). Only entries whose document section exists in the knowledge base are returned.",
+        "responses": {
+          "200": {
+            "description": "Suggestions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "suggestions"
+                  ],
+                  "properties": {
+                    "suggestions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "question",
+                          "doc_id",
+                          "title",
+                          "heading",
+                          "url",
+                          "excerpt"
+                        ],
+                        "properties": {
+                          "question": {
+                            "type": "string"
+                          },
+                          "doc_id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "heading": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "excerpt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/hint": {
+      "post": {
+        "operationId": "chatHint",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Answers one of the suggestions WITHOUT the model: a short excerpt of the document section plus a link. The text is built by the backend from the knowledge base (the client sends only the question). Both messages join the conversation, so the user's next message goes through the model with this exchange as history.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "question"
+                ],
+                "properties": {
+                  "question": {
+                    "type": "string"
+                  },
+                  "conversation_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Hint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "conversation_id",
+                    "message_id",
+                    "text",
+                    "sources"
+                  ],
+                  "properties": {
+                    "conversation_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "message_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Source"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not one of the suggestions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/link": {
+      "post": {
+        "operationId": "linkSession",
+        "description": "Opens a NEW session of the same user for another client (the Chrome extension next to the web app), without the password: the caller proves possession of its own refresh token, which is not rotated. Each client keeps its own refresh-token chain (rotation + replay detection would revoke a shared one). Logging one client out does not sign the other out.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "refresh_token"
+                ],
+                "properties": {
+                  "refresh_token": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "New session",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "access_token",
+                    "refresh_token",
+                    "expires_in"
+                  ],
+                  "properties": {
+                    "access_token": {
+                      "type": "string"
+                    },
+                    "refresh_token": {
+                      "type": "string"
+                    },
+                    "token_type": {
+                      "type": "string"
+                    },
+                    "expires_in": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid, expired, revoked or already rotated refresh token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/requests": {
       "get": {
         "operationId": "listRequests",
@@ -1762,15 +2011,15 @@
         }
       }
     },
-    "/api/analytics/gaps": {
+    "/api/admin/kb/gaps": {
       "get": {
-        "operationId": "knowledgeGaps",
+        "operationId": "adminKbGaps",
         "security": [
           {
             "bearerAuth": []
           }
         ],
-        "description": "Buddy only: escalated questions grouped by topic (AI /v1/analytics/gaps).",
+        "description": "Admin panel: all escalated questions grouped by topic (AI /v1/analytics/gaps). Moved from /api/analytics/gaps.",
         "responses": {
           "200": {
             "description": "Report",
@@ -1783,7 +2032,7 @@
             }
           },
           "403": {
-            "description": "Not a buddy",
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {
@@ -1803,15 +2052,15 @@
         }
       }
     },
-    "/api/kb/lint": {
+    "/api/admin/kb/lint": {
       "get": {
-        "operationId": "kbLint",
+        "operationId": "adminKbLint",
         "security": [
           {
             "bearerAuth": []
           }
         ],
-        "description": "Buddy only: knowledge-base contradictions and stale documents (AI /v1/kb/lint).",
+        "description": "Admin panel: knowledge-base contradictions and stale documents (AI /v1/kb/lint). Moved from /api/kb/lint.",
         "responses": {
           "200": {
             "description": "Report",
@@ -1824,7 +2073,7 @@
             }
           },
           "403": {
-            "description": "Not a buddy",
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {
@@ -1844,22 +2093,154 @@
         }
       }
     },
-    "/api/metrics/chat": {
+    "/api/kb/docs/{id}": {
       "get": {
-        "operationId": "chatMetrics",
+        "operationId": "kbDocument",
         "security": [
           {
             "bearerAuth": []
           }
         ],
-        "description": "Buddy only: aggregated assistant metrics for own interns.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_.-]{1,128}$"
+            }
+          }
+        ],
+        "description": "Any signed-in user: one knowledge-base document by the source id from chat events (AI /v1/kb/docs/{doc_id}). Opened in the chat when the user clicks a source.",
+        "responses": {
+          "200": {
+            "description": "Document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KbDocument"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such document",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "AI unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/questions": {
+      "get": {
+        "operationId": "ownQuestions",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "The intern's own questions escalated to the buddy, newest first (to notify about answers; the answer is also added to the chat conversation the question came from).",
         "responses": {
           "200": {
             "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChatMetrics"
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MentorQuestion"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createQuestion",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Ask the buddy a question directly (the \"Вопросы наставнику\" tab), without the chat. Same storage as a confirmed mentor_question action; the buddy sees it in the mentor desk.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "question"
+                ],
+                "properties": {
+                  "question": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MentorQuestion"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Empty question",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
                 }
               }
             }
@@ -2060,387 +2441,6 @@
         }
       }
     },
-    "/api/questions": {
-      "get": {
-        "operationId": "ownQuestions",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "description": "The intern's own questions escalated to the buddy, newest first (to notify about answers; the answer is also added to the chat conversation the question came from).",
-        "responses": {
-          "200": {
-            "description": "Success",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/MentorQuestion"
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "operationId": "createQuestion",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "description": "Ask the buddy a question directly (the \"Вопросы наставнику\" tab), without the chat. Same storage as a confirmed mentor_question action; the buddy sees it in the mentor desk.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "question"
-                ],
-                "properties": {
-                  "question": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 2000
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Created",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MentorQuestion"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Empty question",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/kb/docs/{id}": {
-      "get": {
-        "operationId": "kbDocument",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "pattern": "^[A-Za-z0-9_.-]{1,128}$"
-            }
-          }
-        ],
-        "description": "Any signed-in user: one knowledge-base document by the source id from chat events (AI /v1/kb/docs/{doc_id}). Opened in the chat when the user clicks a source.",
-        "responses": {
-          "200": {
-            "description": "Document",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/KbDocument"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "No such document",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "AI unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/auth/link": {
-      "post": {
-        "operationId": "linkSession",
-        "description": "Opens a NEW session of the same user for another client (the Chrome extension next to the web app), without the password: the caller proves possession of its own refresh token, which is not rotated. Each client keeps its own refresh-token chain (rotation + replay detection would revoke a shared one). Logging one client out does not sign the other out.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "refresh_token"
-                ],
-                "properties": {
-                  "refresh_token": {
-                    "type": "string"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "New session",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "access_token",
-                    "refresh_token",
-                    "expires_in"
-                  ],
-                  "properties": {
-                    "access_token": {
-                      "type": "string"
-                    },
-                    "refresh_token": {
-                      "type": "string"
-                    },
-                    "token_type": {
-                      "type": "string"
-                    },
-                    "expires_in": {
-                      "type": "integer"
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Invalid, expired, revoked or already rotated refresh token",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/suggestions": {
-      "get": {
-        "operationId": "chatSuggestions",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "description": "Ready-made questions the chat shows as the placeholder of the empty input (AI /v1/suggestions). Only entries whose document section exists in the knowledge base are returned.",
-        "responses": {
-          "200": {
-            "description": "Suggestions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "suggestions"
-                  ],
-                  "properties": {
-                    "suggestions": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "required": [
-                          "question",
-                          "doc_id",
-                          "title",
-                          "heading",
-                          "url",
-                          "excerpt"
-                        ],
-                        "properties": {
-                          "question": {
-                            "type": "string"
-                          },
-                          "doc_id": {
-                            "type": "string"
-                          },
-                          "title": {
-                            "type": "string"
-                          },
-                          "heading": {
-                            "type": "string"
-                          },
-                          "url": {
-                            "type": "string"
-                          },
-                          "excerpt": {
-                            "type": "string"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/chat/hint": {
-      "post": {
-        "operationId": "chatHint",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "description": "Answers one of the suggestions WITHOUT the model: a short excerpt of the document section plus a link. The text is built by the backend from the knowledge base (the client sends only the question). Both messages join the conversation, so the user's next message goes through the model with this exchange as history.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "question"
-                ],
-                "properties": {
-                  "question": {
-                    "type": "string"
-                  },
-                  "conversation_id": {
-                    "type": [
-                      "string",
-                      "null"
-                    ],
-                    "format": "uuid"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Hint",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "conversation_id",
-                    "message_id",
-                    "text",
-                    "sources"
-                  ],
-                  "properties": {
-                    "conversation_id": {
-                      "type": "string",
-                      "format": "uuid"
-                    },
-                    "message_id": {
-                      "type": "string",
-                      "format": "uuid"
-                    },
-                    "text": {
-                      "type": "string"
-                    },
-                    "sources": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/Source"
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not one of the suggestions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/api/admin/accounts": {
       "get": {
         "operationId": "adminAccounts",
@@ -2534,6 +2534,109 @@
           },
           "403": {
             "description": "Teamlead only",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/access": {
+      "get": {
+        "operationId": "adminAccess",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Any signed-in user: is the admin panel open for this role (teamlead, or everyone with ADMIN_OPEN_FOR_ALL=1).",
+        "responses": {
+          "200": {
+            "description": "Access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "allowed"
+                  ],
+                  "properties": {
+                    "allowed": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/feedback": {
+      "get": {
+        "operationId": "adminFeedback",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Admin only: thumbs up/down counts under bot answers and the comments left under thumbs-down.",
+        "responses": {
+          "200": {
+            "description": "Feedback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "up",
+                    "down",
+                    "items"
+                  ],
+                  "properties": {
+                    "up": {
+                      "type": "integer"
+                    },
+                    "down": {
+                      "type": "integer"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "message_id": {
+                            "type": "string"
+                          },
+                          "comment": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
             "content": {
               "application/json": {
                 "schema": {
@@ -3234,184 +3337,22 @@
         }
       }
     },
-    "/api/admin/access": {
+    "/api/metrics/chat": {
       "get": {
-        "operationId": "adminAccess",
+        "operationId": "chatMetrics",
         "security": [
           {
             "bearerAuth": []
           }
         ],
-        "description": "Any signed-in user: is the admin panel open for this role (teamlead, or everyone with ADMIN_OPEN_FOR_ALL=1).",
+        "description": "Buddy only: aggregated assistant metrics for own interns.",
         "responses": {
           "200": {
-            "description": "Access",
+            "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "required": [
-                    "allowed"
-                  ],
-                  "properties": {
-                    "allowed": {
-                      "type": "boolean"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/admin/feedback": {
-      "get": {
-        "operationId": "adminFeedback",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "description": "Admin only: thumbs up/down counts under bot answers and the comments left under thumbs-down.",
-        "responses": {
-          "200": {
-            "description": "Feedback",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "up",
-                    "down",
-                    "items"
-                  ],
-                  "properties": {
-                    "up": {
-                      "type": "integer"
-                    },
-                    "down": {
-                      "type": "integer"
-                    },
-                    "items": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "message_id": {
-                            "type": "string"
-                          },
-                          "comment": {
-                            "type": "string"
-                          },
-                          "created_at": {
-                            "type": "string",
-                            "format": "date-time"
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/admin/kb/gaps": {
-      "get": {
-        "operationId": "adminKbGaps",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "description": "Admin panel: all escalated questions grouped by topic (AI /v1/analytics/gaps). Moved from /api/analytics/gaps.",
-        "responses": {
-          "200": {
-            "description": "Report",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GapsReport"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/admin/kb/lint": {
-      "get": {
-        "operationId": "adminKbLint",
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "description": "Admin panel: knowledge-base contradictions and stale documents (AI /v1/kb/lint). Moved from /api/kb/lint.",
-        "responses": {
-          "200": {
-            "description": "Report",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/KbLintReport"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "required": [
-                    "error"
-                  ],
-                  "properties": {
-                    "error": {
-                      "type": "string"
-                    }
-                  }
+                  "$ref": "#/components/schemas/ChatMetrics"
                 }
               }
             }

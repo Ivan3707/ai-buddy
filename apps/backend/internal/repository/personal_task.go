@@ -29,19 +29,18 @@ func (r *PersonalTaskRepository) Insert(ctx context.Context, userID, checklistID
 	if err := r.tx.QueryRowContext(ctx, `SELECT id FROM checklists WHERE id=$1 FOR UPDATE`, checklistID).Scan(&locked); err != nil {
 		return uuid.Nil, err
 	}
-	rows, err := r.tx.QueryContext(ctx, `SELECT i.stage_id,p.status FROM user_checklist_progress p JOIN checklist_items i ON i.id=p.checklist_item_id WHERE p.user_id=$1 AND p.checklist_id=$2 ORDER BY p.position`, userID, checklistID)
+	rows, err := r.tx.QueryContext(ctx, `SELECT i.stage_id FROM user_checklist_progress p JOIN checklist_items i ON i.id=p.checklist_item_id WHERE p.user_id=$1 AND p.checklist_id=$2 ORDER BY p.position`, userID, checklistID)
 	if err != nil {
 		return uuid.Nil, err
 	}
 	defer rows.Close()
 	type entry struct {
-		stage  uuid.UUID
-		status model.ChecklistStatus
+		stage uuid.UUID
 	}
 	var items []entry
 	for rows.Next() {
 		var x entry
-		if err = rows.Scan(&x.stage, &x.status); err != nil {
+		if err = rows.Scan(&x.stage); err != nil {
 			return uuid.Nil, err
 		}
 		items = append(items, x)
@@ -56,10 +55,9 @@ func (r *PersonalTaskRepository) Insert(ctx context.Context, userID, checklistID
 	if position <= len(items) {
 		stage = items[position-1].stage
 	}
-	status := model.StatusUnavailable
-	if position == 1 || items[position-2].status == model.StatusCompleted || items[position-2].status == model.StatusVerified {
-		status = model.StatusActive
-	}
+	// Personal tasks are independently actionable, including when inserted
+	// before completed work or after unavailable checklist items.
+	status := model.StatusActive
 	if _, err = r.tx.ExecContext(ctx, `UPDATE user_checklist_progress SET position=position+1 WHERE user_id=$1 AND checklist_id=$2 AND position >= $3`, userID, checklistID, position); err != nil {
 		return uuid.Nil, err
 	}

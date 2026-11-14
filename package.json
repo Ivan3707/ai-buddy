@@ -8,7 +8,8 @@
   ],
   "scripts": {
     "build": "npm run build --workspace @ai-buddy/web && npm run build --workspace @ai-buddy/extension",
-    "test": "node --test packages/client/test/*.test.js apps/extension/test/*.test.js && npm run test --workspace @ai-buddy/web"
+    "test": "node --test packages/client/test/*.test.js apps/extension/test/*.test.js && npm run test --workspace @ai-buddy/web",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@playwright/test": "1.56.1"
