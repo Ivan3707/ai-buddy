@@ -1,0 +1,151 @@
+/*
+ * Типографика по иерархии дизайнера. Подключается последним, чтобы переопределять остальные стили.
+ *
+ *  Заглавие страницы ........ Aeroport Bold 60
+ *  Пояснение к заглавию ..... Montserrat Light 24
+ *  Заглавие блока ........... Aeroport Bold 24
+ *  Пояснение к блоку ........ Montserrat Light 24
+ *  Календарь (пояснения) .... Montserrat Light 16
+ *  Задачи (подзаголовки) .... Montserrat Light 16
+ *  Кнопки задач ............. Montserrat Medium 16
+ *  Кнопки (остальные) ....... Montserrat Regular
+ *
+ * Дизайнер просил для «light» писать вес 250, потому что думал, что у Montserrat нет Light.
+ * Файл Montserrat-Light.ttf есть (вес 300), поэтому используем его через --w-light.
+ */
+:root {
+  --font-title: 'Aeroport', var(--font);
+  --font-text: 'Montserrat', var(--font);
+  --w-light: 300;
+}
+
+/* Заглавие страницы */
+.greeting h1,
+.page-heading,
+.feedback h1 {
+  font-family: var(--font-title);
+  font-size: 60px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0;
+}
+
+/* Пояснение к заглавию */
+.greeting p,
+.feedback-lead {
+  font-family: var(--font-text);
+  font-size: 24px;
+  font-weight: var(--w-light);
+}
+
+/* Заглавие блока */
+.checklist-card h2,
+.card-title,
+.mini-calendar h2,
+.task-table h2 {
+  font-family: var(--font-title);
+  font-size: 24px;
+  font-weight: 700;
+}
+
+/* Пояснение к заглавию блока */
+.card-weeks {
+  font-family: var(--font-text);
+  font-size: 24px;
+  font-weight: var(--w-light);
+}
+
+/* Календарь: пояснение, сетка дней */
+.calendar-date,
+.calendar-grid,
+.calendar-weekday {
+  font-family: var(--font-text);
+  font-size: 16px;
+  font-weight: var(--w-light);
+}
+
+/* Задачи: подзаголовки колонок и дополнительная информация */
+.task-table header strong,
+.task-columns,
+.task-cell,
+.task-comment,
+.task-empty {
+  font-family: var(--font-text);
+  font-size: 16px;
+  font-weight: var(--w-light);
+}
+
+/* Кнопки задач */
+.task-name {
+  font-family: var(--font-text);
+  font-size: 16px;
+  font-weight: 500;
+}
+
+/* ───────── Личный кабинет ─────────
+ * Плашка и все заглавия: Aeroport Medium 24; проценты: Aeroport Bold 36;
+ * подзаглавия: Montserrat Medium 16; основные подписи: Montserrat Light 16;
+ * значения «Возраст» и «Стаж»: Montserrat Light 32. */
+.drawer-header h2,
+.person-card h3,
+.fact-card h3,
+.progress-card h3,
+.about-card h3 {
+  font-family: var(--font-title);
+  font-size: 24px;
+  font-weight: 500;
+}
+.progress-percent {
+  font-family: var(--font-title);
+  font-size: 36px;
+  font-weight: 700;
+}
+.about-card dt,
+.progress-line {
+  font-family: var(--font-text);
+  font-size: 16px;
+  font-weight: 500;
+}
+.progress-hint,
+.progress-edges,
+.about-card dd,
+.about-org,
+.drawer-account {
+  font-family: var(--font-text);
+  font-size: 16px;
+  font-weight: var(--w-light);
+}
+.fact-card p {
+  font-family: var(--font-text);
+  font-size: 32px;
+  font-weight: var(--w-light);
+}
+
+/* ───────── Чат (AI-помощник) ─────────
+ * Заглавия как в личном кабинете; текст сообщений: Montserrat Medium 14. */
+.assistant-body label {
+  font-family: var(--font-title);
+  font-size: 24px;
+  font-weight: 500;
+}
+.assistant-body textarea,
+.assistant-answer,
+.assistant-answer p,
+.assistant-answer a,
+.assistant-error {
+  font-family: var(--font-text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* ───────── Обратная связь: как на экране входа ─────────
+ * Заглавие — Aeroport Bold 60 (общее правило выше), подписи полей — Montserrat Light 36,
+ * кнопка — Montserrat Regular 32. */
+.feedback label {
+  font-family: var(--font-text);
+  font-size: 36px;
+  font-weight: var(--w-light);
+}
+.feedback .pill {
+  font-size: 32px;
+}

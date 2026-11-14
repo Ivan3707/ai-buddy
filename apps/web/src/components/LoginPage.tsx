@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from 'react';
 import { login, type User } from '@ai-buddy/client';
-import { LocationIcon } from './icons';
 
 type Props = { error: string; onLogin: (token: string, user: User) => void };
 
@@ -53,7 +52,6 @@ export function LoginPage({ error: initialError, onLogin }: Props) {
           {error && <p className="auth-error" role="alert">{error}</p>}
           <button className="pill pill-light" disabled={busy}>{busy ? 'Входим…' : 'Войти'}</button>
         </form>
-        <LocationIcon className="auth-pin" />
       </section>
       <section className="auth-art" aria-hidden="true">
         <span className="circle circle-green" />
