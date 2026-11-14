@@ -1,7 +1,7 @@
 ﻿param(
   [string]$ProjectName = 'ai-buddy',
   [string]$EnvFile = '.env',
-  [string]$CredentialsDirectory = (Join-Path $env:LOCALAPPDATA 'ai-buddy\credentials')
+  [string]$CredentialsDirectory = ''
 )
 
 Set-StrictMode -Version Latest
@@ -11,6 +11,19 @@ $composeFile = Join-Path $repoRoot 'compose.yaml'
 $previous = @{}
 $managed = @('DB_USER', 'DB_PASSWORD', 'DB_NAME', 'JWT_SECRET', 'WEB_PORT', 'BACKEND_PORT', 'POSTGRES_PORT', 'DB_HOST', 'DB_PORT', 'DB_SSLMODE', 'PGPASSWORD')
 foreach ($name in $managed) { $previous[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
+
+function Safe-GoFailure([string]$detail) {
+  foreach ($secret in @($env:DB_PASSWORD, $env:PGPASSWORD)) {
+    if ($secret) { $detail = $detail.Replace($secret, '[REDACTED]') }
+  }
+  $safe = foreach ($line in ($detail -split "`r?`n")) {
+    if ($line -match '(?i)postgres(?:ql)?://|(?:^|\s)password\s*=') {
+      $state = [regex]::Match($line, 'SQLSTATE\s+[A-Z0-9]+').Value
+      if ($state) { "[данные подключения скрыты] $state" } else { '[данные подключения скрыты]' }
+    } elseif ($line.Trim()) { $line.Trim() }
+  }
+  return ($safe -join ' ').Trim()
+}
 
 try {
   foreach ($name in @('DB_USER', 'DB_PASSWORD', 'DB_NAME', 'JWT_SECRET', 'WEB_PORT', 'BACKEND_PORT', 'POSTGRES_PORT')) {
@@ -42,10 +55,13 @@ try {
   docker compose @composeArgs config --quiet *> $null
   if ($LASTEXITCODE -ne 0) { throw 'Конфигурация Compose некорректна.' }
 
+  if (-not $CredentialsDirectory) { $CredentialsDirectory = Join-Path $repoRoot 'secrets' }
   $CredentialsDirectory = [IO.Path]::GetFullPath($CredentialsDirectory)
+  $defaultSecretsDirectory = Join-Path $repoRoot 'secrets'
   if ($CredentialsDirectory.Equals($repoRoot, [StringComparison]::OrdinalIgnoreCase) -or
-      $CredentialsDirectory.StartsWith($repoRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
-    throw 'Каталог учётных данных должен находиться вне Git-репозитория.'
+      ($CredentialsDirectory.StartsWith($repoRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase) -and
+       -not $CredentialsDirectory.Equals($defaultSecretsDirectory, [StringComparison]::OrdinalIgnoreCase))) {
+    throw 'Каталог учётных данных должен быть secrets/ в корне Git-репозитория или находиться вне репозитория.'
   }
   New-Item -ItemType Directory -Path $CredentialsDirectory -Force | Out-Null
 
@@ -75,12 +91,12 @@ try {
     Push-Location (Join-Path $repoRoot 'apps/backend')
     try {
       Write-Host 'Инициализирую каталог чек-листов...'
-      go run ./cmd/init-catalog *> $null
-      if ($LASTEXITCODE -ne 0) { throw 'Инициализация каталога не выполнена.' }
+      $catalogOutput = go run ./cmd/init-catalog 2>&1 | Out-String
+      if ($LASTEXITCODE -ne 0) { throw ('Инициализация каталога не выполнена: ' + (Safe-GoFailure $catalogOutput)) }
       $credentialsFile = Join-Path $CredentialsDirectory ('hr-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N') + '.json')
       Write-Host 'Синхронизирую сотрудников Mock HR...'
-      go run ./cmd/sync-hr -snapshot (Join-Path $repoRoot 'data/corporate_employees.json') -credentials $credentialsFile *> $null
-      if ($LASTEXITCODE -ne 0) { throw 'Mock HR Sync не выполнен. Проверьте тестовую БД и каталог; прежние файлы учётных данных сохранены.' }
+      $syncOutput = go run ./cmd/sync-hr -snapshot (Join-Path $repoRoot 'data/corporate_employees.json') -credentials $credentialsFile 2>&1 | Out-String
+      if ($LASTEXITCODE -ne 0) { throw ('Mock HR Sync не выполнен; прежние файлы учётных данных сохранены. Причина: ' + (Safe-GoFailure $syncOutput)) }
     } finally { Pop-Location }
 
     $credentials = Get-Content -LiteralPath $credentialsFile -Raw -Encoding UTF8 | ConvertFrom-Json

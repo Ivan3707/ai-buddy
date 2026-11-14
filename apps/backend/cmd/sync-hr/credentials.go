@@ -35,8 +35,8 @@ func privateCredentialsPath(path, repoRoot string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))) {
-		return "", errors.New("credential file must be outside the repository")
+	if rel != "secrets" && (rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))) {
+		return "", errors.New("credential file must be outside the repository or in its secrets directory")
 	}
 	if _, err := os.Lstat(path); err == nil {
 		return "", errors.New("credential file already exists")

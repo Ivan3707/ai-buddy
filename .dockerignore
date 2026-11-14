@@ -10,3 +10,4 @@
 /load-results
 /backups
 **/__pycache__
+secrets/

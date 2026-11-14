@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -48,10 +49,30 @@ func TestPrivateCredentialsPathRejectsRepository(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	secretsDir := filepath.Join(repo, "secrets")
+	_, statErr := os.Stat(secretsDir)
+	createdSecretsDir := errors.Is(statErr, os.ErrNotExist)
+	nestedDir := filepath.Join(secretsDir, "nested")
+	_, nestedStatErr := os.Stat(nestedDir)
+	createdNestedDir := errors.Is(nestedStatErr, os.ErrNotExist)
+	t.Cleanup(func() {
+		if createdNestedDir {
+			_ = os.Remove(nestedDir)
+		}
+		if createdSecretsDir {
+			_ = os.Remove(secretsDir)
+		}
+	})
 	if _, err := privateCredentialsPath(filepath.Join(repo, "credential-test.json"), repo); err == nil {
 		t.Fatal("accepted credentials path inside repository")
 	}
 	if _, err := privateCredentialsPath("relative-credentials.json", repo); err == nil {
 		t.Fatal("accepted relative credentials path")
+	}
+	if _, err := privateCredentialsPath(filepath.Join(repo, "secrets", "hr-test-allowed.json"), repo); err != nil {
+		t.Fatalf("rejected ignored secrets directory: %v", err)
+	}
+	if _, err := privateCredentialsPath(filepath.Join(nestedDir, "hr-test-rejected.json"), repo); err == nil {
+		t.Fatal("accepted nested repository directory")
 	}
 }

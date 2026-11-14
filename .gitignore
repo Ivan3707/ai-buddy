@@ -21,3 +21,4 @@ test-results/
 /load-results/
 apps/backend/.cache/
 /load-results-archive-20261114/
+/secrets/
