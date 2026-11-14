@@ -1,0 +1,62 @@
+[
+  {
+    "question": "Как подключиться к VPN?",
+    "doc": "it-setup",
+    "heading": "VPN"
+  },
+  {
+    "question": "Что делать, если заболел?",
+    "doc": "leave",
+    "heading": "Больничный"
+  },
+  {
+    "question": "Во сколько стендап и какие встречи у команды?",
+    "doc": "communication",
+    "heading": "Встречи команды"
+  },
+  {
+    "question": "Как взять задачу в Jira?",
+    "doc": "jira",
+    "heading": "Как взять задачу"
+  },
+  {
+    "question": "Как называть ветки в git?",
+    "doc": "git-workflow",
+    "heading": "Ветки"
+  },
+  {
+    "question": "Где найти дашборды Grafana?",
+    "doc": "grafana",
+    "heading": "Где найти дашборды"
+  },
+  {
+    "question": "Как настроить пароли и второй фактор?",
+    "doc": "it-setup",
+    "heading": "Пароли и второй фактор"
+  },
+  {
+    "question": "Что делать, если застрял на задаче?",
+    "doc": "onboarding-plan",
+    "heading": "Если застрял"
+  },
+  {
+    "question": "Как сдать задание на проверку?",
+    "doc": "review-assignments",
+    "heading": "Как сдать задание"
+  },
+  {
+    "question": "Как работать удалённо?",
+    "doc": "work-schedule",
+    "heading": "Удалённая работа"
+  },
+  {
+    "question": "Как распознать фишинг?",
+    "doc": "security",
+    "heading": "Фишинг"
+  },
+  {
+    "question": "Когда встречи 1:1 с наставником?",
+    "doc": "mentor",
+    "heading": "Встречи 1:1"
+  }
+]

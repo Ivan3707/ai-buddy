@@ -396,6 +396,35 @@
         }
       }
     },
+    "/v1/suggestions": {
+      "get": {
+        "operationId": "suggestions",
+        "description": "Ready-made questions (data/suggestions.json) whose document section exists in the current index, each with a short excerpt of that section.",
+        "responses": {
+          "200": {
+            "description": "Suggestions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "suggestions"
+                  ],
+                  "properties": {
+                    "suggestions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/kb/reload": {
       "post": {
         "operationId": "kbReload",

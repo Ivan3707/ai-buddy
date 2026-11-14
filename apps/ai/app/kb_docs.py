@@ -5,6 +5,9 @@ Chunk titles are "<document> — <section>", so the section heading is the part 
 """
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
@@ -36,3 +39,41 @@ def kb_doc(doc_id: str, request: Request):
     if doc is None:
         return JSONResponse(status_code=404, content={"error": "not_found"})
     return doc
+
+
+# ---- suggestions: ready-made questions the chat offers in the empty input (answered with a link, no LLM) ----
+
+def _excerpt(text: str, limit: int = 420) -> str:
+    text = text.strip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    end = max(cut.rfind(". "), cut.rfind("\n"))
+    return (cut[: end + 1] if end > limit // 2 else cut.rsplit(" ", 1)[0] + "…").strip()
+
+
+def load_suggestions(path: Path, chunks: list[Doc]) -> list[dict]:
+    """Questions from data/suggestions.json whose document section really exists in the current index.
+
+    The file is demo data like the KB; a company with its own wiki ships its own list. Entries that point
+    to a missing document or section are dropped, so the chat never offers a hint it cannot show.
+    """
+    try:
+        items = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    out = []
+    for item in items if isinstance(items, list) else []:
+        doc = assemble(str(item.get("doc", "")), chunks)
+        section = next((s for s in (doc or {}).get("sections", []) if s["heading"] == item.get("heading")), None)
+        if not doc or not section or not str(item.get("question", "")).strip():
+            continue
+        out.append({"question": item["question"].strip(), "doc_id": doc["id"], "title": doc["title"],
+                    "heading": section["heading"], "url": doc["url"], "excerpt": _excerpt(section["text"])})
+    return out
+
+
+@router.get("/v1/suggestions")
+def suggestions(request: Request):
+    path = Path(getattr(request.app.state, "data_dir", ".")) / "suggestions.json"
+    return {"suggestions": load_suggestions(path, indexed_docs(request.app.state.retriever))}

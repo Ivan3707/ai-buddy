@@ -141,6 +141,20 @@ export function createGateway({baseUrl, auth, hooks = {}, store, client, fetchIm
         try { return {request: await sendJson('POST', '/api/requests', {type: kind, params})}; }
         catch (error) { return failure(error, 'Не удалось создать заявку.'); }
       }
+      case 'suggestions': // ready-made questions for the placeholder of the empty input
+        try {
+          const data = await getJson('/api/suggestions');
+          return {suggestions: (data.suggestions || []).map(item => String(item.question)).filter(Boolean)};
+        } catch { return {suggestions: []}; }
+      case 'hint-turn': { // a suggestion answered without the model: excerpt + link, saved into the dialog
+        const question = String(message.question || '').trim().slice(0, 300);
+        const cid = await store.get('conversationId');
+        try {
+          const hint = await sendJson('POST', '/api/chat/hint', {question, ...(typeof cid === 'string' && cid ? {conversation_id: cid} : {})});
+          if (hint?.conversation_id) await store.set('conversationId', hint.conversation_id);
+          return {hint};
+        } catch (error) { return failure(error, 'Не удалось получить подсказку.'); }
+      }
       case 'questions':
         try { return {questions: await getJson('/api/questions')}; } catch (error) { return failure(error, 'Не удалось загрузить вопросы.'); }
       case 'question-create': {

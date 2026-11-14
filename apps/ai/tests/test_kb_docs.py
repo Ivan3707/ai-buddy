@@ -36,3 +36,30 @@ def test_endpoint_returns_document_and_404(monkeypatch):
     body = client.get("/v1/kb/docs/leave").json()
     assert body["id"] == "leave" and body["sections"] and body["title"]
     assert client.get("/v1/kb/docs/nope").status_code == 404
+
+
+def test_suggestions_come_from_real_sections_only(tmp_path, monkeypatch):
+    from app.kb_docs import load_suggestions
+    chunks = load_markdown_kb(KB, "http://wiki.test/wiki")
+    path = tmp_path / "s.json"
+    path.write_text('[{"question":"Как подключиться к VPN?","doc":"it-setup","heading":"VPN"},'
+                    '{"question":"нет раздела","doc":"it-setup","heading":"Нет такого"},'
+                    '{"question":"нет документа","doc":"missing","heading":"VPN"}]', encoding="utf-8")
+    got = load_suggestions(path, chunks)
+    assert [g["question"] for g in got] == ["Как подключиться к VPN?"]
+    assert got[0]["url"] == "http://wiki.test/wiki/it-setup.html" and got[0]["excerpt"] and len(got[0]["excerpt"]) <= 421
+    assert load_suggestions(tmp_path / "missing.json", chunks) == []
+
+
+def test_shipped_suggestions_all_resolve():
+    from app.kb_docs import load_suggestions
+    data = Path(__file__).resolve().parents[3] / "data" / "suggestions.json"
+    expected = len(__import__("json").loads(data.read_text(encoding="utf-8")))
+    assert len(load_suggestions(data, load_markdown_kb(KB))) == expected
+
+
+def test_suggestions_endpoint(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+    client = TestClient(create_app(retriever=BM25Retriever(load_markdown_kb(KB))))
+    body = client.get("/v1/suggestions").json()
+    assert body["suggestions"] and {"question", "doc_id", "title", "heading", "url", "excerpt"} <= set(body["suggestions"][0])

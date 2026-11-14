@@ -10,6 +10,8 @@ from typing import Any
 from .retrieval import Hit
 from .schemas import AgentChatRequest
 
+WEEKDAYS = ("понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье")
+
 SYSTEM_PROMPT = """Ты — AI-buddy, наставник стажёра в IT-компании. Это ДЕМО: база знаний синтетическая.
 
 Как отвечать:
@@ -115,7 +117,10 @@ def render_page(req: AgentChatRequest) -> str:
 def build_messages(req: AgentChatRequest, hits: list[Hit]) -> list[dict[str, str]]:
     """System = our fixed rules + trusted context. Retrieved KB text is untrusted, so it goes into the
     user turn (lower authority than the system prompt), next to the question it was retrieved for."""
-    ctx = json.dumps(req.user_context.model_dump(mode="json", exclude_none=True), ensure_ascii=False)
+    data = req.user_context.model_dump(mode="json", exclude_none=True)
+    if req.user_context.today:  # models guess the weekday of a date wrongly; give it
+        data["today_weekday"] = WEEKDAYS[req.user_context.today.weekday()]
+    ctx = json.dumps(data, ensure_ascii=False)
     system = f"{SYSTEM_PROMPT}\n\n<user_context>\n{ctx}\n</user_context>"
     history = [{"role": t.role, "content": t.content} for t in req.history]
     page = render_page(req)

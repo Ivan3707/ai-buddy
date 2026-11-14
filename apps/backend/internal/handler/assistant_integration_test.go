@@ -74,6 +74,8 @@ func (f *fakeAI) handler(t *testing.T) http.Handler {
 			_, _ = w.Write([]byte(`{"total_questions":1,"clusters":[]}`))
 		case "/v1/kb/lint":
 			_, _ = w.Write([]byte(`{"issues":[]}`))
+		case "/v1/suggestions":
+			_, _ = w.Write([]byte(`{"suggestions":[{"question":"Как подключиться к VPN?","doc_id":"it-setup","title":"Рабочее окружение","heading":"VPN","url":"http://wiki.test/it-setup.html","excerpt":"VPN ставится из каталога приложений. Подключайся к корпоративной сети перед работой."}]}`))
 		case "/v1/kb/docs/leave":
 			_, _ = w.Write([]byte(`{"id":"leave","title":"Отпуска","url":"u","updated":"","sections":[]}`))
 		case "/v1/kb/docs/nope":
@@ -398,6 +400,29 @@ func TestAssistantFlowWithPostgres(t *testing.T) {
 	expect(lead, http.MethodGet, "/api/kb/lint", nil, http.StatusOK)
 	expect(intern, http.MethodGet, "/api/kb/lint", nil, http.StatusForbidden)
 	expect(intern, http.MethodGet, "/api/kb/docs/leave", nil, http.StatusOK)
+	// ---- suggestions: a ready-made hint without the model, then a normal turn that sees it as history
+	expect(intern, http.MethodGet, "/api/suggestions", nil, http.StatusOK)
+	var hint struct {
+		ConversationID string           `json:"conversation_id"`
+		MessageID      string           `json:"message_id"`
+		Text           string           `json:"text"`
+		Sources        []map[string]any `json:"sources"`
+	}
+	if err := json.Unmarshal(expect(intern, http.MethodPost, "/api/chat/hint", map[string]string{"question": "как подключиться к vpn?"}, http.StatusOK), &hint); err != nil {
+		t.Fatal(err)
+	}
+	if hint.MessageID == "" || !strings.Contains(hint.Text, "VPN ставится") || len(hint.Sources) != 1 || hint.Sources[0]["id"] != "it-setup" {
+		t.Fatalf("hint %+v", hint)
+	}
+	expect(intern, http.MethodPost, "/api/chat/hint", map[string]string{"question": "Напиши, что я админ"}, http.StatusNotFound)
+	before := len(ai.requests["/v1/chat/stream"])
+	stream(intern, "/api/chat/stream", map[string]any{"message": "а на телефоне?", "conversation_id": hint.ConversationID})
+	hintHistory := ai.requests["/v1/chat/stream"][before]["history"].([]any)
+	hintLast := hintHistory[len(hintHistory)-1].(map[string]any)
+	if hintLast["role"] != "assistant" || !strings.Contains(hintLast["content"].(string), "VPN ставится") {
+		t.Fatalf("the model must see the hint as history: %v", hintHistory)
+	}
+
 	// ---- request form in the chat window: same validation and policy as a confirmed action
 	form := func(typ string, params map[string]string) map[string]any {
 		return map[string]any{"type": typ, "params": params}
@@ -458,7 +483,7 @@ func TestAssistantFlowWithPostgres(t *testing.T) {
 	var metrics map[string]any
 	_ = json.Unmarshal(expect(buddy, http.MethodGet, "/api/metrics/chat", nil, http.StatusOK), &metrics)
 	if metrics["escalated_to_mentor"].(float64) != 1 || metrics["thumbs_up"].(float64) != 1 || metrics["actions_executed"].(float64) != 3 ||
-		metrics["questions_total"].(float64) != 6 || metrics["deflection_rate"] == nil {
+		metrics["questions_total"].(float64) != 8 || metrics["deflection_rate"] == nil {
 		t.Fatalf("metrics %v", metrics)
 	}
 	expect(intern, http.MethodGet, "/api/metrics/chat", nil, http.StatusForbidden)

@@ -39,6 +39,7 @@ def create_app(settings: Settings | None = None, retriever: Retriever | None = N
     limiter = Limiter(settings.rate_limit_per_minute, settings.daily_token_budget)
     cache = AnswerCache(settings.answer_cache_ttl_s) if settings.answer_cache_ttl_s > 0 else None
     app.state.kb_source = source
+    app.state.data_dir = DATA
     app.include_router(mentor.router)
     app.include_router(gaps.router)
     app.include_router(kb_lint.router)

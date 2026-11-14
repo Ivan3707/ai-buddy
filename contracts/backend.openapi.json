@@ -2265,6 +2265,159 @@
           }
         }
       }
+    },
+    "/api/suggestions": {
+      "get": {
+        "operationId": "chatSuggestions",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Ready-made questions the chat shows as the placeholder of the empty input (AI /v1/suggestions). Only entries whose document section exists in the knowledge base are returned.",
+        "responses": {
+          "200": {
+            "description": "Suggestions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "suggestions"
+                  ],
+                  "properties": {
+                    "suggestions": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "question",
+                          "doc_id",
+                          "title",
+                          "heading",
+                          "url",
+                          "excerpt"
+                        ],
+                        "properties": {
+                          "question": {
+                            "type": "string"
+                          },
+                          "doc_id": {
+                            "type": "string"
+                          },
+                          "title": {
+                            "type": "string"
+                          },
+                          "heading": {
+                            "type": "string"
+                          },
+                          "url": {
+                            "type": "string"
+                          },
+                          "excerpt": {
+                            "type": "string"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/chat/hint": {
+      "post": {
+        "operationId": "chatHint",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Answers one of the suggestions WITHOUT the model: a short excerpt of the document section plus a link. The text is built by the backend from the knowledge base (the client sends only the question). Both messages join the conversation, so the user's next message goes through the model with this exchange as history.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "question"
+                ],
+                "properties": {
+                  "question": {
+                    "type": "string"
+                  },
+                  "conversation_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "format": "uuid"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Hint",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "conversation_id",
+                    "message_id",
+                    "text",
+                    "sources"
+                  ],
+                  "properties": {
+                    "conversation_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "message_id": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "text": {
+                      "type": "string"
+                    },
+                    "sources": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Source"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not one of the suggestions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

@@ -52,6 +52,8 @@ func RegisterAssistantRoutes(mux *http.ServeMux, auth func(http.Handler) http.Ha
 	route("GET /api/analytics/gaps", h.gaps)
 	route("GET /api/kb/lint", h.lint)
 	route("GET /api/kb/docs/{id}", h.kbDoc)
+	route("GET /api/suggestions", h.suggestions)
+	route("POST /api/chat/hint", h.hintTurn)
 	route("GET /api/metrics/chat", h.metrics)
 }
 
@@ -422,6 +424,27 @@ func (h assistantHandler) lint(w http.ResponseWriter, r *http.Request, user *mod
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(4 * time.Minute))
 	raw, err := h.s.Lint(r.Context(), user)
 	sendRaw(w, raw, err)
+}
+
+func (h assistantHandler) suggestions(w http.ResponseWriter, r *http.Request, _ *model.User) {
+	raw, err := h.s.Suggestions(r.Context())
+	sendRaw(w, raw, err)
+}
+
+func (h assistantHandler) hintTurn(w http.ResponseWriter, r *http.Request, user *model.User) {
+	var body struct {
+		Question       string     `json:"question"`
+		ConversationID *uuid.UUID `json:"conversation_id"`
+	}
+	if !decodeBody(w, r, &body, 4096) {
+		return
+	}
+	res, err := h.s.HintTurn(r.Context(), user.ID, body.ConversationID, body.Question)
+	if err != nil {
+		assistantError(w, err)
+		return
+	}
+	send(w, http.StatusOK, res)
 }
 
 func (h assistantHandler) kbDoc(w http.ResponseWriter, r *http.Request, _ *model.User) {

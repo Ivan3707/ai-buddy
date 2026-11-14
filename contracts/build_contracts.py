@@ -433,6 +433,12 @@ ai_spec = {
             "parameters": [{"name": "doc_id", "in": "path", "required": True, "schema": {"type": "string"}}],
             "description": "One KB document (all sections) by the source id from chat events.",
             "responses": {"200": json_resp("Document", ref("KbDocument")), "404": json_resp("No such document", ERROR)}}},
+        "/v1/suggestions": {"get": {
+            "operationId": "suggestions",
+            "description": "Ready-made questions (data/suggestions.json) whose document section exists in the current index, "
+                           "each with a short excerpt of that section.",
+            "responses": {"200": json_resp("Suggestions", {"type": "object", "required": ["suggestions"], "properties": {
+                "suggestions": {"type": "array", "items": {"type": "object"}}}})}}},
         "/v1/kb/reload": {"post": {
             "operationId": "kbReload",
             "description": "Re-read the knowledge base from its source (Markdown dir or Confluence) and re-index.",
@@ -498,6 +504,25 @@ backend_paths.update({
         "operationId": "cancelAction", "security": BEARER, "parameters": [UUID_PARAM],
         "responses": {"200": json_resp("Cancelled", ref("PendingAction")),
                       "404": json_resp("Not found", ERROR), "409": json_resp("Already executed", ERROR)}}},
+    "/api/suggestions": {"get": {
+        "operationId": "chatSuggestions", "security": BEARER,
+        "description": "Ready-made questions the chat shows as the placeholder of the empty input (AI /v1/suggestions). "
+                       "Only entries whose document section exists in the knowledge base are returned.",
+        "responses": {"200": json_resp("Suggestions", {"type": "object", "required": ["suggestions"], "properties": {
+            "suggestions": {"type": "array", "items": {"type": "object", "required": ["question", "doc_id", "title", "heading", "url", "excerpt"], "properties": {
+                "question": {"type": "string"}, "doc_id": {"type": "string"}, "title": {"type": "string"},
+                "heading": {"type": "string"}, "url": {"type": "string"}, "excerpt": {"type": "string"}}}}}})}}},
+    "/api/chat/hint": {"post": {
+        "operationId": "chatHint", "security": BEARER,
+        "description": "Answers one of the suggestions WITHOUT the model: a short excerpt of the document section plus a link. "
+                       "The text is built by the backend from the knowledge base (the client sends only the question). Both messages "
+                       "join the conversation, so the user's next message goes through the model with this exchange as history.",
+        "requestBody": json_body({"type": "object", "required": ["question"], "properties": {
+            "question": {"type": "string"}, "conversation_id": {"type": ["string", "null"], "format": "uuid"}}}),
+        "responses": {"200": json_resp("Hint", {"type": "object", "required": ["conversation_id", "message_id", "text", "sources"], "properties": {
+            "conversation_id": {"type": "string", "format": "uuid"}, "message_id": {"type": "string", "format": "uuid"},
+            "text": {"type": "string"}, "sources": {"type": "array", "items": ref("Source")}}}),
+                      "404": json_resp("Not one of the suggestions", ERROR)}}},
     "/api/auth/link": {"post": {
         "operationId": "linkSession",
         "description": "Opens a NEW session of the same user for another client (the Chrome extension next to the web app), "

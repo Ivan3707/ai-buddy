@@ -22,7 +22,7 @@
     compact: () => ({w: 380, h: 560}),
     full: () => ({w: Math.min(980, innerWidth - 32), h: Math.min(740, innerHeight - 48)}),
   };
-  const KEYS = {pos: 'buddyPos', mode: 'buddyChatMode', sizes: 'buddyChatSizes', greeting: 'buddyGreeting', page: 'buddyPageMode'};
+  const KEYS = {pos: 'buddyPos', mode: 'buddyChatMode', sizes: 'buddyChatSizes', greeting: 'buddyGreeting', page: 'buddyPageMode', tips: 'buddyTips'};
 
   function mount(env) {
     const opt = {login: true, logout: false, pageContext: true, hide: true, requests: true, ...(env.features || {})};
@@ -127,6 +127,7 @@
             <label class="page">Страница:
               <select class="page-mode" title="Передавать ли боту заголовок, адрес и выделенный текст этой страницы">
                 <option value="auto">определять сам</option><option value="always">всегда учитывать</option><option value="never">не учитывать</option></select></label>
+            <label class="tips" title="Подсказки-вопросы в пустом поле ввода"><input type="checkbox" class="tips-on" checked> подсказки</label>
             <button type="button" class="clear" title="Очистить чат и начать новый диалог">Очистить</button>
           </div>
           <form class="composer"><textarea rows="1" maxlength="2000" placeholder="Спроси Бади…"></textarea>
@@ -138,6 +139,7 @@
     const $ = selector => root.querySelector(selector);
     const char = $('.char'), body = $('.body'), bubble = $('.bubble'), chat = $('.chat'), log = $('.log');
     const input = $('.composer textarea'), sendButton = $('.send'), loginForm = $('.login');
+    const tipsToggle = $('.tips-on');
     const chip = $('.chip'), pageMode = $('.page-mode'), reader = $('.reader'), readerBody = $('.reader-body');
     const grip = $('.grip'), modeButton = $('.mode'), openFull = $('.open-full');
     const scrim = $('.scrim'), tabsBar = $('.tabs'), notesPanel = $('.notes'), reqsPanel = $('.reqs'), askPanel = $('.ask'), calPanel = $('.cal');
@@ -150,6 +152,7 @@
     let anchor = {right: true, below: false};
     let busy = false, signedIn = null, user = null, selection = '', abortCurrent = null;
     let tab = 'chat', readerOpen = false; // tabs exist only in the full mode
+    let suggestions = [], tip = '', tipsOn = true; // ready-made questions shown as the placeholder of the empty input
 
     const mountHost = () => { if (!host.isConnected) (document.body || document.documentElement).append(host); };
 
@@ -202,7 +205,8 @@
     }
     modeButton.onclick = () => setMode(mode === 'full' ? 'compact' : 'full');
 
-    Promise.all([store.get(KEYS.pos), store.get(KEYS.mode), store.get(KEYS.sizes), store.get(KEYS.page)]).then(([p, m, s, pm]) => {
+    Promise.all([store.get(KEYS.pos), store.get(KEYS.mode), store.get(KEYS.sizes), store.get(KEYS.page), store.get(KEYS.tips)]).then(([p, m, s, pm, tp]) => {
+      if (tp === false) { tipsOn = false; tipsToggle.checked = false; renderTip(); }
       if (['auto', 'always', 'never'].includes(pm)) pageMode.value = pm;
       if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) pos = p;
       if (s && typeof s === 'object') sizes = s;
@@ -322,6 +326,7 @@
       layout();
       await refreshSession();
       if (signedIn) {
+        void loadSuggestions();
         if (!readerOpen && tab === 'chat') input.focus();
         const key = `buddyBrief:${user?.id || ''}`;
         if (await store.get(key) !== today && !log.childElementCount) {
@@ -622,6 +627,46 @@
       setTimeout(() => note.remove(), 8000);
     });
 
+    // ---------- suggestions: a random ready-made question as the placeholder of the empty input ----------
+    // Enter on the empty field answers it from the knowledge base WITHOUT the model (an excerpt and a link); Tab pastes it
+    // into the field. Anything the user writes afterwards goes to the model, with the hint in the dialog history.
+    function renderTip() {
+      const on = tipsOn && tip;
+      input.placeholder = on ? `Например: ${tip}` : 'Спроси Бади…';
+      input.title = on ? 'Enter на пустом поле: подсказка из базы знаний со ссылкой. Tab: вставить этот вопрос' : '';
+    }
+    function rotateTip() {
+      if (tipsOn && suggestions.length) {
+        let next = tip;
+        for (let i = 0; i < 5 && next === tip && suggestions.length > 1; i += 1) next = suggestions[Math.floor(Math.random() * suggestions.length)];
+        tip = next === tip ? suggestions[0] : next;
+      } else tip = '';
+      renderTip();
+    }
+    async function loadSuggestions() {
+      if (suggestions.length) return;
+      const result = await env.call({op: 'suggestions'});
+      if (Array.isArray(result?.suggestions)) { suggestions = result.suggestions; rotateTip(); }
+    }
+    const tipTimer = setInterval(() => { if (!input.value && !chat.hidden) rotateTip(); }, 9000);
+    cleanup.push(() => clearInterval(tipTimer));
+    tipsToggle.onchange = () => { tipsOn = tipsToggle.checked; void store.set(KEYS.tips, tipsOn); rotateTip(); };
+    const isSuggestion = text => suggestions.some(q => q.toLowerCase() === text.toLowerCase());
+    async function askHint(text) {
+      if (readerOpen) closeDoc();
+      if (tab !== 'chat') showTab('chat');
+      setSelection('');
+      const userNode = el('div', 'msg user', text);
+      log.append(userNode);
+      const render = assistantBubble();
+      const node = log.lastElementChild;
+      render({status: 'Ищу в документе…', text: '', sources: [], finished: false, error: null, card: null, messageId: null, mood: 'thinking'});
+      const result = await env.call({op: 'hint-turn', question: text});
+      if (!result?.hint) { node.remove(); userNode.remove(); ask(text); return; } // no hint available: the model answers
+      const h = result.hint;
+      render({status: '', text: h.text, sources: h.sources || [], finished: true, error: null, card: null, messageId: h.message_id, mood: 'idle'});
+    }
+
     // ---------- questions to the mentor tab ----------
     const QSTATUS = {open: 'ждёт ответа', answered: 'отвечен'};
     const stamp = iso => { try { return new Date(iso).toLocaleString('ru-RU', {day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'}); } catch { return ''; } };
@@ -755,12 +800,16 @@
 
     $('.composer').addEventListener('submit', event => {
       event.preventDefault();
-      const text = input.value.trim();
+      let text = input.value.trim();
+      if (!text && tipsOn && tip) text = tip; // Enter on the empty field takes the suggestion shown in it
       if (!text || (busy && queued)) return;
       input.value = '';
-      ask(text);
+      const first = !log.querySelector('.msg.user');
+      if (first && !busy && isSuggestion(text)) void askHint(text); else ask(text);
+      rotateTip();
     });
     input.addEventListener('keydown', event => {
+      if (event.key === 'Tab' && !event.shiftKey && !input.value && tipsOn && tip) { event.preventDefault(); input.value = tip; return; }
       if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); $('.composer').requestSubmit(); }
     });
     $('.close').onclick = closeChat;
@@ -770,6 +819,7 @@
       await env.call({op: 'new-dialog'});
       log.replaceChildren();
       closeDoc();
+      rotateTip();
       input.focus();
     };
     $('.out').onclick = async () => { // signs out of the account everywhere (the site follows, see lib/sso.js)
@@ -993,6 +1043,8 @@
     .page{display:flex;gap:6px;align-items:center;font-size:11px;color:#68708a;margin:0}
     .page select{font:inherit;font-size:11px;padding:2px 4px;border:1px solid #c5cad3;border-radius:6px;background:#fff;color:#1d2330}
     .clear{font-size:11px;padding:2px 10px;color:#68708a;margin-left:auto}
+    .tips{display:flex;gap:4px;align-items:center;font-size:11px;color:#68708a}
+    .page-row{flex-wrap:wrap}
     .q-form,.e-form{display:grid;gap:8px;padding:12px;border:1px solid #d9dee6;border-radius:12px;background:#fff}
     .q-form label,.e-form label{display:grid;gap:3px;font-size:12px;color:#68708a}
     .q-form textarea,.e-form input{font:inherit;padding:8px 10px;border:1px solid #c5cad3;border-radius:10px;color:#1d2330;background:#fff;width:100%}
