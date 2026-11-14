@@ -76,4 +76,5 @@ type Dependencies struct {
 	SessionCheck  SessionChecker
 	Sessions      SessionService
 	Assistant     *service.AssistantService
+	Admin         *service.AdminService
 }

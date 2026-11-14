@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { User } from '@ai-buddy/client';
 import { BuddyInfoPage } from '../../bot/BuddyPages';
 import { useStageScale } from '../../hooks/useStageScale';
+import { AdminPage } from '../../pages/AdminPage';
 import { CalendarPage } from '../../pages/CalendarPage';
 import { MentorPage } from '../../pages/MentorPage';
 import { StaffHomePage } from '../../pages/StaffHomePage';
@@ -19,7 +20,9 @@ const STAFF_ITEMS: NavItem[] = [
   { view: 'buddy', label: 'Бади' },
 ];
 
-type Props = { user: User; token: string; onLogout: () => void };
+const ADMIN_ITEM: NavItem = { view: 'admin', label: 'Админ' };
+
+type Props ={ user: User; token: string; onLogout: () => void };
 
 /** Рабочее пространство наставника и руководителя: то же меню, сцена и вкладки справа, что у стажёра. */
 export function StaffShell({ user, token, onLogout }: Props) {
@@ -36,16 +39,20 @@ export function StaffShell({ user, token, onLogout }: Props) {
     window.addEventListener('ai-buddy:navigate', open);
     return () => window.removeEventListener('ai-buddy:navigate', open);
   }, []);
+  // «Админ» есть только у руководителя (права проверяет и бэкенд)
+  const isAdmin = user.role === 'teamlead';
+  const items = isAdmin ? [...STAFF_ITEMS, ADMIN_ITEM] : STAFF_ITEMS;
 
   return (
     <div className="shell">
-      <Sidebar view={view} items={STAFF_ITEMS} onNavigate={setView} onLogout={onLogout} />
+      <Sidebar view={view} items={items} onNavigate={setView} onLogout={onLogout} />
       <main className="workspace staff">
         {view === 'home' && <StaffHomePage user={user} token={token} onNavigate={setView} />}
         {view === 'team' && <StaffTeamPage user={user} token={token} />}
         {view === 'mentor' && <MentorPage token={token} />}
         {view === 'calendar' && <CalendarPage />}
         {view === 'buddy' && <BuddyInfoPage user={user} />}
+        {view === 'admin' && isAdmin && <AdminPage token={token} />}
       </main>
       <SideTabs onProfile={() => setProfileOpen(true)} onNotes={() => setNotesOpen(true)} />
       <StaffProfileDrawer user={user} open={profileOpen} onClose={() => setProfileOpen(false)} />

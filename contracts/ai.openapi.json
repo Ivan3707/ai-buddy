@@ -476,6 +476,210 @@
         }
       }
     },
+    "/v1/admin/llm": {
+      "get": {
+        "operationId": "adminLlm",
+        "description": "Provider, model, mode and API balance for the admin panel. OpenRouter: GET {base}/key; other providers return a note. Never contains the key or a raw provider error.",
+        "responses": {
+          "200": {
+            "description": "Status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "provider",
+                    "mode",
+                    "model",
+                    "balance"
+                  ],
+                  "properties": {
+                    "provider": {
+                      "type": "string"
+                    },
+                    "mode": {
+                      "$ref": "#/components/schemas/AiMode"
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "fallback_model": {
+                      "type": "string"
+                    },
+                    "balance": {
+                      "type": "object",
+                      "required": [
+                        "available",
+                        "note"
+                      ],
+                      "properties": {
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "usage": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "limit": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "limit_remaining": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "usage_daily": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "usage_weekly": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "usage_monthly": {
+                          "type": [
+                            "number",
+                            "null"
+                          ]
+                        },
+                        "is_free_tier": {
+                          "type": [
+                            "boolean",
+                            "null"
+                          ]
+                        },
+                        "label": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "note": {
+                          "type": "string",
+                          "description": "Human note when no balance is available"
+                        }
+                      }
+                    },
+                    "budget": {
+                      "type": [
+                        "object",
+                        "null"
+                      ],
+                      "properties": {
+                        "daily_tokens_limit": {
+                          "type": "integer"
+                        },
+                        "daily_tokens_used": {
+                          "type": "integer"
+                        },
+                        "per_minute_limit": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/llm-ping": {
+      "post": {
+        "operationId": "adminLlmPing",
+        "description": "Tiny completion (max_tokens 16) with the same base URL, key, model and extra body as chat; canned result in mock mode. Failures are reported in the body (ok=false).",
+        "responses": {
+          "200": {
+            "description": "Ping result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "ok",
+                    "latency_ms",
+                    "answer"
+                  ],
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "mode": {
+                      "$ref": "#/components/schemas/AiMode"
+                    },
+                    "model": {
+                      "type": "string"
+                    },
+                    "latency_ms": {
+                      "type": "integer"
+                    },
+                    "answer": {
+                      "type": "string"
+                    },
+                    "input_tokens": {
+                      "type": "integer"
+                    },
+                    "output_tokens": {
+                      "type": "integer"
+                    },
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/admin/kb": {
+      "get": {
+        "operationId": "adminKb",
+        "description": "Document and chunk counts of the current index.",
+        "responses": {
+          "200": {
+            "description": "Counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "documents",
+                    "chunks"
+                  ],
+                  "properties": {
+                    "documents": {
+                      "type": "integer"
+                    },
+                    "chunks": {
+                      "type": "integer"
+                    },
+                    "source": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/metrics": {
       "get": {
         "operationId": "metrics",

@@ -41,6 +41,13 @@ class Limiter:
                 hits.append(now)
             return None
 
+    def budget_status(self) -> dict:
+        """Public snapshot for the admin panel: tokens spent today against the daily budget (0 = unlimited)."""
+        with self._lock:
+            tokens = self._tokens if self._day == self._today() else 0
+            return {"daily_tokens_limit": self.daily_tokens, "daily_tokens_used": tokens,
+                    "per_minute_limit": self.per_minute}
+
     def spend(self, tokens: int) -> None:
         with self._lock:
             if self._day != self._today():

@@ -35,7 +35,7 @@ export class BotError extends Error {
   constructor(public status: number, message: string) { super(message); }
 }
 
-async function request<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
+export async function request<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
   const response = await fetch(path, {
     ...init,
     headers: { Authorization: `Bearer ${token}`, ...(init.body ? { 'Content-Type': 'application/json' } : {}), ...init.headers },
@@ -49,7 +49,7 @@ async function request<T>(token: string, path: string, init: RequestInit = {}): 
   return response.status === 204 ? (undefined as T) : response.json();
 }
 
-const post = <T>(token: string, path: string, body?: unknown) =>
+export const post = <T>(token: string, path: string, body?: unknown) =>
   request<T>(token, path, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body) });
 
 export type StreamEvent =

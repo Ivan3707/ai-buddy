@@ -77,6 +77,9 @@ func NewRouter(
 	if deps.Assistant != nil {
 		RegisterAssistantRoutes(mux, authenticated, deps.Assistant)
 	}
+	if deps.Admin != nil {
+		RegisterAdminRoutes(mux, authenticated, deps.Admin)
+	}
 
 	return middleware.InstrumentHTTP(mux)
 }
