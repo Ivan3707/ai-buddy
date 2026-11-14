@@ -148,22 +148,25 @@ describe('админ-панель', () => {
   });
 });
 
-describe('пункт «Админ» в меню', () => {
+describe('адрес /admin', () => {
   beforeEach(() => {
     vi.mocked(client.getAssignedInterns).mockResolvedValue([internUser]);
     vi.mocked(client.getPendingSubmissions).mockResolvedValue([]);
     vi.mocked(client.getInternProgress).mockRejectedValue(new Error('нет данных'));
+    window.history.pushState({}, '', '/admin');
   });
+  afterEach(() => window.history.pushState({}, '', '/'));
 
-  it('есть у руководителя и открывает панель', async () => {
+  it('открывает панель у руководителя, пункта в меню нет', async () => {
     render(<StaffShell user={{ ...buddyUser, role: 'teamlead' }} token="t" onLogout={() => undefined} />);
-    await userEvent.click(screen.getByRole('button', { name: 'Админ' }));
+    expect(screen.queryByRole('button', { name: 'Админ' })).not.toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Админ' })).toBeInTheDocument();
     await waitFor(() => expect(calls).toContain('GET /api/admin/accounts'));
   });
 
-  it('нет у наставника', () => {
+  it('наставнику без флага показывает «нет доступа»', async () => {
+    routes['GET /api/admin/access'] = () => json({ allowed: false });
     render(<StaffShell user={buddyUser} token="t" onLogout={() => undefined} />);
-    expect(screen.queryByRole('button', { name: 'Админ' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Нет доступа к админ-панели.')).toBeInTheDocument();
   });
 });

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { User } from '@ai-buddy/client';
 import { BuddyInfoPage } from '../../bot/BuddyPages';
 import { useAdminAccess } from '../../hooks/useAdminAccess';
+import { isAdminPath } from '../../lib/adminPath';
 import { useStageScale } from '../../hooks/useStageScale';
 import { AdminPage } from '../../pages/AdminPage';
 import { CalendarPage } from '../../pages/CalendarPage';
@@ -21,13 +22,11 @@ const STAFF_ITEMS: NavItem[] = [
   { view: 'buddy', label: 'Бади' },
 ];
 
-const ADMIN_ITEM: NavItem = { view: 'admin', label: 'Админ' };
-
 type Props ={ user: User; token: string; onLogout: () => void };
 
 /** Рабочее пространство наставника и руководителя: то же меню, сцена и вкладки справа, что у стажёра. */
 export function StaffShell({ user, token, onLogout }: Props) {
-  const [view, setView] = useState<View>('home');
+  const [view, setView] = useState<View>(isAdminPath() ? 'admin' : 'home');
   const [profileOpen, setProfileOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   useStageScale();
@@ -40,20 +39,19 @@ export function StaffShell({ user, token, onLogout }: Props) {
     window.addEventListener('ai-buddy:navigate', open);
     return () => window.removeEventListener('ai-buddy:navigate', open);
   }, []);
-  // «Админ» есть у руководителя; другим ролям его открывает только флаг ADMIN_OPEN_FOR_ALL на бэкенде (демо-запись). Права проверяет бэкенд.
+  // Админка открывается по адресу /admin: руководителю всегда, остальным только при ADMIN_OPEN_FOR_ALL на бэкенде (демо). Права проверяет бэкенд.
   const isAdmin = useAdminAccess(token, user.role);
-  const items = isAdmin ? [...STAFF_ITEMS, ADMIN_ITEM] : STAFF_ITEMS;
 
   return (
     <div className="shell">
-      <Sidebar view={view} items={items} onNavigate={setView} onLogout={onLogout} />
+      <Sidebar view={view} items={STAFF_ITEMS} onNavigate={setView} onLogout={onLogout} />
       <main className="workspace staff">
         {view === 'home' && <StaffHomePage user={user} token={token} onNavigate={setView} />}
         {view === 'team' && <StaffTeamPage user={user} token={token} />}
         {view === 'mentor' && <MentorPage token={token} />}
         {view === 'calendar' && <CalendarPage />}
         {view === 'buddy' && <BuddyInfoPage user={user} />}
-        {view === 'admin' && isAdmin && <AdminPage token={token} />}
+        {view === 'admin' && (isAdmin ? <AdminPage token={token} /> : <p className="muted">Нет доступа к админ-панели.</p>)}
       </main>
       <SideTabs onProfile={() => setProfileOpen(true)} onNotes={() => setNotesOpen(true)} />
       <StaffProfileDrawer user={user} open={profileOpen} onClose={() => setProfileOpen(false)} />
