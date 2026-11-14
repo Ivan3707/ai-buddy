@@ -144,6 +144,8 @@ CANDIDATES = 20  # depth of each partial ranking before fusion
 # написано") make the page the topic. Without such words the page is only weak context, so
 # topic switches ("Как оформить отпуск?" while a Grafana tab is open) still find their documents.
 DEICTIC = re.compile(r"\b(тут|здесь|это|этом|этой|эту|этот|эти|этого|страниц\w*|выделен\w*|написан\w*)\b")
+# Elliptical follow-ups ("а за сколько дней?", "и кто согласует?", "а если я стажёр?") have no topic of their own.
+FOLLOW_UP = re.compile(r"^\s*(а|и|но|ну|тогда|ещё|еще)\b")
 
 
 def retrieve(req: AgentChatRequest, retriever: Retriever, k: int, min_score: float,
@@ -169,7 +171,15 @@ def retrieve(req: AgentChatRequest, retriever: Retriever, k: int, min_score: flo
             alone = []
     if alone:
         rankings.insert(0, alone)
-    return rankings[0][:k] if len(rankings) == 1 else fuse(rankings, k)
+    hits = rankings[0][:k] if len(rankings) == 1 else fuse(rankings, k)
+    if use_history and previous and FOLLOW_UP.match(req.message.casefold()):
+        # "а за сколько дней?" continues the previous answer, so its evidence stays in view: the bare
+        # follow-up drags in noise ("сроки" of access requests) and fusion alone can push out a document
+        # the previous answer relied on (e.g. the second side of a contradiction).
+        seen = {(h.doc.id, h.doc.title) for h in hits}
+        carried = [h for h in retriever.search(previous, k, min_score) if (h.doc.id, h.doc.title) not in seen]
+        hits = hits + carried
+    return hits
 
 
 async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,

@@ -98,6 +98,20 @@ def test_follow_up_uses_previous_user_turn_and_topic_switch_still_works():
     assert retrieve(alone, r, 1, 0.1)[0].doc.id == "standup"
 
 
+def test_elliptical_follow_up_keeps_previous_turn_evidence():
+    from app.agent import retrieve
+    from app.schemas import AgentChatRequest
+    from conftest import user_context
+    r = BM25Retriever(DOCS)
+    history = [{"role": "user", "content": "Как оформить отпуск?"}, {"role": "assistant", "content": "Заявлением."}]
+    previous = {(h.doc.id, h.doc.title) for h in r.search("Как оформить отпуск?", 1, 0.1)}
+    follow_up = AgentChatRequest(message="а во сколько стендап", history=history, user_context=user_context())
+    got = {(h.doc.id, h.doc.title) for h in retrieve(follow_up, r, 1, 0.1)}
+    assert previous <= got and len(got) == 2  # own top hit + the previous answer's evidence
+    switch = AgentChatRequest(message="во сколько стендап", history=history, user_context=user_context())
+    assert [h.doc.id for h in retrieve(switch, r, 1, 0.1)] == ["standup"]  # no carry-over on a topic switch
+
+
 def test_page_context_steers_retrieval_and_is_masked_and_rendered():
     from app.agent import mask_request, retrieve
     from app.prompts import build_messages
