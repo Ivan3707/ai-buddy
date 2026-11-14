@@ -2,36 +2,30 @@
 
 AI-Buddy — платформа адаптации стажёров: Go Backend, PostgreSQL, React Web, Python AI и расширение Chrome. Buddy проверяет задания; Teamlead видит профессиональный прогресс и добавляет персональные задания. Учётные записи и назначения Buddy/Teamlead приходят из Mock HR.
 
-## Запуск с чистой БД
+## Первый запуск на Windows
 
-Нужны Go 1.26, Node.js 22, Docker Compose и Goose (`go install github.com/pressly/goose/v3/cmd/goose@v3.24.1`). `00001_init.sql` создаёт итоговую схему прежней v9, но имеет версию Goose 1. **Команды ниже предназначены только для новой пустой БД.** Не применяйте эту миграцию поверх существующих БД с историей v8/v9 и не удаляйте существующие БД или Docker volumes.
+Нужны Windows PowerShell, Docker Desktop с Compose, Go 1.26 и Goose (`go install github.com/pressly/goose/v3/cmd/goose@v3.24.1`). Для сборки Extension и локальных тестов нужен Node.js 22. Docker собирает Web и AI самостоятельно. Миграция `00001_init.sql` предназначена для пустой БД; bootstrap отказывается применять её к другой истории Goose.
 
-Из корня проекта в Windows PowerShell:
+Из корня клонированного репозитория:
 
 ```powershell
-if (-not (Test-Path .env)) { Copy-Item .env.example .env }
-# Задайте DB_PASSWORD и JWT_SECRET в .env, затем загрузите переменные:
-Get-Content .env | Where-Object { $_ -match '^[A-Z_]+=' } | ForEach-Object {
-  $key, $value = $_ -split '=', 2
-  [Environment]::SetEnvironmentVariable($key, $value, 'Process')
-}
-docker compose up -d --wait postgres
-$history = docker compose exec -T postgres psql -U $env:DB_USER -d $env:DB_NAME -Atc "SELECT to_regclass('public.goose_db_version')"
-if ($LASTEXITCODE -ne 0 -or $history -match 'goose_db_version') { throw 'Нужна новая пустая БД; текущую не мигрировать' }
-$dsn = "host=127.0.0.1 port=5433 user=$env:DB_USER password=$env:DB_PASSWORD dbname=$env:DB_NAME sslmode=disable"
-goose -dir apps/backend/migrations postgres $dsn up
-Set-Location apps/backend
-$env:DB_HOST = '127.0.0.1'
-$env:DB_PORT = '5433'
-$env:DB_SSLMODE = 'disable'
-go run ./cmd/init-catalog
-$credentials = Join-Path $env:LOCALAPPDATA ('ai-buddy\credentials\hr-' + (Get-Date -Format 'yyyyMMdd-HHmmss') + '.json')
-go run ./cmd/sync-hr -snapshot ../../data/corporate_employees.json -credentials $credentials
-Set-Location ../..
-docker compose up --build -d --wait
+Copy-Item .env.example .env
+# В .env замените DB_PASSWORD и JWT_SECRET на случайные секреты.
+# JWT_SECRET должен содержать не менее 32 символов.
+.\scripts\bootstrap.ps1
 ```
 
-Web: <http://127.0.0.1:5173>; Backend: <http://127.0.0.1:8080/health>. Если том PostgreSQL уже существует, выберите новую БД и создайте её отдельно до запуска команд; не меняйте историю миграций старой БД. `docker compose --env-file .env config --quiet` проверяет конфигурацию, `docker compose ps` показывает состояние сервисов. `docker compose stop` останавливает сервисы, сохраняя данные.
+Скрипт запускает PostgreSQL, применяет Goose, выполняет `init-catalog` и `sync-hr`, затем собирает и запускает приложение с ожиданием healthcheck. Путь к файлу первичных учётных данных вне Git выводится после Sync; сами пароли не выводятся. Сохраните первый файл: повторный Sync не выдаст пароль существующего сотрудника. Для отдельного стенда используйте параметры `-ProjectName`, `-EnvFile`, `-CredentialsDirectory` и отдельные `WEB_PORT`, `BACKEND_PORT`, `POSTGRES_PORT` в его env-файле.
+
+Web: <http://127.0.0.1:5173>; Backend: <http://127.0.0.1:8080/health>. Проверяйте `docker compose ps`: все четыре сервиса должны быть healthy. `docker compose up -d --build` подходит для обычного повторного запуска инициализированного стенда; миграции и HR Sync эта команда не выполняет. Чтобы повторно применить справочник и снимок HR, снова запустите `.\scripts\bootstrap.ps1`. Прежние пароли и прогресс сохраняются; новый файл с `[]` не заменяет первый файл. Остановка без удаления данных: `docker compose stop`.
+
+Типичные ошибки:
+
+- Шаблонный секрет: замените `DB_PASSWORD` и `JWT_SECRET` в `.env`. Изменение пароля в env-файле не меняет пароль роли в существующем PostgreSQL volume.
+- Занятый порт: задайте свободные `WEB_PORT`, `BACKEND_PORT`, `POSTGRES_PORT`; для второго стенда задайте отдельный ProjectName.
+- Другая история Goose или таблица пользователей без Goose: bootstrap останавливается. Не применяйте миграцию к старой БД v8/v9 без отдельного плана и backup.
+- Ошибка создания файла учётных данных: проверьте каталог вне Git и возможность ограничить ACL. При неизвестном результате COMMIT сохраните созданный файл и проверьте БД перед повтором.
+- Backend не поднялся после временной недоступности БД: проверьте `docker compose ps` и `docker compose logs backend`; для согласованного запуска используйте `docker compose up -d --wait`.
 
 ## Первичные пароли
 
