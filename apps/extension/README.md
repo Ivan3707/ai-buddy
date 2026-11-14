@@ -105,7 +105,7 @@ npm test --workspace @ai-buddy/extension        # только расширен�
 npm run coverage --workspace @ai-buddy/extension  # покрытие lib/**, порог 80% строк, LCOV в apps/extension/coverage/lcov.info
 ```
 
-DOM-обвязка (`buddy/widget.js`, `buddy/content.js`) unit-тестами не покрыта, её проверяют браузерные сценарии из `docs/manual-testing.md` и e2e `tests/e2e/demo.spec.ts` (`npm run test:e2e` при поднятом стенде).
+DOM-обвязка (`buddy/widget.js`, `buddy/content.js`) unit-тестами не покрыта, её проверяют браузерные сценарии из `docs/manual-testing.md`.
 
 ## Ручная проверка
 

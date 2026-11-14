@@ -344,7 +344,9 @@ BACKEND_ONLY = {
         },
     },
     "Feedback": {"type": "object", "additionalProperties": False, "required": ["rating"],
-                 "properties": {"rating": {"type": "string", "enum": ["up", "down"]}}},
+                 "properties": {"rating": {"type": "string", "enum": ["up", "down"]},
+                                "comment": {"type": "string", "maxLength": 1000,
+                                            "description": "What was wrong; only kept with rating=down. Shown to the admin, not to mentors."}}},
     "AnswerMentorQuestion": {"type": "object", "additionalProperties": False, "required": ["answer"],
                              "properties": {"answer": {"type": "string", "minLength": 1, "maxLength": 4000}}},
     "ChatMetrics": {
@@ -354,7 +356,6 @@ BACKEND_ONLY = {
             "answered_by_bot": {"type": "integer"},
             "escalated_to_mentor": {"type": "integer"},
             "deflection_rate": {"type": "number", "description": "1 - escalated/questions"},
-            "thumbs_up": {"type": "integer"}, "thumbs_down": {"type": "integer"},
             "actions_executed": {"type": "integer"},
             "estimated_mentor_minutes_saved": {"type": "number"},
         },
@@ -699,6 +700,18 @@ backend_paths.update({
                        "number of active sessions. Never returns password hashes, tokens or secrets.",
         "responses": {"200": json_resp("Accounts", {"type": "object", "required": ["accounts"], "properties": {
             "accounts": {"type": "array", "items": ADMIN_ACCOUNT}}}), "403": ADMIN_FORBIDDEN}}},
+    "/api/admin/access": {"get": {
+        "operationId": "adminAccess", "security": BEARER,
+        "description": "Any signed-in user: is the admin panel open for this role (teamlead, or everyone with ADMIN_OPEN_FOR_ALL=1).",
+        "responses": {"200": json_resp("Access", {"type": "object", "required": ["allowed"], "properties": {"allowed": {"type": "boolean"}}})}}},
+    "/api/admin/feedback": {"get": {
+        "operationId": "adminFeedback", "security": BEARER,
+        "description": "Admin only: thumbs up/down counts under bot answers and the comments left under thumbs-down.",
+        "responses": {"200": json_resp("Feedback", {"type": "object", "required": ["up", "down", "items"], "properties": {
+            "up": {"type": "integer"}, "down": {"type": "integer"},
+            "items": {"type": "array", "items": {"type": "object", "properties": {
+                "message_id": {"type": "string"}, "comment": {"type": "string"}, "created_at": {"type": "string", "format": "date-time"}}}}}}),
+            "403": json_resp("Forbidden", ERROR)}}},
     "/api/admin/llm": {"get": {
         "operationId": "adminLlm", "security": BEARER,
         "description": "Teamlead only: provider, model, mode and API balance (AI /v1/admin/llm).",

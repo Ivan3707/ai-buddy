@@ -69,6 +69,7 @@ func Run() error {
 		Assistant:     service.NewAssistantService(db, env("AI_URL", "http://127.0.0.1:8001")),
 		Admin:         service.NewAdminService(db, env("AI_URL", "http://127.0.0.1:8001"), hints),
 	}
+	deps.Admin.OpenForAll = os.Getenv("ADMIN_OPEN_FOR_ALL") == "1"
 	deps.Corporate.Unavailable = os.Getenv("CORPORATE_MOCK_UNAVAILABLE") == "1"
 	defer db.Close()
 	workerCtx, cancelWorker := context.WithCancel(context.Background())

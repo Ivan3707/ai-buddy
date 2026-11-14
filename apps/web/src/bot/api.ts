@@ -25,7 +25,7 @@ export type Hint = { id: string; item_id: string; text: string; read_at: string 
 export type MentorDraft = { draft: string; sources: Source[]; confidence: 'grounded' | 'partial' | 'none'; kb_suggestion?: { title: string; text: string } };
 export type ChatMetrics = {
   questions_total: number; answered_by_bot: number; escalated_to_mentor: number; deflection_rate: number | null;
-  thumbs_up: number; thumbs_down: number; actions_executed: number; estimated_mentor_minutes_saved: number;
+  actions_executed: number; estimated_mentor_minutes_saved: number;
 };
 export type GapsReport = { total_questions: number; clusters: { label: string; count: number; examples: string[] }[] };
 export type KbLintReport = { issues: { kind: string; doc_ids: string[]; detail: string }[] };
@@ -99,7 +99,7 @@ export const bot = {
   brief: (token: string, onEvent: (e: StreamEvent) => void, signal?: AbortSignal) => stream(token, '/api/chat/brief/stream', {}, onEvent, signal),
   messages: (token: string, conversationId?: string) =>
     request<{ conversation_id: string | null; messages: ChatMessage[] }>(token, `/api/chat/messages${conversationId ? `?conversation_id=${conversationId}` : ''}`),
-  feedback: (token: string, messageId: string, rating: 'up' | 'down') => post<void>(token, `/api/chat/messages/${messageId}/feedback`, { rating }),
+  feedback: (token: string, messageId: string, rating: 'up' | 'down', comment?: string) => post<void>(token, `/api/chat/messages/${messageId}/feedback`, comment ? { rating, comment } : { rating }),
   confirm: (token: string, actionId: string) => post<ActionResult>(token, `/api/actions/${actionId}/confirm`),
   cancel: (token: string, actionId: string) => post<PendingAction>(token, `/api/actions/${actionId}/cancel`),
   requests: (token: string) => request<ServiceRequest[]>(token, '/api/requests'),

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { User } from '@ai-buddy/client';
 import { BuddyInfoPage } from '../../bot/BuddyPages';
+import { useAdminAccess } from '../../hooks/useAdminAccess';
 import { useStageScale } from '../../hooks/useStageScale';
 import { AdminPage } from '../../pages/AdminPage';
 import { CalendarPage } from '../../pages/CalendarPage';
@@ -39,8 +40,8 @@ export function StaffShell({ user, token, onLogout }: Props) {
     window.addEventListener('ai-buddy:navigate', open);
     return () => window.removeEventListener('ai-buddy:navigate', open);
   }, []);
-  // «Админ» есть только у руководителя (права проверяет и бэкенд)
-  const isAdmin = user.role === 'teamlead';
+  // «Админ» есть у руководителя; другим ролям его открывает только флаг ADMIN_OPEN_FOR_ALL на бэкенде (демо-запись). Права проверяет бэкенд.
+  const isAdmin = useAdminAccess(token, user.role);
   const items = isAdmin ? [...STAFF_ITEMS, ADMIN_ITEM] : STAFF_ITEMS;
 
   return (

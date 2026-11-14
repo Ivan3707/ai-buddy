@@ -121,7 +121,7 @@ export function createGateway({baseUrl, auth, hooks = {}, store, client, fetchIm
         }
       }
       case 'feedback':
-        try { await sendFeedback(await options(), message.messageId, message.rating); return {ok: true}; } catch { return {ok: false}; }
+        try { await sendFeedback(await options(), message.messageId, message.rating, message.comment); return {ok: true}; } catch { return {ok: false}; }
       case 'new-dialog':
         await store.remove('conversationId');
         return {ok: true};

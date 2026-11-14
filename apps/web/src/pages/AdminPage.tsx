@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
-  admin, type AdminAccount, type AdminLlm, type AdminNotification, type AdminPing, type AdminSystem,
+  admin, type AdminAccount, type AnswerFeedback, type AdminLlm, type AdminNotification, type AdminPing, type AdminSystem,
   type KbCounts, type NotificationSample, type StuckCheck,
 } from '../bot/adminApi';
 import { personName, staffRoleLabel } from '../lib/format';
@@ -11,6 +11,7 @@ const TABS = [
   { id: 'accounts', label: 'Аккаунты' },
   { id: 'llm', label: 'API и модель' },
   { id: 'notifications', label: 'Оповещения' },
+  { id: 'quality', label: 'Оценки ответов' },
   { id: 'system', label: 'Система' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
@@ -297,6 +298,33 @@ const COUNTER_LABELS: [keyof AdminSystem['counters'], string][] = [
   ['messages_today', 'Сообщений в чате сегодня'], ['active_sessions', 'Активных сессий'],
 ];
 
+function QualityTab({ token }: { token: string }) {
+  const { data, error, loading, reload } = useLoad<AnswerFeedback>(useCallback(() => admin.feedback(token), [token]));
+  return (
+    <div className="admin-stack">
+      <section className="staff-card admin-block" aria-label="Оценки ответов бота">
+        <div className="panel-head">
+          <h2>Оценки ответов бота</h2>
+          <div className="admin-actions"><button className="pill pill-black pill-sm" onClick={() => void reload()} disabled={loading}>Обновить</button></div>
+        </div>
+        <p className="muted">Оценки 👍/👎 стажёров под ответами. Это сигнал о качестве бота: наставники их не видят.</p>
+        <Status loading={loading && !data} error={error} />
+        {data && (
+          <>
+            <div className="admin-counters">
+              <div><b>{data.up}</b><span>👍 помогло</span></div>
+              <div><b>{data.down}</b><span>👎 не помогло</span></div>
+            </div>
+            {data.items.length === 0
+              ? <p className="muted">Комментариев к 👎 пока нет.</p>
+              : <ul className="admin-checks">{data.items.map(i => <li key={i.message_id}><div><b>{i.comment}</b><small className="muted">{date(i.created_at)}</small></div></li>)}</ul>}
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function SystemTab({ token }: { token: string }) {
   const { data, error, loading, reload } = useLoad<AdminSystem>(useCallback(() => admin.system(token), [token]));
   const [reloading, setReloading] = useState(false);
@@ -367,6 +395,7 @@ export function AdminPage({ token }: { token: string }) {
         {tab === 'accounts' && <AccountsTab token={token} />}
         {tab === 'llm' && <LlmTab token={token} />}
         {tab === 'notifications' && <NotificationsTab token={token} />}
+        {tab === 'quality' && <QualityTab token={token} />}
         {tab === 'system' && <SystemTab token={token} />}
       </div>
     </div>

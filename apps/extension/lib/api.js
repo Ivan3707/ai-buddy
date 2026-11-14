@@ -72,10 +72,10 @@ export function cancelAction(options, actionId) {
 
 // 👍/👎 for an assistant message. 404 (unknown message or endpoint not deployed yet)
 // is not an error for the user: resolves {saved: false}.
-export async function sendFeedback(options, messageId, rating) {
+export async function sendFeedback(options, messageId, rating, comment = '') {
   if (rating !== 'up' && rating !== 'down') throw new TypeError(`invalid rating: ${rating}`);
   try {
-    await postJson({...options, path: `/api/chat/messages/${encodeURIComponent(messageId)}/feedback`, body: {rating}});
+    await postJson({...options, path: `/api/chat/messages/${encodeURIComponent(messageId)}/feedback`, body: comment ? {rating, comment: String(comment).slice(0, 1000)} : {rating}});
     return {saved: true};
   } catch (error) {
     if (error?.status === 404 || error?.status === 405) return {saved: false};

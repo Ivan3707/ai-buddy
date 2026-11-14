@@ -118,8 +118,6 @@ type ChatMetrics struct {
 	AnsweredByBot        int      `json:"answered_by_bot"`
 	EscalatedToMentor    int      `json:"escalated_to_mentor"`
 	DeflectionRate       *float64 `json:"deflection_rate"`
-	ThumbsUp             int      `json:"thumbs_up"`
-	ThumbsDown           int      `json:"thumbs_down"`
 	ActionsExecuted      int      `json:"actions_executed"`
 	EstimatedMinutesSave int      `json:"estimated_mentor_minutes_saved"`
 }
@@ -851,14 +849,23 @@ func (s *AssistantService) Messages(ctx context.Context, userID uuid.UUID, conve
 	return conversationID, out, rows.Err()
 }
 
-func (s *AssistantService) Feedback(ctx context.Context, userID, messageID uuid.UUID, rating string) error {
+func (s *AssistantService) Feedback(ctx context.Context, userID, messageID uuid.UUID, rating, comment string) error {
 	if rating != "up" && rating != "down" {
 		return ErrActionInvalid
 	}
+	comment = strings.TrimSpace(comment)
+	if r := []rune(comment); len(r) > 1000 {
+		comment = string(r[:1000])
+	}
+	if rating != "down" {
+		comment = ""
+	}
 	res, err := s.db.ExecContext(ctx, `
-		UPDATE chat_messages m SET feedback = $3
+		UPDATE chat_messages m SET
+		  feedback_comment = CASE WHEN $4 <> '' THEN $4 WHEN m.feedback IS DISTINCT FROM $3 THEN NULL ELSE m.feedback_comment END,
+		  feedback = $3
 		FROM chat_conversations c
-		WHERE m.id = $1 AND c.id = m.conversation_id AND c.user_id = $2 AND m.role = 'assistant'`, messageID, userID, rating)
+		WHERE m.id = $1 AND c.id = m.conversation_id AND c.user_id = $2 AND m.role = 'assistant'`, messageID, userID, rating, comment)
 	if err != nil {
 		return err
 	}
@@ -1130,10 +1137,8 @@ func (s *AssistantService) Metrics(ctx context.Context, staff *model.User) (Chat
 		              WHERE c.user_id IN (SELECT id FROM interns))
 		SELECT (SELECT count(*) FROM msgs WHERE role = 'user'),
 		       (SELECT count(*) FROM mentor_questions WHERE intern_id IN (SELECT id FROM interns)),
-		       (SELECT count(*) FROM msgs WHERE feedback = 'up'),
-		       (SELECT count(*) FROM msgs WHERE feedback = 'down'),
 		       (SELECT count(*) FROM assistant_actions WHERE status = 'executed' AND user_id IN (SELECT id FROM interns))`,
-		staff.ID).Scan(&m.QuestionsTotal, &m.EscalatedToMentor, &m.ThumbsUp, &m.ThumbsDown, &m.ActionsExecuted)
+		staff.ID).Scan(&m.QuestionsTotal, &m.EscalatedToMentor, &m.ActionsExecuted)
 	if err != nil {
 		return m, err
 	}

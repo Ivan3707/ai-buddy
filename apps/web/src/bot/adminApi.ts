@@ -33,7 +33,11 @@ export type StuckCheck = {
 };
 export type KbCounts = { documents: number; chunks: number; source?: string };
 
+export type AnswerFeedback = { up: number; down: number; items: { message_id: string; comment: string; created_at: string }[] };
+
 export const admin = {
+  access: (token: string) => request<{ allowed: boolean }>(token, '/api/admin/access').then(r => r.allowed).catch(() => false),
+  feedback: (token: string) => request<AnswerFeedback>(token, '/api/admin/feedback'),
   accounts: (token: string) => request<{ accounts: AdminAccount[] }>(token, '/api/admin/accounts').then(r => r.accounts),
   llm: (token: string) => request<AdminLlm>(token, '/api/admin/llm'),
   ping: (token: string) => post<AdminPing>(token, '/api/admin/llm/ping'),

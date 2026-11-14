@@ -10,13 +10,23 @@ import (
 	"github.com/nvkmaksim/ai-buddy/backend/internal/service"
 )
 
-// RegisterAdminRoutes adds the admin panel API. There is no separate admin role: every route is teamlead only.
+// RegisterAdminRoutes adds the admin panel API. There is no separate admin role: every route is teamlead only, unless ADMIN_OPEN_FOR_ALL is set (demo).
 func RegisterAdminRoutes(mux *http.ServeMux, auth func(http.Handler) http.Handler, s *service.AdminService) {
 	h := adminHandler{s: s}
 	teamlead := middleware.RequireRole(model.RoleTeamlead)
-	route := func(pattern string, fn http.HandlerFunc) {
-		mux.Handle(pattern, auth(teamlead(fn)))
+	gate := func(fn http.HandlerFunc) http.Handler {
+		if s.OpenForAll {
+			return auth(fn)
+		}
+		return auth(teamlead(fn))
 	}
+	route := func(pattern string, fn http.HandlerFunc) { mux.Handle(pattern, gate(fn)) }
+	// every signed-in user may ask whether the panel is open for them (the menu item depends on it)
+	mux.Handle("GET /api/admin/access", auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user, _ := middleware.CurrentUser(r.Context())
+		send(w, http.StatusOK, map[string]bool{"allowed": s.OpenForAll || (user != nil && user.Role == model.RoleTeamlead)})
+	})))
+	route("GET /api/admin/feedback", h.feedback)
 	route("GET /api/admin/accounts", h.accounts)
 	route("GET /api/admin/llm", h.llm)
 	route("POST /api/admin/llm/ping", h.llmPing)
@@ -40,6 +50,16 @@ func (h adminHandler) accounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	send(w, http.StatusOK, map[string]any{"accounts": items})
+}
+
+func (h adminHandler) feedback(w http.ResponseWriter, r *http.Request) {
+	out, err := h.s.AnswerFeedback(r.Context())
+	if err != nil {
+		log.Printf("admin feedback: %v", err)
+		send(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		return
+	}
+	send(w, http.StatusOK, out)
 }
 
 func (h adminHandler) llm(w http.ResponseWriter, r *http.Request) {

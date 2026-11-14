@@ -24,7 +24,7 @@
     // on a phone the big mode takes the whole screen
     full: () => (innerWidth < 600 ? {w: innerWidth - 16, h: innerHeight - 16} : {w: Math.min(980, innerWidth - 32), h: Math.min(740, innerHeight - 48)}),
   };
-  const KEYS = {pos: 'buddyPos', mode: 'buddyChatMode', sizes: 'buddyChatSizes', greeting: 'buddyGreeting', page: 'buddyPageMode'};
+  const KEYS = {pos: 'buddyPos', mode: 'buddyChatMode', sizes: 'buddyChatSizes', greeting: 'buddyGreeting'};
 
   function mount(env) {
     const opt = {login: true, logout: false, pageContext: true, hide: true, requests: true, ...(env.features || {})};
@@ -126,9 +126,6 @@
         <div class="composer-wrap">
           <div class="chip" hidden><span class="chip-text"></span><button type="button" class="chip-x" aria-label="Не учитывать выделение">×</button></div>
           <div class="page-row">
-            <label class="page">Страница:
-              <select class="page-mode" title="Передавать ли боту заголовок, адрес и выделенный текст этой страницы">
-                <option value="auto">определять сам</option><option value="always">всегда учитывать</option><option value="never">не учитывать</option></select></label>
             <button type="button" class="clear" title="Очистить чат и начать новый диалог">Очистить</button>
           </div>
           <form class="composer"><textarea rows="1" maxlength="2000" placeholder="Спроси Бади…"></textarea>
@@ -155,11 +152,10 @@
     const $ = selector => root.querySelector(selector);
     const char = $('.char'), body = $('.body'), bubble = $('.bubble'), chat = $('.chat'), log = $('.log');
     const input = $('.composer textarea'), sendButton = $('.send'), loginForm = $('.login');
-    const chip = $('.chip'), pageMode = $('.page-mode'), reader = $('.reader'), readerBody = $('.reader-body');
+    const chip = $('.chip'), reader = $('.reader'), readerBody = $('.reader-body');
     const grip = $('.grip'), modeButton = $('.mode'), openFull = $('.open-full');
     const scrim = $('.scrim'), tabsBar = $('.tabs'), notesPanel = $('.notes'), reqsPanel = $('.reqs'), askPanel = $('.ask'), calPanel = $('.cal');
     $('.hide').hidden = !opt.hide;
-    $('.page').hidden = !opt.pageContext;
 
     let pos = {x: innerWidth - SIZE - 24, y: innerHeight - SIZE - 24};
     let mode = 'compact';
@@ -237,8 +233,7 @@
     }
     modeButton.onclick = () => setMode(mode === 'full' ? 'compact' : 'full');
 
-    Promise.all([store.get(KEYS.pos), store.get(KEYS.mode), store.get(KEYS.sizes), store.get(KEYS.page)]).then(([p, m, s, pm]) => {
-      if (['auto', 'always', 'never'].includes(pm)) pageMode.value = pm;
+    Promise.all([store.get(KEYS.pos), store.get(KEYS.mode), store.get(KEYS.sizes)]).then(([p, m, s]) => {
       const at = fromStored(p);
       if (at) pos = at;
       if (s && typeof s === 'object') sizes = s;
@@ -626,6 +621,21 @@
     function feedback(messageId) {
       const row = el('div', 'fb');
       const note = el('span');
+      const why = el('form', 'fb-why'); why.hidden = true;
+      const text = el('textarea'); text.rows = 2; text.maxLength = 1000; text.placeholder = 'Что не так с ответом? (необязательно)';
+      const sendWhy = el('button', 'primary', 'Отправить'); sendWhy.type = 'submit';
+      const skip = el('button', '', 'Пропустить'); skip.type = 'button';
+      const whyBar = el('div', 'bar'); whyBar.append(skip, sendWhy);
+      why.append(text, whyBar);
+      skip.onclick = () => { why.hidden = true; };
+      why.onsubmit = async event => {
+        event.preventDefault();
+        const comment = text.value.trim();
+        if (!comment) { why.hidden = true; return; }
+        sendWhy.disabled = true;
+        const r = await env.call({op: 'feedback', messageId, rating: 'down', comment});
+        if (r?.ok) { why.hidden = true; note.textContent = 'Спасибо, учтём!'; } else { sendWhy.disabled = false; note.textContent = 'Не сохранилось, попробуйте ещё раз'; }
+      };
       for (const [rating, icon] of [['up', '👍'], ['down', '👎']]) {
         const b = row.appendChild(el('button', '', icon));
         b.type = 'button';
@@ -637,10 +647,12 @@
           b.classList.add('on');
           const r = await env.call({op: 'feedback', messageId, rating});
           note.textContent = r?.ok ? 'Спасибо!' : 'Не сохранилось';
+          if (rating === 'down' && r?.ok) { why.hidden = false; text.focus(); }
         };
       }
       row.append(note);
-      return row;
+      const wrap = el('div', 'fb-wrap'); wrap.append(row, why);
+      return wrap;
     }
 
     // ---------- document reader (sources open here, in the full mode) ----------
@@ -912,17 +924,16 @@
         finish(message, render);
       });
     }
-    // "Страница: определять сам": the page goes along only when the question is about it. Decided here, in the browser,
+    // The page goes along only when the question is about it. Decided here, in the browser,
     // before anything leaves the machine: a selection is attached, or the question points at the page ("тут", "это",
     // "на странице"), or the tab is a work tool the bot has hints for (wiki, Grafana, Jira, GitLab).
     const POINTS_AT_PAGE = /(?<!\p{L})(это|эт[аоуие]|этот|этой|этом|этих|тут|здесь|вот|выделенн\p{L}*|страниц\p{L}*|экран\p{L}*)(?!\p{L})/iu;
     const WORK_TOOL = /grafana|дашборд|dashboard|jira|тикет|issue|board|gitlab|github|merge.?request|pull.?request|wiki|confluence|вики|регламент|faq|памятк/i;
     function wantsPage(text, force) {
-      if (!opt.pageContext || pageMode.value === 'never') return false;
-      if (force || pageMode.value === 'always') return true;
+      if (!opt.pageContext) return false;
+      if (force) return true;
       return Boolean(selection) || POINTS_AT_PAGE.test(text) || WORK_TOOL.test(`${document.title} ${location.hostname}`);
     }
-    pageMode.onchange = () => { void store.set(KEYS.page, pageMode.value); };
     function pageContext(text, force = false) {
       if (!wantsPage(text, force)) return null;
       const url = /^https?:/.test(location.protocol) ? `${location.origin}${location.pathname}` : '';
@@ -1188,9 +1199,8 @@
 
     /* ввод */
     .composer-wrap{border-top:1px solid var(--grey);padding:8px 16px 14px;background:var(--cream)}
-    .page-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
-    .page{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--muted);margin:0}
-    .page select{font:inherit;font-size:11px;padding:3px 8px;border:1px solid var(--grey);border-radius:999px;background:#fff;color:var(--ink)}
+    .page-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px;margin-bottom:6px}
+    .fb-why{display:flex;flex-direction:column;gap:6px;margin-top:6px}.fb-why textarea{width:100%;box-sizing:border-box;font:inherit;font-size:12px;padding:8px 10px;border:1px solid var(--grey);border-radius:12px;resize:vertical}.fb-why[hidden]{display:none}
     .clear{font-size:11px;padding:3px 14px;color:var(--muted);margin-left:auto;background:var(--grey-soft)}
     .chip{display:flex;align-items:center;gap:6px;background:var(--pink-soft);border-radius:999px;padding:4px 12px;font-size:11px;margin-bottom:6px}
     .chip-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chip-x{background:transparent;padding:0 4px}

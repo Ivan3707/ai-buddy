@@ -482,7 +482,7 @@ func TestAssistantFlowWithPostgres(t *testing.T) {
 	// ---- metrics for staff only
 	var metrics map[string]any
 	_ = json.Unmarshal(expect(buddy, http.MethodGet, "/api/metrics/chat", nil, http.StatusOK), &metrics)
-	if metrics["escalated_to_mentor"].(float64) != 1 || metrics["thumbs_up"].(float64) != 1 || metrics["actions_executed"].(float64) != 3 ||
+	if metrics["escalated_to_mentor"].(float64) != 1 || metrics["actions_executed"].(float64) != 3 ||
 		metrics["questions_total"].(float64) != 8 || metrics["deflection_rate"] == nil {
 		t.Fatalf("metrics %v", metrics)
 	}

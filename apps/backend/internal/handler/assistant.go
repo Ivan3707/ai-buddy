@@ -202,7 +202,8 @@ func (h assistantHandler) feedback(w http.ResponseWriter, r *http.Request, user 
 		return
 	}
 	var body struct {
-		Rating string `json:"rating"`
+		Rating  string `json:"rating"`
+		Comment string `json:"comment"`
 	}
 	if !decodeJSONBody(w, r, &body) {
 		return
@@ -211,7 +212,7 @@ func (h assistantHandler) feedback(w http.ResponseWriter, r *http.Request, user 
 		send(w, http.StatusBadRequest, map[string]string{"error": "rating must be up or down"})
 		return
 	}
-	if err := h.s.Feedback(r.Context(), user.ID, id, body.Rating); err != nil {
+	if err := h.s.Feedback(r.Context(), user.ID, id, body.Rating, body.Comment); err != nil {
 		assistantError(w, err)
 		return
 	}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { User } from '@ai-buddy/client';
 import { useChecklists } from '../../hooks/useChecklists';
+import { useAdminAccess } from '../../hooks/useAdminAccess';
 import { useStageScale } from '../../hooks/useStageScale';
 import { overallProgress } from '../../lib/format';
 import { CalendarPage } from '../../pages/CalendarPage';
@@ -11,7 +12,8 @@ import { BuddyInfoPage } from '../../bot/BuddyPages';
 import { NotesDrawer } from './NotesDrawer';
 import { ProfileDrawer } from './ProfileDrawer';
 import { SideTabs } from './SideTabs';
-import { Sidebar, type View } from './Sidebar';
+import { AdminPage } from '../../pages/AdminPage';
+import { NAV_ITEMS, Sidebar, type NavItem, type View } from './Sidebar';
 
 type Props = { user: User; token: string; onLogout: () => void };
 
@@ -23,6 +25,8 @@ export function AppShell({ user, token, onLogout }: Props) {
   const [tasksChecklist, setTasksChecklist] = useState<'common' | 'professional'>('common');
   const checklists = useChecklists(token);
   useStageScale();
+  const isAdmin = useAdminAccess(token, user.role);
+  const items: NavItem[] = isAdmin ? [...NAV_ITEMS, { view: 'admin', label: 'Админ' }] : NAV_ITEMS;
   // подсказки Бади могут открыть раздел («есть вопросы стажёров» -> «Вопросы»)
   useEffect(() => {
     const open = (event: Event) => {
@@ -57,12 +61,13 @@ export function AppShell({ user, token, onLogout }: Props) {
 
   return (
     <div className="shell">
-      <Sidebar view={view} onNavigate={setView} onLogout={onLogout} />
+      <Sidebar view={view} items={items} onNavigate={setView} onLogout={onLogout} />
       <main className="workspace">
         {view === 'home' && <HomePage user={user} checklists={checklists} onOpenTasks={type => { setTasksChecklist(type); setView('tasks'); }} />}
         {view === 'calendar' && <CalendarPage />}
         {view === 'tasks' && <TasksPage token={token} checklists={checklists} selected={tasksChecklist} onSelect={setTasksChecklist} />}
         {view === 'buddy' && <BuddyInfoPage user={user} />}
+        {view === 'admin' && isAdmin && <AdminPage token={token} />}
       </main>
       <SideTabs onProfile={() => setProfileOpen(true)} onNotes={() => setNotesOpen(true)} />
       <ProfileDrawer

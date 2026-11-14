@@ -3211,6 +3211,109 @@
           }
         }
       }
+    },
+    "/api/admin/access": {
+      "get": {
+        "operationId": "adminAccess",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Any signed-in user: is the admin panel open for this role (teamlead, or everyone with ADMIN_OPEN_FOR_ALL=1).",
+        "responses": {
+          "200": {
+            "description": "Access",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "allowed"
+                  ],
+                  "properties": {
+                    "allowed": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/feedback": {
+      "get": {
+        "operationId": "adminFeedback",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "description": "Admin only: thumbs up/down counts under bot answers and the comments left under thumbs-down.",
+        "responses": {
+          "200": {
+            "description": "Feedback",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "up",
+                    "down",
+                    "items"
+                  ],
+                  "properties": {
+                    "up": {
+                      "type": "integer"
+                    },
+                    "down": {
+                      "type": "integer"
+                    },
+                    "items": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "message_id": {
+                            "type": "string"
+                          },
+                          "comment": {
+                            "type": "string"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4229,6 +4332,11 @@
               "up",
               "down"
             ]
+          },
+          "comment": {
+            "type": "string",
+            "maxLength": 1000,
+            "description": "What was wrong; only kept with rating=down. Shown to the admin, not to mentors."
           }
         }
       },
@@ -4262,12 +4370,6 @@
           "deflection_rate": {
             "type": "number",
             "description": "1 - escalated/questions"
-          },
-          "thumbs_up": {
-            "type": "integer"
-          },
-          "thumbs_down": {
-            "type": "integer"
           },
           "actions_executed": {
             "type": "integer"

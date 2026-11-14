@@ -23,6 +23,8 @@ type HintTicker interface {
 }
 
 type AdminService struct {
+	// OpenForAll lets every signed-in role into the admin panel (demo recording). Off by default: RBAC stays with the backend.
+	OpenForAll bool
 	db     *sql.DB
 	aiURL  string
 	client *http.Client
@@ -47,6 +49,42 @@ type AdminAccount struct {
 	CreatedAt      time.Time  `json:"created_at"`
 	LastLoginAt    *time.Time `json:"last_login_at"`
 	ActiveSessions int        `json:"active_sessions"`
+}
+
+type AnswerFeedbackItem struct {
+	MessageID string    `json:"message_id"`
+	Comment   string    `json:"comment"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type AnswerFeedback struct {
+	Up    int                  `json:"up"`
+	Down  int                  `json:"down"`
+	Items []AnswerFeedbackItem `json:"items"`
+}
+
+// AnswerFeedback counts thumbs under bot answers and lists the comments left under thumbs-down. It is a product-quality
+// signal for the admin panel; the mentor desk does not show it.
+func (s *AdminService) AnswerFeedback(ctx context.Context) (AnswerFeedback, error) {
+	out := AnswerFeedback{Items: []AnswerFeedbackItem{}}
+	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FILTER (WHERE feedback = 'up'), count(*) FILTER (WHERE feedback = 'down') FROM chat_messages`).Scan(&out.Up, &out.Down); err != nil {
+		return out, err
+	}
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT id::text, feedback_comment, created_at FROM chat_messages
+		WHERE feedback = 'down' AND COALESCE(feedback_comment, '') <> '' ORDER BY created_at DESC LIMIT 50`)
+	if err != nil {
+		return out, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var it AnswerFeedbackItem
+		if err := rows.Scan(&it.MessageID, &it.Comment, &it.CreatedAt); err != nil {
+			return out, err
+		}
+		out.Items = append(out.Items, it)
+	}
+	return out, rows.Err()
 }
 
 func (s *AdminService) Accounts(ctx context.Context) ([]AdminAccount, error) {
