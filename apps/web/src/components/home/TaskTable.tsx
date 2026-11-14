@@ -17,14 +17,13 @@ export function TaskTable({ checklist, onOpen }: Props) {
         <strong>{done}/{items.length} выполнено</strong>
       </header>
       <div className="task-columns" aria-hidden="true">
-        <span>Задачи</span><span>Руководитель</span><span>Срок</span><span>Комментарий</span>
+        <span>Задачи</span><span>Руководитель</span><span>Срок</span><span>Описание</span>
       </div>
+      <div className="task-rows">
       {items.length === 0 && <p className="task-empty">В этом чек-листе пока нет задач.</p>}
       {items.map(item => {
         const locked = item.status === 'unavailable';
-        const mark = locked
-          ? <LockIcon width={16} height={16} />
-          : isDone(item) ? <CheckIcon width={16} height={16} /> : null;
+        const mark = locked ? <LockIcon /> : <CheckIcon className="task-check" />;
         return (
           <article
             key={item.id}
@@ -38,6 +37,7 @@ export function TaskTable({ checklist, onOpen }: Props) {
           </article>
         );
       })}
+      </div>
     </section>
   );
 }

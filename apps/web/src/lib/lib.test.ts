@@ -56,8 +56,8 @@ describe('format', () => {
 
   it('internshipDuration считает стаж по дате создания', () => {
     const now = new Date(2026, 10, 14);
-    expect(internshipDuration('2026-11-01T10:00:00', now)).toBe('меньше месяца');
-    expect(internshipDuration('2026-10-20T10:00:00', now)).toBe('меньше месяца'); // ещё не прошёл месяц
+    expect(internshipDuration('2026-11-01T10:00:00', now)).toBe('до месяца');
+    expect(internshipDuration('2026-10-20T10:00:00', now)).toBe('до месяца'); // ещё не прошёл месяц
     expect(internshipDuration('2026-08-14T10:00:00', now)).toBe('3 месяца');
     expect(internshipDuration('2025-09-10T10:00:00', now)).toBe('1 год 2 месяца');
     expect(internshipDuration('2024-11-01T10:00:00', now)).toBe('2 года');

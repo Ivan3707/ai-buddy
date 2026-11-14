@@ -82,4 +82,3 @@
 .task-row.is-locked .task-cell { background: var(--grey-soft); color: #555; }
 .task-empty { margin: 8px 0 0; color: var(--text-muted); }
 
-.calendar-page-body { max-width: 420px; }

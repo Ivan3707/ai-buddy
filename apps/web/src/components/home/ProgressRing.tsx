@@ -3,9 +3,13 @@ type Props = { percent: number; label: string; size?: number };
 /** Кольцо прогресса: светлая дорожка и тёмная дуга выполненной части. */
 export function ProgressRing({ percent, label, size = 200 }: Props) {
   const value = Math.max(0, Math.min(100, Math.round(percent)));
-  const stroke = size * 0.09;
+  const stroke = size >= 200 ? 16 : size * 0.09; // в макете у большого кольца обводка 16 px
   const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
+  // Дуга выполненной части в макете (Figma arc): старт 0°, внутренний радиус 77,99 % — она толще белой дорожки
+  const bold = size >= 200;
+  const valueStroke = bold ? (size / 2) * (1 - 0.7799) : stroke;
+  const valueRadius = size / 2 - valueStroke / 2; // внешний край совпадает с краем дорожки
+  const circumference = 2 * Math.PI * valueRadius;
   return (
     <div
       className="ring"
@@ -22,10 +26,10 @@ export function ProgressRing({ percent, label, size = 200 }: Props) {
           className="ring-value"
           cx={size / 2}
           cy={size / 2}
-          r={radius}
-          strokeWidth={stroke}
+          r={valueRadius}
+          strokeWidth={valueStroke}
           strokeDasharray={`${(circumference * value) / 100} ${circumference}`}
-          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          transform={bold ? undefined : `rotate(-90 ${size / 2} ${size / 2})`}
         />
       </svg>
       <span className="ring-text">{value}%</span>

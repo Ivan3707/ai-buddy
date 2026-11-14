@@ -59,12 +59,12 @@ export function plural(count: number, forms: [string, string, string]): string {
   return forms[2];
 }
 
-/** Стаж по дате создания аккаунта: «меньше месяца», «3 месяца», «1 год 2 месяца». */
+/** Стаж по дате создания аккаунта: «до месяца», «3 месяца», «1 год 2 месяца». */
 export function internshipDuration(createdAt: string, now: Date = new Date()): string {
   const start = new Date(createdAt);
   let months = (now.getFullYear() - start.getFullYear()) * 12 + now.getMonth() - start.getMonth();
   if (now.getDate() < start.getDate()) months -= 1;
-  if (months < 1) return 'меньше месяца';
+  if (months < 1) return 'до месяца';
   const years = Math.floor(months / 12);
   const rest = months % 12;
   const parts: string[] = [];

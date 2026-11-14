@@ -121,8 +121,9 @@ describe('кабинет стажёра', () => {
     expect(screen.getByText('0/1 выполнено')).toBeInTheDocument();
     await userEvent.click(screen.getByText('Доступ к репозиторию'));
     expect(await screen.findByRole('heading', { name: 'Задачи' })).toBeInTheDocument();
-    expect(await screen.findByRole('region', { name: 'Общий чек-лист' })).toBeInTheDocument();
     expect(await screen.findByRole('region', { name: 'Профессиональный чек-лист' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^Общий\s*чек-лист$/ }));
+    expect(await screen.findByRole('region', { name: 'Общий чек-лист' })).toBeInTheDocument();
   });
 
   it('навигация: календарь, задачи, главная', async () => {

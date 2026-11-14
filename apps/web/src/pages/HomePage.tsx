@@ -6,7 +6,7 @@ import { ChecklistCard } from '../components/home/ChecklistCard';
 import { MiniCalendar } from '../components/home/MiniCalendar';
 import { TaskTable } from '../components/home/TaskTable';
 
-type Props = { user: User; checklists: ChecklistsState; onOpenTasks: () => void };
+type Props = { user: User; checklists: ChecklistsState; onOpenTasks: (type: 'common' | 'professional') => void };
 
 export function HomePage({ user, checklists, onOpenTasks }: Props) {
   const [selected, setSelected] = useState<'common' | 'professional'>('common');
@@ -35,7 +35,7 @@ export function HomePage({ user, checklists, onOpenTasks }: Props) {
             />
             <MiniCalendar />
           </div>
-          <TaskTable checklist={data[selected]} onOpen={onOpenTasks} />
+          <TaskTable checklist={data[selected]} onOpen={() => onOpenTasks(selected)} />
         </>
       )}
     </div>

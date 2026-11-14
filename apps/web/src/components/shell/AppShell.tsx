@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { User } from '@ai-buddy/client';
 import { useChecklists } from '../../hooks/useChecklists';
+import { useStageScale } from '../../hooks/useStageScale';
 import { overallProgress } from '../../lib/format';
 import { CalendarPage } from '../../pages/CalendarPage';
 import { FeedbackPage } from '../../pages/FeedbackPage';
@@ -19,7 +20,9 @@ export function AppShell({ user, token, onLogout }: Props) {
   const [view, setView] = useState<View>('home');
   const [profileOpen, setProfileOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [tasksChecklist, setTasksChecklist] = useState<'common' | 'professional'>('common');
   const checklists = useChecklists(token);
+  useStageScale();
 
   // Экран обратной связи появляется после завершения обоих чек-листов (один раз за сессию браузера)
   const { data } = checklists;
@@ -48,9 +51,9 @@ export function AppShell({ user, token, onLogout }: Props) {
     <div className="shell">
       <Sidebar view={view} onNavigate={setView} onLogout={onLogout} />
       <main className="workspace">
-        {view === 'home' && <HomePage user={user} checklists={checklists} onOpenTasks={() => setView('tasks')} />}
+        {view === 'home' && <HomePage user={user} checklists={checklists} onOpenTasks={type => { setTasksChecklist(type); setView('tasks'); }} />}
         {view === 'calendar' && <CalendarPage />}
-        {view === 'tasks' && <TasksPage token={token} checklists={checklists} />}
+        {view === 'tasks' && <TasksPage token={token} checklists={checklists} selected={tasksChecklist} onSelect={setTasksChecklist} />}
       </main>
       <SideTabs onProfile={() => setProfileOpen(true)} onNotes={() => setNotesOpen(true)} />
       <ProfileDrawer

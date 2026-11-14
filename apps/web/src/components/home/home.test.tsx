@@ -45,9 +45,9 @@ describe('ChecklistCard', () => {
 describe('MiniCalendar', () => {
   const today = new Date(2026, 10, 14);
 
-  it('подсвечивает сегодняшний день и показывает дату', () => {
+  it('подсвечивает сегодняшний день и показывает месяц и год', () => {
     render(<MiniCalendar today={today} />);
-    expect(screen.getByText('14.11.2026')).toBeInTheDocument();
+    expect(screen.getByText('Ноябрь 2026 г.')).toBeInTheDocument();
     expect(screen.getByText('14')).toHaveClass('is-today');
     expect(screen.getByText('30')).not.toHaveClass('is-today');
   });
@@ -57,7 +57,7 @@ describe('MiniCalendar', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Следующий месяц' }));
     expect(screen.getByText('Декабрь 2026 г.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Предыдущий месяц' }));
-    expect(screen.getByText('14.11.2026')).toBeInTheDocument();
+    expect(screen.getByText('Ноябрь 2026 г.')).toBeInTheDocument();
   });
 
   it('работает без переданной даты', () => {
