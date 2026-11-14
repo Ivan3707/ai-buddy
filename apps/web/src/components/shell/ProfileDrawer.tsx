@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { User } from '@ai-buddy/client';
 import { internshipDuration, type OverallProgress } from '../../lib/format';
 import { PROFILE_STUB } from '../../lib/stubs';
@@ -8,20 +9,26 @@ type Props = {
   progress: OverallProgress;
   open: boolean;
   onClose: () => void;
-  onLogout: () => void;
 };
 
 /** Личный кабинет: панель справа с данными о стажёре (макет personal.png). */
-export function ProfileDrawer({ user, progress, open, onClose, onLogout }: Props) {
+export function ProfileDrawer({ user, progress, open, onClose }: Props) {
+  // Крестика нет: панель закрывается по Esc и по клику на затемнённый фон
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
   const profile = PROFILE_STUB;
   return (
     <div className="drawer-backdrop" onClick={onClose}>
       <aside className="drawer" role="dialog" aria-label="Профиль" onClick={event => event.stopPropagation()}>
         <header className="drawer-header">
-          <span className="drawer-icon"><UserIcon width={26} height={26} /><small>Личный</small></span>
+          <span className="drawer-icon"><UserIcon width={26} height={26} /></span>
           <h2>Личный кабинет</h2>
-          <button className="drawer-close" aria-label="Закрыть профиль" onClick={onClose}>×</button>
         </header>
 
         <div className="drawer-body">
@@ -64,8 +71,6 @@ export function ProfileDrawer({ user, progress, open, onClose, onLogout }: Props
             </dl>
             <p className="about-org">{profile.department}<br />{profile.unit}</p>
           </section>
-
-          <p className="drawer-account">{user.email} · <button className="link" onClick={onLogout}>Выйти</button></p>
         </div>
       </aside>
     </div>

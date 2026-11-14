@@ -109,8 +109,7 @@
 .progress-hint,
 .progress-edges,
 .about-card dd,
-.about-org,
-.drawer-account {
+.about-org {
   font-family: var(--font-text);
   font-size: 16px;
   font-weight: var(--w-light);

@@ -31,7 +31,7 @@
 
 .page-heading { margin: 0 0 24px; font-size: 40px; font-weight: 800; }
 
-.side-tabs { position: fixed; top: 28px; right: 0; display: grid; gap: 16px; z-index: 5; }
+.side-tabs { position: fixed; top: 28px; right: 0; display: grid; justify-items: end; gap: 16px; z-index: 5; }
 .side-tab {
   display: grid;
   place-content: center;
@@ -60,7 +60,6 @@
 }
 .drawer-header h2 { margin: 0; font-size: 24px; font-weight: 800; }
 .drawer-icon { display: grid; justify-items: center; font-size: 10px; opacity: 0.85; }
-.drawer-close { position: absolute; top: 14px; right: 20px; color: #fff; font-size: 30px; line-height: 1; }
 .drawer-body {
   flex: 1;
   display: grid;
@@ -95,7 +94,6 @@
 .about-card dt { font-size: 15px; font-weight: 500; }
 .about-card dd { margin: 0; font-size: 13px; font-weight: 300; opacity: 0.85; }
 .about-org { margin: auto 0 0; padding-top: 24px; font-size: 13px; font-weight: 300; opacity: 0.45; }
-.drawer-account { margin: 4px 0 0; font-size: 13px; text-align: center; overflow-wrap: anywhere; }
 
 /* AI-помощник */
 .assistant { position: fixed; right: 28px; bottom: 28px; z-index: 6; display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }

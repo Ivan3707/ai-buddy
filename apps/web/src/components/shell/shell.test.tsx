@@ -33,12 +33,12 @@ describe('ProfileDrawer', () => {
   const progress = { completed: 1, total: 20, active: 2, percent: 5 };
 
   it('ничего не рисует, пока закрыт', () => {
-    render(<ProfileDrawer user={internUser} progress={progress} open={false} onClose={() => undefined} onLogout={() => undefined} />);
+    render(<ProfileDrawer user={internUser} progress={progress} open={false} onClose={() => undefined} />);
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('показывает личный кабинет: ФИО, стаж, прогресс и данные о себе', () => {
-    render(<ProfileDrawer user={internUser} progress={progress} open onClose={() => undefined} onLogout={() => undefined} />);
+    render(<ProfileDrawer user={internUser} progress={progress} open onClose={() => undefined} />);
     const dialog = screen.getByRole('dialog', { name: 'Профиль' });
     expect(within(dialog).getByRole('heading', { name: 'Личный кабинет' })).toBeInTheDocument();
     expect(within(dialog).getByRole('heading', { name: /Кузнецов/ })).toBeInTheDocument();
@@ -51,23 +51,24 @@ describe('ProfileDrawer', () => {
     expect(about).toHaveTextContent('Бэкенд-разработчик');
     expect(about).toHaveTextContent('Руководитель');
     expect(about).toHaveTextContent('Наставник');
-    expect(dialog).toHaveTextContent(internUser.email);
+    expect(dialog).not.toHaveTextContent(internUser.email);
   });
 
   it('показывает прочерк без профессии', () => {
-    render(<ProfileDrawer user={{ ...internUser, profession: null }} progress={progress} open onClose={() => undefined} onLogout={() => undefined} />);
+    render(<ProfileDrawer user={{ ...internUser, profession: null }} progress={progress} open onClose={() => undefined} />);
     expect(within(screen.getByRole('region', { name: 'О себе' })).getByText('—')).toBeInTheDocument();
   });
 
-  it('закрывается и позволяет выйти', async () => {
+  it('закрывается по Esc и по клику на фон, внутри панели не закрывается', async () => {
     const onClose = vi.fn();
-    const onLogout = vi.fn();
-    render(<ProfileDrawer user={internUser} progress={progress} open onClose={onClose} onLogout={onLogout} />);
+    const { container } = render(<ProfileDrawer user={internUser} progress={progress} open onClose={onClose} />);
     await userEvent.click(screen.getByRole('dialog'));
     expect(onClose).not.toHaveBeenCalled();
-    await userEvent.click(screen.getByRole('button', { name: 'Закрыть профиль' }));
+    await userEvent.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(1);
-    await userEvent.click(screen.getByRole('button', { name: 'Выйти' }));
-    expect(onLogout).toHaveBeenCalledTimes(1);
+    await userEvent.click(container.querySelector('.drawer-backdrop') as HTMLElement);
+    expect(onClose).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('button', { name: 'Закрыть профиль' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Личный')).not.toBeInTheDocument();
   });
 });

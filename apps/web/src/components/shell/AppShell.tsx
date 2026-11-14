@@ -11,10 +11,10 @@ import { ProfileDrawer } from './ProfileDrawer';
 import { SideTabs } from './SideTabs';
 import { Sidebar, type View } from './Sidebar';
 
-type Props = { user: User; token: string; onLogout: () => void };
+type Props = { user: User; token: string; onLogout?: () => void };
 
 /** Рабочее пространство стажёра: меню слева, страница в центре, вкладки справа. */
-export function AppShell({ user, token, onLogout }: Props) {
+export function AppShell({ user, token }: Props) {
   const [view, setView] = useState<View>('home');
   const [profileOpen, setProfileOpen] = useState(false);
   const checklists = useChecklists(token);
@@ -43,7 +43,6 @@ export function AppShell({ user, token, onLogout }: Props) {
         progress={overallProgress(checklists.data)}
         open={profileOpen}
         onClose={() => setProfileOpen(false)}
-        onLogout={onLogout}
       />
       <Assistant token={token} />
     </div>

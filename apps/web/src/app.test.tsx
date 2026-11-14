@@ -135,14 +135,15 @@ describe('кабинет стажёра', () => {
     expect(screen.getByRole('heading', { name: /Привет/ })).toBeInTheDocument();
   });
 
-  it('профиль открывается и позволяет выйти', async () => {
+  it('профиль открывается и закрывается по клику на фон', async () => {
     await openShell();
     await userEvent.click(screen.getByRole('button', { name: 'Профиль' }));
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('25 %')).toBeInTheDocument();
     expect(within(dialog).getByText('1/4')).toBeInTheDocument();
-    await userEvent.click(within(dialog).getByRole('button', { name: 'Выйти' }));
-    expect(await screen.findByRole('heading', { name: 'Вход' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Выйти' })).not.toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('обратная связь: отправка и сообщение об успехе', async () => {
