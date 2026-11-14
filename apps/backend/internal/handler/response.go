@@ -87,7 +87,8 @@ func writeServiceError(w http.ResponseWriter, err error) {
 		errors.Is(err, service.ErrReviewNotPending),
 		errors.Is(err, service.ErrSubmissionAlreadyReviewed),
 		errors.Is(err, service.ErrProgressIncomplete),
-		errors.Is(err, service.ErrProfessionNotSet):
+		errors.Is(err, service.ErrProfessionNotSet),
+		errors.Is(err, service.ErrOutdatedProfessionTrack):
 		send(w, http.StatusConflict, map[string]string{
 			"error": err.Error(),
 		})

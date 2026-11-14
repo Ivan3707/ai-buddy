@@ -45,6 +45,47 @@
         }
       }
     },
+    "/hint": {
+      "post": {
+        "operationId": "hint",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["title", "estimated_minutes"],
+                "properties": {
+                  "title": {"type": "string", "minLength": 1, "maxLength": 255},
+                  "description": {"type": "string", "maxLength": 4000},
+                  "expected_result": {"type": "string", "maxLength": 4000},
+                  "estimated_minutes": {"type": "integer", "minimum": 1}
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Hint generated",
+            "content": {"application/json": {"schema": {
+              "type": "object",
+              "required": ["hint"],
+              "properties": {"hint": {"type": "string", "minLength": 1}}
+            }}}
+          },
+          "422": {
+            "description": "Validation error",
+            "content": {"application/json": {"schema": {
+              "type": "object",
+              "required": ["detail"],
+              "properties": {"detail": {"type": "array", "items": {"type": "object"}}}
+            }}}
+          }
+        }
+      }
+    },
     "/chat": {
       "post": {
         "operationId": "chat",

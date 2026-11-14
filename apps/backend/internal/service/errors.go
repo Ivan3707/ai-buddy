@@ -19,4 +19,5 @@ var (
 	ErrSubmissionAlreadyReviewed = errors.New("checklist item submission was already reviewed")
 	ErrProfessionNotSet          = errors.New("user profession is not set")
 	ErrProgressIncomplete        = errors.New("user progress is incomplete")
+	ErrOutdatedProfessionTrack   = errors.New("professional checklist no longer matches user profession")
 )

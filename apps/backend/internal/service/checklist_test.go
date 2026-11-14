@@ -23,6 +23,77 @@ type checklistTestFixture struct {
 	profItems      []model.ChecklistItem
 }
 
+func TestBuildChecklistWithProgressCountsOnlyConfirmedWork(t *testing.T) {
+	checklistID, stageID := uuid.New(), uuid.New()
+	ordinaryID, reviewedID := uuid.New(), uuid.New()
+	items := []model.ChecklistItem{
+		{ID: ordinaryID, ChecklistID: checklistID, StageID: stageID},
+		{ID: reviewedID, ChecklistID: checklistID, StageID: stageID, RequiresReview: true},
+	}
+	stage := model.ChecklistStage{ID: stageID, ChecklistID: checklistID}
+	for _, tc := range []struct {
+		name     string
+		ordinary model.ChecklistStatus
+		reviewed model.ChecklistStatus
+		want     int
+	}{
+		{"pending buddy review", model.StatusActive, model.StatusCompleted, 0},
+		{"buddy approved", model.StatusActive, model.StatusVerified, 1},
+		{"ordinary complete while review pending", model.StatusCompleted, model.StatusCompleted, 1},
+		{"both confirmed", model.StatusCompleted, model.StatusVerified, 2},
+		{"buddy rejected", model.StatusCompleted, model.StatusActive, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			progress := map[uuid.UUID]model.UserChecklistProgress{
+				ordinaryID: {ChecklistItemID: ordinaryID, Status: tc.ordinary},
+				reviewedID: {ChecklistItemID: reviewedID, Status: tc.reviewed},
+			}
+			got, err := buildChecklistWithProgress(model.Checklist{ID: checklistID}, []model.ChecklistStage{stage}, items, progress)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.CompletedItems != tc.want || got.CompletionPercent != float64(tc.want)*50 {
+				t.Fatalf("confirmed progress: %d items, %.1f%%; want %d items, %.1f%%", got.CompletedItems, got.CompletionPercent, tc.want, float64(tc.want)*50)
+			}
+			if got.Items[1].Status != tc.reviewed {
+				t.Fatalf("review status changed: %s", got.Items[1].Status)
+			}
+		})
+	}
+}
+
+func TestChecklistProgressWaitsForBuddyApproval(t *testing.T) {
+	db, ctx := openChecklistTestDB(t)
+	fixture := createChecklistTestFixture(t, db, ctx, model.ProfessionBackend, 1, 1)
+	user := createChecklistTestIntern(t, db, ctx, model.ProfessionBackend)
+	itemID := fixture.profItems[0].ID
+	setRequiresReview(t, db, ctx, itemID)
+	progressService := NewProgressService(db)
+	text := "finished by intern"
+	submission, err := progressService.SubmitItem(ctx, user.ID, itemID, &text, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	checklists := NewChecklistService(db)
+	pending, err := checklists.GetByUserID(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pending.Professional.CompletedItems != 0 || pending.Professional.CompletionPercent != 0 || pending.Professional.Items[0].Status != model.StatusCompleted {
+		t.Fatalf("pending review counted as confirmed: %+v", pending.Professional)
+	}
+	if err := progressService.ReviewSubmission(ctx, *user.BuddyID, submission.ID, true, nil); err != nil {
+		t.Fatal(err)
+	}
+	approved, err := checklists.GetByUserID(ctx, user.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if approved.Professional.CompletedItems != 1 || approved.Professional.CompletionPercent != 100 || approved.Professional.Items[0].Status != model.StatusVerified {
+		t.Fatalf("approved review not counted: %+v", approved.Professional)
+	}
+}
+
 func openChecklistTestDB(t *testing.T) (*sql.DB, context.Context) {
 	t.Helper()
 

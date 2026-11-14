@@ -229,8 +229,8 @@ func buildChecklistWithProgress(
 			CompletedAt: itemProgress.CompletedAt,
 		}
 
-		if itemProgress.Status == model.StatusCompleted ||
-			itemProgress.Status == model.StatusVerified {
+		if itemProgress.Status == model.StatusVerified ||
+			(!item.RequiresReview && itemProgress.Status == model.StatusCompleted) {
 			result.CompletedItems++
 		}
 

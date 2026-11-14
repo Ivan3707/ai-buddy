@@ -30,14 +30,38 @@ class ChatResponse(BaseModel):
     sources: list[Source]
     mode: str = "mock"
 
+class HintRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str = Field(min_length=1, max_length=255)
+    description: str = Field(default="", max_length=4000)
+    expected_result: str = Field(default="", max_length=4000)
+    estimated_minutes: int = Field(gt=0)
+
+class HintResponse(BaseModel):
+    hint: str
+
+def find_document(text: str):
+    query = text.casefold()
+    return next((item for item in KB if any(word in query for word in item["keywords"])), None)
+
 @app.get("/health")
 def health():
     return {"status": "ok", "mode": "mock"}
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(body: ChatRequest):
-    query = body.message.casefold()
-    doc = next((item for item in KB if any(word in query for word in item["keywords"])), None)
+    doc = find_document(body.message)
     if doc is None:
         return ChatResponse(answer="В демо-базе нет ответа. Попробуйте спросить про отпуск или доступ к сервисам.", sources=[])
     return ChatResponse(answer=doc["text"], sources=[Source(**{k: doc[k] for k in ("id", "title", "url")})])
+
+@app.post("/hint", response_model=HintResponse)
+def hint(body: HintRequest):
+    doc = find_document(" ".join((body.title, body.description, body.expected_result)))
+    if doc is not None:
+        return HintResponse(hint=doc["text"])
+    expected = body.expected_result.strip()
+    guidance = f"Начните с небольшого шага по задаче «{body.title.strip()}»."
+    if expected:
+        guidance += f" Сверьте результат с ожидаемым: {expected}."
+    return HintResponse(hint=guidance)
