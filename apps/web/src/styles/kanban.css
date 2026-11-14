@@ -1,0 +1,45 @@
+/* Перетаскивание карточек на доске задач */
+.kanban-slot { display: contents; }
+.kanban-card-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.kanban-handle {
+  display: inline-grid;
+  place-content: center;
+  width: 30px;
+  height: 30px;
+  margin: -6px -8px 0 0;
+  border-radius: 10px;
+  color: #252525;
+  font-size: 20px;
+  line-height: 1;
+  opacity: 0.65;
+  cursor: grab;
+  touch-action: none; /* пальцем доску листают, а за ручку тянут карточку */
+  user-select: none;
+}
+.kanban-handle:hover { opacity: 1; background: #00000014; }
+.kanban-card.is-draggable { cursor: grab; user-select: none; }
+.kanban-card.is-draggable:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+.kanban-card.is-draggable form, .kanban-card.is-draggable .history { cursor: auto; user-select: text; }
+.kanban-card.is-dragging {
+  position: fixed;
+  z-index: 40;
+  margin: 0;
+  box-sizing: border-box;
+  pointer-events: none;
+  cursor: grabbing;
+  box-shadow: 0 18px 40px #00000055;
+  transform: rotate(2deg);
+}
+.kanban-card.is-picked { box-shadow: 0 0 0 3px var(--ink); }
+.kanban-card.is-flash { animation: kanban-flash 0.5s ease-in-out 3; }
+@keyframes kanban-flash { 50% { box-shadow: 0 0 0 5px var(--pink); } }
+.kanban-card-ghost { border: 2px dashed #25252570; border-radius: 24px; background: #2525250f; }
+
+/* пока тянут карточку: допустимая колонка подсвечена, остальные приглушены */
+.kanban-columns.is-dragging .kanban-column:not(.is-completed) { opacity: 0.55; transition: opacity 0.15s; }
+.kanban-columns.is-dragging .kanban-column.is-completed { outline: 3px dashed var(--pink); outline-offset: -3px; }
+.kanban-column.is-over { background: var(--pink-soft); outline-style: solid !important; }
+.kanban-notice { margin: 0 0 12px; padding: 10px 16px; border-radius: 16px; background: var(--pink-soft); color: #252525; font-size: 15px; }
+
+/* на телефоне колонки «прилипают» при прокрутке; во время переноса это мешает автопрокрутке у края */
+.kanban-columns.is-dragging { scroll-snap-type: none !important; }

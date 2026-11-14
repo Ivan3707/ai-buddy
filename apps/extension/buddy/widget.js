@@ -24,7 +24,7 @@
     // on a phone the big mode takes the whole screen
     full: () => (innerWidth < 600 ? {w: innerWidth - 16, h: innerHeight - 16} : {w: Math.min(980, innerWidth - 32), h: Math.min(740, innerHeight - 48)}),
   };
-  const KEYS = {pos: 'buddyPos', mode: 'buddyChatMode', sizes: 'buddyChatSizes', greeting: 'buddyGreeting', page: 'buddyPageMode', tips: 'buddyTips'};
+  const KEYS = {pos: 'buddyPos', mode: 'buddyChatMode', sizes: 'buddyChatSizes', greeting: 'buddyGreeting', page: 'buddyPageMode'};
 
   function mount(env) {
     const opt = {login: true, logout: false, pageContext: true, hide: true, requests: true, embedded: false, ...(env.features || {})};
@@ -129,7 +129,6 @@
             <label class="page">Страница:
               <select class="page-mode" title="Передавать ли боту заголовок, адрес и выделенный текст этой страницы">
                 <option value="auto">определять сам</option><option value="always">всегда учитывать</option><option value="never">не учитывать</option></select></label>
-            <label class="tips" title="Подсказки-вопросы в пустом поле ввода"><input type="checkbox" class="tips-on" checked> подсказки</label>
             <button type="button" class="clear" title="Очистить чат и начать новый диалог">Очистить</button>
           </div>
           <form class="composer"><textarea rows="1" maxlength="2000" placeholder="Спроси Бади…"></textarea>
@@ -141,7 +140,6 @@
     const $ = selector => root.querySelector(selector);
     const char = $('.char'), body = $('.body'), bubble = $('.bubble'), chat = $('.chat'), log = $('.log');
     const input = $('.composer textarea'), sendButton = $('.send'), loginForm = $('.login');
-    const tipsToggle = $('.tips-on');
     const chip = $('.chip'), pageMode = $('.page-mode'), reader = $('.reader'), readerBody = $('.reader-body');
     const grip = $('.grip'), modeButton = $('.mode'), openFull = $('.open-full');
     const scrim = $('.scrim'), tabsBar = $('.tabs'), notesPanel = $('.notes'), reqsPanel = $('.reqs'), askPanel = $('.ask'), calPanel = $('.cal');
@@ -155,7 +153,7 @@
     let anchor = {right: true, below: false};
     let busy = false, signedIn = null, user = null, selection = '', abortCurrent = null;
     let tab = 'chat', readerOpen = false; // tabs exist only in the full mode
-    let suggestions = [], tip = '', tipsOn = true; // ready-made questions shown as the placeholder of the empty input
+    let suggestions = [], tip = ''; // ready-made questions shown as the placeholder of the empty input
 
     const mountHost = () => { if (!host.isConnected) (document.body || document.documentElement).append(host); };
 
@@ -229,8 +227,7 @@
     }
     modeButton.onclick = () => setMode(mode === 'full' ? 'compact' : 'full');
 
-    Promise.all([store.get(KEYS.pos), store.get(KEYS.mode), store.get(KEYS.sizes), store.get(KEYS.page), store.get(KEYS.tips)]).then(([p, m, s, pm, tp]) => {
-      if (tp === false) { tipsOn = false; tipsToggle.checked = false; renderTip(); }
+    Promise.all([store.get(KEYS.pos), store.get(KEYS.mode), store.get(KEYS.sizes), store.get(KEYS.page)]).then(([p, m, s, pm]) => {
       if (['auto', 'always', 'never'].includes(pm)) pageMode.value = pm;
       const at = fromStored(p);
       if (at) pos = at;
@@ -361,7 +358,7 @@
         }
       }
     }
-    function closeChat() { if (opt.embedded) return; chat.hidden = true; char.classList.remove('open'); layout(); setTimeout(showNext, 400); }
+    function closeChat() { if (opt.embedded) return; input.value = ''; rotateTip(); chat.hidden = true; char.classList.remove('open'); layout(); setTimeout(showNext, 400); }
     scrim.onclick = closeChat;
 
     // One place decides what the window shows: login (not signed in), or - signed in - the chat / reader / notes / requests.
@@ -663,12 +660,11 @@
     // Enter on the empty field answers it from the knowledge base WITHOUT the model (an excerpt and a link); Tab pastes it
     // into the field. Anything the user writes afterwards goes to the model, with the hint in the dialog history.
     function renderTip() {
-      const on = tipsOn && tip;
-      input.placeholder = on ? `Например: ${tip}` : 'Спроси Бади…';
-      input.title = on ? 'Enter на пустом поле: подсказка из базы знаний со ссылкой. Tab: вставить этот вопрос' : '';
+      input.placeholder = tip || 'Спроси Бади…';
+      input.title = tip ? 'Enter на пустом поле: подсказка из базы знаний со ссылкой. Tab: вставить этот вопрос' : '';
     }
     function rotateTip() {
-      if (tipsOn && suggestions.length) {
+      if (suggestions.length) {
         let next = tip;
         for (let i = 0; i < 5 && next === tip && suggestions.length > 1; i += 1) next = suggestions[Math.floor(Math.random() * suggestions.length)];
         tip = next === tip ? suggestions[0] : next;
@@ -682,7 +678,6 @@
     }
     const tipTimer = setInterval(() => { if (!input.value && !chat.hidden) rotateTip(); }, 9000);
     cleanup.push(() => clearInterval(tipTimer));
-    tipsToggle.onchange = () => { tipsOn = tipsToggle.checked; void store.set(KEYS.tips, tipsOn); rotateTip(); };
     const isSuggestion = text => suggestions.some(q => q.toLowerCase() === text.toLowerCase());
     async function askHint(text) {
       if (readerOpen) closeDoc();
@@ -833,7 +828,7 @@
     $('.composer').addEventListener('submit', event => {
       event.preventDefault();
       let text = input.value.trim();
-      if (!text && tipsOn && tip) text = tip; // Enter on the empty field takes the suggestion shown in it
+      if (!text && tip) text = tip; // Enter on the empty field takes the suggestion shown in it
       if (!text || (busy && queued)) return;
       input.value = '';
       const first = !log.querySelector('.msg.user');
@@ -841,7 +836,7 @@
       rotateTip();
     });
     input.addEventListener('keydown', event => {
-      if (event.key === 'Tab' && !event.shiftKey && !input.value && tipsOn && tip) { event.preventDefault(); input.value = tip; return; }
+      if (event.key === 'Tab' && !event.shiftKey && !input.value && tip) { event.preventDefault(); input.value = tip; return; }
       if (event.key === 'Enter' && !event.shiftKey && !event.isComposing) { event.preventDefault(); $('.composer').requestSubmit(); }
     });
     $('.close').onclick = closeChat;
@@ -1070,7 +1065,6 @@
     .page-row{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
     .page{display:flex;gap:6px;align-items:center;font-size:11px;color:var(--muted);margin:0}
     .page select{font:inherit;font-size:11px;padding:3px 8px;border:1px solid var(--grey);border-radius:999px;background:#fff;color:var(--ink)}
-    .tips{display:flex;gap:4px;align-items:center;font-size:11px;color:var(--muted)}
     .clear{font-size:11px;padding:3px 14px;color:var(--muted);margin-left:auto;background:var(--grey-soft)}
     .chip{display:flex;align-items:center;gap:6px;background:var(--pink-soft);border-radius:999px;padding:4px 12px;font-size:11px;margin-bottom:6px}
     .chip-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.chip-x{background:transparent;padding:0 4px}
