@@ -93,12 +93,12 @@ func (s *ChecklistService) GetByUserID(
 		return nil, fmt.Errorf("get professional checklist stages: %w", err)
 	}
 
-	commonItems, err := checklistRepo.GetItems(ctx, common.ID)
+	commonItems, err := checklistRepo.GetItemsForUser(ctx, common.ID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("get common checklist items: %w", err)
 	}
 
-	professionalItems, err := checklistRepo.GetItems(ctx, professional.ID)
+	professionalItems, err := checklistRepo.GetItemsForUser(ctx, professional.ID, userID)
 	if err != nil {
 		return nil, fmt.Errorf("get professional checklist items: %w", err)
 	}
@@ -126,7 +126,11 @@ func (s *ChecklistService) GetByUserID(
 
 	for _, itemProgress := range progress {
 		expectedChecklistID, ok := expectedItems[itemProgress.ChecklistItemID]
-		if !ok || itemProgress.ChecklistID != expectedChecklistID {
+		if !ok {
+			// HR can change profession; retain the previous track as history.
+			continue
+		}
+		if itemProgress.ChecklistID != expectedChecklistID {
 			return nil, fmt.Errorf(
 				"%w: unexpected progress record for item %s",
 				ErrProgressIncomplete,

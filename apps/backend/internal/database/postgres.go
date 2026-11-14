@@ -4,11 +4,26 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"strconv"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 func OpenPostgres() (*sql.DB, error) {
+	config, err := postgresConfig()
+	if err != nil {
+		return nil, err
+	}
+	db := stdlib.OpenDB(*config)
+	if err := db.Ping(); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("ping PostgreSQL: %w", err)
+	}
+	return db, nil
+}
+
+func postgresConfig() (*pgx.ConnConfig, error) {
 	host := getEnv("DB_HOST", "localhost")
 	port := getEnv("DB_PORT", "5432")
 	user := getEnv("DB_USER", "app")
@@ -16,22 +31,24 @@ func OpenPostgres() (*sql.DB, error) {
 	dbname := getEnv("DB_NAME", "app")
 	sslmode := getEnv("DB_SSLMODE", "disable")
 
-	dsn := fmt.Sprintf(
-		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
-		host, port, user, password, dbname, sslmode,
-	)
-
-	db, err := sql.Open("pgx", dsn)
+	portNumber, err := strconv.ParseUint(port, 10, 16)
 	if err != nil {
-		return nil, fmt.Errorf("open PostgreSQL connection: %w", err)
+		return nil, fmt.Errorf("invalid DB_PORT: %w", err)
 	}
-
-	if err := db.Ping(); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("ping PostgreSQL: %w", err)
+	config, err := pgx.ParseConfig("sslmode=" + sslmode)
+	if err != nil {
+		return nil, fmt.Errorf("invalid DB_SSLMODE: %w", err)
 	}
-
-	return db, nil
+	config.Host = host
+	config.Port = uint16(portNumber)
+	config.User = user
+	config.Password = password
+	config.Database = dbname
+	for _, fallback := range config.Fallbacks {
+		fallback.Host = host
+		fallback.Port = uint16(portNumber)
+	}
+	return config, nil
 }
 
 func getEnv(key, fallback string) string {

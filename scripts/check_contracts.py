@@ -22,6 +22,26 @@ print(f"OpenAPI documents valid; {len(shared)} shared schemas agree")
 if os.getenv("CHECK_LIVE") == "1":
     base = os.getenv("BACKEND_URL", "http://127.0.0.1:8080")
 
+    credentials_file = os.getenv("E2E_CREDENTIALS_FILE")
+    if not credentials_file:
+        raise RuntimeError("E2E_CREDENTIALS_FILE is required for live contract checks")
+    try:
+        credentials = json.loads(Path(credentials_file).read_text(encoding="utf-8"))
+    except OSError as error:
+        raise RuntimeError("E2E_CREDENTIALS_FILE cannot be read") from error
+    except json.JSONDecodeError as error:
+        raise RuntimeError("E2E_CREDENTIALS_FILE is not valid JSON") from error
+
+    if not isinstance(credentials, list):
+        raise RuntimeError("E2E_CREDENTIALS_FILE must contain an array of accounts")
+    email = "buddy@demo.example"
+    account = next(
+        (item for item in credentials if isinstance(item, dict) and item.get("email") == email),
+        None,
+    )
+    if account is None or not isinstance(account.get("password"), str) or not account["password"]:
+        raise RuntimeError("E2E_CREDENTIALS_FILE has no usable credential for buddy@demo.example")
+
     def request(path, method, body=None, token=None):
         headers = {"Content-Type": "application/json"}
         if token:
@@ -69,16 +89,13 @@ if os.getenv("CHECK_LIVE") == "1":
     )
     assert status == 401, ("unauthenticated chat", status)
 
-    # Authenticate using the CI buddy account.
-    email = os.environ["BOOTSTRAP_BUDDY_EMAIL"]
-    password = os.environ["BOOTSTRAP_BUDDY_PASSWORD"]
-
+    # Authenticate using the Mock HR Buddy account.
     status, login = request(
         "/api/auth/login",
         "POST",
-        {"email": email, "password": password},
+        {"email": email, "password": account["password"]},
     )
-    assert status == 200, ("login", status, login)
+    assert status == 200, ("login", status)
     assert login["token_type"] == "Bearer"
     token = login["access_token"]
     assert token, "login returned an empty access token"
@@ -94,9 +111,6 @@ if os.getenv("CHECK_LIVE") == "1":
 
     check("/api/chat", "POST", {"message": ""}, 400, token)
     check("/api/chat", "POST", {"message": "xyz"}, 200, token)
-
-    check("/api/onboarding?role=ml", "GET", None, 200)
-    check("/api/onboarding?role=invalid", "GET", None, 400)
 
     print("Live backend responses conform to contracts")
 

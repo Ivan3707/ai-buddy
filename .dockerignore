@@ -3,4 +3,11 @@
 **/dist
 **/.venv
 .env
+.env.*
+*credentials*.json
+**/credentials/
+**/.cache
+/load-results
+/backups
 **/__pycache__
+secrets/

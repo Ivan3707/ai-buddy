@@ -36,6 +36,10 @@ func NewJWTService(secret string, ttl time.Duration) (*JWTService, error) {
 }
 
 func (s *JWTService) GenerateAccessToken(userID uuid.UUID) (string, error) {
+	return s.GenerateSessionAccessToken(userID, uuid.Nil)
+}
+
+func (s *JWTService) GenerateSessionAccessToken(userID, sessionID uuid.UUID) (string, error) {
 	now := time.Now()
 
 	claims := jwt.RegisteredClaims{
@@ -43,6 +47,9 @@ func (s *JWTService) GenerateAccessToken(userID uuid.UUID) (string, error) {
 		Subject:   userID.String(),
 		IssuedAt:  jwt.NewNumericDate(now),
 		ExpiresAt: jwt.NewNumericDate(now.Add(s.ttl)),
+	}
+	if sessionID != uuid.Nil {
+		claims.ID = sessionID.String()
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
@@ -56,6 +63,11 @@ func (s *JWTService) GenerateAccessToken(userID uuid.UUID) (string, error) {
 }
 
 func (s *JWTService) ValidateAccessToken(tokenString string) (uuid.UUID, error) {
+	userID, _, err := s.ValidateSessionAccessToken(tokenString)
+	return userID, err
+}
+
+func (s *JWTService) ValidateSessionAccessToken(tokenString string) (uuid.UUID, uuid.UUID, error) {
 	claims := &jwt.RegisteredClaims{}
 
 	token, err := jwt.ParseWithClaims(
@@ -72,15 +84,21 @@ func (s *JWTService) ValidateAccessToken(tokenString string) (uuid.UUID, error) 
 		jwt.WithExpirationRequired(),
 	)
 	if err != nil || !token.Valid {
-		return uuid.Nil, ErrInvalidToken
+		return uuid.Nil, uuid.Nil, ErrInvalidToken
 	}
 
 	userID, err := uuid.Parse(claims.Subject)
 	if err != nil || userID == uuid.Nil {
-		return uuid.Nil, ErrInvalidToken
+		return uuid.Nil, uuid.Nil, ErrInvalidToken
 	}
-
-	return userID, nil
+	if claims.ID == "" {
+		return userID, uuid.Nil, nil
+	}
+	sessionID, err := uuid.Parse(claims.ID)
+	if err != nil || sessionID == uuid.Nil {
+		return uuid.Nil, uuid.Nil, ErrInvalidToken
+	}
+	return userID, sessionID, nil
 }
 
 func (s *JWTService) TTL() time.Duration {

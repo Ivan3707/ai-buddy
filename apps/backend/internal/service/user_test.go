@@ -36,6 +36,7 @@ func TestUserService_CreateIntern(t *testing.T) {
 	if err := db.PingContext(ctx); err != nil {
 		t.Fatalf("ping database: %v", err)
 	}
+	requireIsolatedTestDatabase(t, db, ctx)
 
 	// Подготавливаем тестовые чек-листы.
 	profession := model.ProfessionBackend
@@ -168,6 +169,7 @@ func TestUserService_CreateIntern_Rollback(t *testing.T) {
 	if err := db.PingContext(ctx); err != nil {
 		t.Fatalf("ping database: %v", err)
 	}
+	requireIsolatedTestDatabase(t, db, ctx)
 
 	// Создаём только общий чек-лист.
 	commonID := uuid.New()

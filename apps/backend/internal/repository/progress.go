@@ -29,13 +29,15 @@ func (r *ProgressRepository) CreateMany(
 			checklist_id,
 			checklist_item_id,
 			status,
-			completed_at
+			completed_at, position, activated_at
 		)
-		VALUES ($1, $2, $3, $4, $5)
+		SELECT $1, $2, $3, $4::varchar(20), $5, COALESCE(NULLIF($6,0),i.position),
+			CASE WHEN $4::varchar(20) = 'active' THEN now() ELSE NULL END
+		FROM checklist_items i WHERE i.id=$3
 	`
 
 	for _, item := range progress {
-		_, err := r.db.ExecContext(
+		result, err := r.db.ExecContext(
 			ctx,
 			query,
 			item.UserID,
@@ -43,9 +45,17 @@ func (r *ProgressRepository) CreateMany(
 			item.ChecklistItemID,
 			string(item.Status),
 			item.CompletedAt,
+			item.Position,
 		)
 		if err != nil {
 			return fmt.Errorf("create progress for item %s: %w", item.ChecklistItemID, err)
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected != 1 {
+			return ErrNotFound
 		}
 	}
 
@@ -64,7 +74,8 @@ func (r *ProgressRepository) GetByUserID(
 			p.checklist_item_id,
 			p.status,
 			p.completed_at,
-			p.created_at
+			p.created_at,
+			p.position
 		FROM user_checklist_progress AS p
 		JOIN checklist_items AS ci
 			ON ci.id = p.checklist_item_id
@@ -72,7 +83,7 @@ func (r *ProgressRepository) GetByUserID(
 		JOIN checklists AS c
 			ON c.id = p.checklist_id
 		WHERE p.user_id = $1
-		ORDER BY c.type, ci.position
+		ORDER BY c.type, p.position
 	`
 
 	rows, err := r.db.QueryContext(ctx, query, userID)
@@ -95,6 +106,7 @@ func (r *ProgressRepository) GetByUserID(
 			&item.Status,
 			&completedAt,
 			&item.CreatedAt,
+			&item.Position,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan progress: %w", err)
@@ -260,7 +272,9 @@ func (r *ProgressRepository) UpdateStatus(
 ) error {
 	query := `
 		UPDATE user_checklist_progress
-		SET status = $1, completed_at = $2
+		SET status = $1::varchar(20), completed_at = $2,
+		activated_at = CASE WHEN $1::varchar(20) = 'active' AND status <> 'active' THEN now()
+		WHEN $1::varchar(20) <> 'active' THEN NULL ELSE activated_at END
 		WHERE user_id = $3 AND checklist_item_id = $4
 	`
 

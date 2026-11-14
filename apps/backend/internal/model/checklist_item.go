@@ -15,6 +15,7 @@ type ChecklistItem struct {
 	ExpectedResult   *string
 	RequiresReview   bool
 	EstimatedMinutes *int
+	DueAt            *time.Time
 	Position         int
 	CreatedAt        time.Time
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/model"
@@ -18,6 +20,21 @@ func NewUserService(db *sql.DB) *UserService {
 	return &UserService{db: db}
 }
 
+func (s *UserService) ListAssignedInterns(ctx context.Context, actorID uuid.UUID, role model.UserRole) ([]model.User, error) {
+	if role != model.RoleBuddy && role != model.RoleTeamlead {
+		return nil, ErrUserNotStaff
+	}
+	return repository.NewUserRepository(s.db).ListAssignedInterns(ctx, actorID, role)
+}
+
+func (s *UserService) ListTeamleads(ctx context.Context) ([]model.User, error) {
+	return repository.NewUserRepository(s.db).ListByRole(ctx, model.RoleTeamlead)
+}
+
+func (s *UserService) ListBuddies(ctx context.Context) ([]model.User, error) {
+	return repository.NewUserRepository(s.db).ListByRole(ctx, model.RoleBuddy)
+}
+
 func (s *UserService) CreateIntern(
 	ctx context.Context,
 	email string,
@@ -25,6 +42,30 @@ func (s *UserService) CreateIntern(
 	profession model.Profession,
 	buddyID uuid.UUID,
 ) (*model.User, error) {
+	return s.createIntern(ctx, email, passwordHash, profession, buddyID, uuid.Nil, "", "", "", "", "")
+}
+
+func (s *UserService) CreateInternWithProfile(ctx context.Context, email, passwordHash string, profession model.Profession, buddyID uuid.UUID, firstName, lastName, telegram, department, team string) (*model.User, error) {
+	if strings.TrimSpace(firstName) == "" || strings.TrimSpace(lastName) == "" || strings.TrimSpace(department) == "" || strings.TrimSpace(team) == "" {
+		return nil, ErrInvalidProfile
+	}
+	return s.createIntern(ctx, email, passwordHash, profession, buddyID, uuid.Nil, firstName, lastName, telegram, department, team)
+}
+
+func (s *UserService) CreateInternWithAssignments(ctx context.Context, email, passwordHash string, profession model.Profession, buddyID, teamleadID uuid.UUID, birthDate, employedSince time.Time, firstName, lastName, telegram, department, team string) (*model.User, error) {
+	if strings.TrimSpace(firstName) == "" || strings.TrimSpace(lastName) == "" || strings.TrimSpace(department) == "" || strings.TrimSpace(team) == "" {
+		return nil, ErrInvalidProfile
+	}
+	if teamleadID == uuid.Nil || birthDate.IsZero() || employedSince.IsZero() || birthDate.After(time.Now().AddDate(-16, 0, 0)) || employedSince.After(time.Now()) || employedSince.Before(birthDate) {
+		return nil, ErrInvalidProfile
+	}
+	return s.createInternWithDates(ctx, email, passwordHash, profession, buddyID, teamleadID, birthDate, employedSince, firstName, lastName, telegram, department, team)
+}
+
+func (s *UserService) createIntern(ctx context.Context, email, passwordHash string, profession model.Profession, buddyID, teamleadID uuid.UUID, firstName, lastName, telegram, department, team string) (*model.User, error) {
+	return s.createInternWithDates(ctx, email, passwordHash, profession, buddyID, teamleadID, time.Time{}, time.Time{}, firstName, lastName, telegram, department, team)
+}
+func (s *UserService) createInternWithDates(ctx context.Context, email, passwordHash string, profession model.Profession, buddyID, teamleadID uuid.UUID, birthDate, employedSince time.Time, firstName, lastName, telegram, department, team string) (*model.User, error) {
 	switch profession {
 	case model.ProfessionBackend,
 		model.ProfessionFrontend,
@@ -52,6 +93,15 @@ func (s *UserService) CreateIntern(
 		if buddy.Role != model.RoleBuddy {
 			return ErrUserNotBuddy
 		}
+		if teamleadID != uuid.Nil {
+			lead, err := userRepo.GetByID(ctx, teamleadID)
+			if err != nil {
+				return fmt.Errorf("get teamlead: %w", err)
+			}
+			if lead.Role != model.RoleTeamlead {
+				return ErrUserNotTeamlead
+			}
+		}
 
 		user := &model.User{
 			Email:        email,
@@ -59,6 +109,22 @@ func (s *UserService) CreateIntern(
 			Role:         model.RoleIntern,
 			Profession:   &profession,
 			BuddyID:      &buddyID,
+		}
+		if teamleadID != uuid.Nil {
+			user.TeamleadID = &teamleadID
+		}
+		if !birthDate.IsZero() {
+			user.BirthDate = &birthDate
+		}
+		if !employedSince.IsZero() {
+			user.EmployedSince = &employedSince
+		}
+		if firstName != "" {
+			user.FirstName = &firstName
+			user.LastName = &lastName
+			user.TelegramUsername = &telegram
+			user.Department = &department
+			user.Team = &team
 		}
 
 		if err := userRepo.Create(ctx, user); err != nil {
@@ -104,6 +170,7 @@ func (s *UserService) CreateIntern(
 					ChecklistID:     checklist.ID,
 					ChecklistItemID: item.ID,
 					Status:          status,
+					Position:        i + 1,
 				})
 			}
 		}

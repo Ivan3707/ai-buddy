@@ -35,18 +35,7 @@ func TestSubmissionRepository(t *testing.T) {
 	if err := db.PingContext(ctx); err != nil {
 		t.Fatalf("ping database: %v", err)
 	}
-
-	var migrationVersion int64
-	if err := db.QueryRowContext(ctx, `
-		SELECT COALESCE(MAX(version_id), 0)
-		FROM goose_db_version
-		WHERE is_applied
-	`).Scan(&migrationVersion); err != nil {
-		t.Fatalf("get Goose version: %v", err)
-	}
-	if migrationVersion != 3 {
-		t.Fatalf("expected Goose version 3, got %d", migrationVersion)
-	}
+	requireIsolatedTestDatabase(t, db, ctx)
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -115,11 +104,11 @@ func TestSubmissionRepository(t *testing.T) {
 
 	_, err = tx.ExecContext(ctx, `
 		INSERT INTO user_checklist_progress (
-			id, user_id, checklist_id, checklist_item_id, status
+			id, user_id, checklist_id, checklist_item_id, status, position
 		)
 		VALUES
-			($1, $2, $3, $4, 'active'),
-			($5, $2, $3, $6, 'active')
+			($1, $2, $3, $4, 'active', 1),
+			($5, $2, $3, $6, 'active', 2)
 	`,
 		firstProgressID,
 		internID,

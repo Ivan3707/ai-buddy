@@ -23,4 +23,6 @@ type UserChecklistProgress struct {
 	Status          ChecklistStatus
 	CompletedAt     *time.Time
 	CreatedAt       time.Time
+	Position        int
+	ActivatedAt     *time.Time
 }

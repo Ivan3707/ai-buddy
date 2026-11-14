@@ -35,6 +35,7 @@ func TestUserRepository(t *testing.T) {
 	if err := db.PingContext(ctx); err != nil {
 		t.Fatalf("ping database: %v", err)
 	}
+	requireIsolatedTestDatabase(t, db, ctx)
 
 	repo := NewUserRepository(db)
 

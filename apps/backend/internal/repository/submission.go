@@ -16,10 +16,12 @@ type SubmissionRepository struct {
 }
 
 type BuddyPendingSubmission struct {
-	Submission model.ChecklistItemSubmission
-	InternID   uuid.UUID
-	ItemID     uuid.UUID
-	ItemTitle  string
+	Submission      model.ChecklistItemSubmission
+	InternID        uuid.UUID
+	ItemID          uuid.UUID
+	ItemTitle       string
+	InternFirstName *string
+	InternLastName  *string
 }
 
 func NewSubmissionRepository(db DBTX) *SubmissionRepository {
@@ -245,7 +247,7 @@ func (r *SubmissionRepository) ListPendingByBuddyID(
 			s.review_comment,
 			p.user_id,
 			p.checklist_item_id,
-			ci.title
+			ci.title, u.first_name, u.last_name
 		FROM checklist_item_submissions AS s
 		JOIN user_checklist_progress AS p ON p.id = s.progress_id
 		JOIN users AS u ON u.id = p.user_id
@@ -268,6 +270,7 @@ func (r *SubmissionRepository) ListPendingByBuddyID(
 		var reviewedAt sql.NullTime
 		var reviewedBy uuid.NullUUID
 		var reviewComment sql.NullString
+		var firstName, lastName sql.NullString
 		if err := rows.Scan(
 			&item.Submission.ID,
 			&item.Submission.ProgressID,
@@ -282,11 +285,18 @@ func (r *SubmissionRepository) ListPendingByBuddyID(
 			&item.InternID,
 			&item.ItemID,
 			&item.ItemTitle,
+			&firstName, &lastName,
 		); err != nil {
 			return nil, fmt.Errorf("scan pending buddy submission: %w", err)
 		}
 		if resultText.Valid {
 			item.Submission.ResultText = &resultText.String
+		}
+		if firstName.Valid {
+			item.InternFirstName = &firstName.String
+		}
+		if lastName.Valid {
+			item.InternLastName = &lastName.String
 		}
 		if resultURL.Valid {
 			item.Submission.ResultURL = &resultURL.String
