@@ -39,25 +39,3 @@ func (d Dependencies) RegisterChecklistRoutes(
 		authenticated(buddyOnly(d.reviewSubmissionHandler())),
 	)
 }
-
-func (d Dependencies) RegisterProgressRoutes(
-	mux *http.ServeMux,
-	authenticated func(http.Handler) http.Handler,
-) {
-	mux.Handle(
-		"GET /api/progress",
-		authenticated(
-			middleware.RequireRole(model.RoleIntern)(
-				d.progressHandler(false),
-			),
-		),
-	)
-	mux.Handle(
-		"GET /api/staff/interns/{internID}/progress",
-		authenticated(
-			middleware.RequireRole(model.RoleBuddy, model.RoleTeamlead)(
-				d.progressHandler(true),
-			),
-		),
-	)
-}

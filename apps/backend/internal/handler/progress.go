@@ -67,3 +67,25 @@ func (d Dependencies) progressHandler(staff bool) http.HandlerFunc {
 		send(w, 200, out)
 	}
 }
+
+func (d Dependencies) RegisterProgressRoutes(
+	mux *http.ServeMux,
+	authenticated func(http.Handler) http.Handler,
+) {
+	mux.Handle(
+		"GET /api/progress",
+		authenticated(
+			middleware.RequireRole(model.RoleIntern)(
+				d.progressHandler(false),
+			),
+		),
+	)
+	mux.Handle(
+		"GET /api/staff/interns/{internID}/progress",
+		authenticated(
+			middleware.RequireRole(model.RoleBuddy, model.RoleTeamlead)(
+				d.progressHandler(true),
+			),
+		),
+	)
+}

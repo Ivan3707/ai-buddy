@@ -1,10 +1,6 @@
 package handler_test
 
-import (
-	"time"
-
-	"github.com/nvkmaksim/ai-buddy/backend/internal/model"
-)
+import "github.com/nvkmaksim/ai-buddy/backend/internal/model"
 
 type loginRequest struct {
 	Email    string `json:"email"`
@@ -42,15 +38,4 @@ type loginResponse struct {
 	IsFirstLogin bool       `json:"is_first_login"`
 	User         publicUser `json:"user"`
 	RefreshToken string     `json:"refresh_token,omitempty"`
-}
-
-func fullMonths(from, to time.Time) int {
-	months := (to.Year()-from.Year())*12 + int(to.Month()-from.Month())
-	if to.Day() < from.Day() {
-		months--
-	}
-	if months < 0 {
-		return 0
-	}
-	return months
 }
