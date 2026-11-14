@@ -6,8 +6,8 @@
   globalThis.__aiBuddyCharacter = true;
   if (!globalThis.AIBuddyWidget) return;
 
-  const HIDDEN_KEY = 'aiBuddyHidden';
-  const hiddenOnTab = sessionStorage.getItem(HIDDEN_KEY) === '1'; // "×" on the character: until the tab closes
+  const VISIBLE_KEY = 'buddyVisible'; // shared by all windows: false = hidden everywhere, anything else = shown everywhere
+  const POS_KEY = 'buddyPos';
 
   const call = message => chrome.runtime.sendMessage(message).catch(() => ({error: 'extension reloaded'}));
   let port = null;
@@ -32,19 +32,24 @@
   const buddy = globalThis.AIBuddyWidget.mount({
     call, stream, storage,
     features: {login: true, logout: true, pageContext: true, hide: true, requests: true},
-    onHide: () => sessionStorage.setItem(HIDDEN_KEY, '1'),
+    onHide: () => chrome.storage.local.set({[VISIBLE_KEY]: false}), // the "×": hidden in every window
   });
-  if (!hiddenOnTab) buddy.show();
+  chrome.storage.local.get(VISIBLE_KEY).then(stored => { if (stored[VISIBLE_KEY] !== false) buddy.show(); });
+  // one state for all windows: shown / hidden and the position follow what any window changes
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== 'local') return;
+    if (changes[VISIBLE_KEY]) { if (changes[VISIBLE_KEY].newValue === false) buddy.hide(); else buddy.show(); }
+    if (changes[POS_KEY]) void buddy.syncPosition();
+  });
 
   chrome.runtime.onMessage.addListener(message => {
     if (message?.op === 'sso-changed' && WEB_APP.test(location.host)) { // the extension signed in/out: the site syncs
       window.postMessage({source: 'ai-buddy-extension', op: 'changed'}, location.origin);
       return;
     }
-    if (message?.op === 'remove') buddy.remove();
-    if (message?.op === 'toggle') { // toolbar icon: show Бади (even if hidden with ×) and open/close the chat
-      sessionStorage.removeItem(HIDDEN_KEY);
-      if (!buddy.isShown()) { buddy.show(); void buddy.open(); } else buddy.toggle();
+    if (message?.op === 'toggle') { // toolbar icon: Бади is shown now; if he already was, it opens/closes the chat here
+      if (!buddy.isShown()) buddy.show();
+      if (message.wasShown === false) void buddy.open(); else buddy.toggle();
     }
   });
 
@@ -70,7 +75,7 @@
       });
       return;
     }
-    if (!buddy.isShown()) buddy.show();
+    if (!buddy.isShown()) return; // hidden by the user: the site does not bring him back
     if (m.op === 'ask' && str(m.question, 500)) { void buddy.ask(str(m.question, 500)); return; }
     if (m.op !== 'say' || !str(m.text, 300)) return;
     const question = str(m.question, 500);
