@@ -61,6 +61,7 @@ function ConfigFingerprint {
         'ops/load/k6/common.js', 'ops/load/k6/public.js',
         'ops/load/k6/read.js', 'ops/load/k6/mixed.js',
         'ops/load/run-k6.ps1', 'ops/load/collect-results.ps1',
+        'ops/load/collect-docker-stats.ps1',
         'ops/load/run-series.ps1', 'ops/load/seed.Dockerfile',
         'apps/backend/cmd/cleanup-load/main.go', 'apps/backend/cmd/seed-load/main.go',
         'apps/backend/go.mod', 'apps/backend/go.sum',
@@ -166,7 +167,63 @@ $executed = 0
             comparable_to_prior = (-not $AllowChangedConfig)
         }
         try {
-            & (Join-Path $PSScriptRoot 'run-k6.ps1') -Scenario $scenario -VUs $vus -Duration $duration -RunId $runId
+
+            $statsScript = Join-Path $PSScriptRoot 'collect-docker-stats.ps1'
+            $statsTemp = Join-Path $root "load-results/docker-stats-$runId.csv"
+            $statsFinal = Join-Path $dir 'docker-stats.csv'
+
+            if (Test-Path -LiteralPath $statsTemp) {
+                throw "Telemetry file already exists: $statsTemp"
+            }
+
+            $statsJob = Start-Job -ScriptBlock {
+                param($scriptPath, $outputPath)
+
+                & $scriptPath -IntervalSeconds 5 -Output $outputPath
+            } -ArgumentList $statsScript, $statsTemp
+
+            try {
+                Start-Sleep -Seconds 12
+
+                if ($statsJob.State -ne 'Running') {
+                    $details = Receive-Job -Job $statsJob 2>&1 | Out-String
+                    throw "Docker metrics collector stopped: $details"
+                }
+
+                & (Join-Path $PSScriptRoot 'run-k6.ps1') `
+                    -Scenario $scenario `
+                    -VUs $vus `
+                    -Duration $duration `
+                    -RunId $runId
+            }
+            finally {
+                if ($statsJob.State -eq 'Running') {
+                    Stop-Job -Job $statsJob
+                }
+
+                Remove-Job -Job $statsJob -Force
+
+                if (
+                    (Test-Path -LiteralPath $statsTemp) -and
+                    (Test-Path -LiteralPath $dir)
+                ) {
+                    Move-Item -LiteralPath $statsTemp `
+                        -Destination $statsFinal
+                }
+            }
+
+            if (-not (Test-Path -LiteralPath $statsFinal)) {
+                throw "Missing Docker metrics CSV for $runId"
+            }
+
+            $statsRows = @(Import-Csv -LiteralPath $statsFinal)
+
+            if ($statsRows.Count -lt 9) {
+                throw "Insufficient Docker metrics samples for $runId"
+            }
+
+            Write-Host "Docker metrics collected: $($statsRows.Count) rows"
+
             $ended = [DateTimeOffset]::UtcNow
             AssertSameConfig $fingerprint
             Start-Sleep -Seconds 6 # allow the final Prometheus scrape
