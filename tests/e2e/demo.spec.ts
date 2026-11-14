@@ -17,21 +17,25 @@ async function loginWeb(page: Page, email: string, password: string) {
   await page.getByTestId('login').click();
 }
 
-test('role-oriented Web works for intern, buddy and teamlead', async ({ page }) => {
-  const cases = [
-    { email: 'backend.intern@demo.example', heading: 'Мои чек-листы', route: 'checklists' },
-    { email: 'buddy@demo.example', heading: 'Команда', route: 'team' },
-    { email: 'teamlead@demo.example', heading: 'Команда', route: 'team' },
-  ];
-  for (const item of cases) {
-    await page.goto('/');
-    await loginWeb(page, item.email, initialPassword(item.email));
-    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
-    await page.getByTestId(`nav-${item.route}`).click();
-    await expect(page.getByRole('heading', { name: item.heading, level: 1 })).toBeVisible();
-    await page.getByTestId('nav-profile').click();
-    await expect(page.getByText('Сопоставление подтверждено')).toBeVisible();
-    await page.getByTitle('Выйти').click();
+test('role-oriented Web works for intern and shows a placeholder for buddy and teamlead', async ({ page }) => {
+  await page.goto('/');
+  const internEmail = 'backend.intern@demo.example';
+  await loginWeb(page, internEmail, initialPassword(internEmail));
+  await page.getByTestId('nav-checklists').click();
+  await expect(page.getByRole('heading', { name: 'Мои чек-листы', level: 1 })).toBeVisible();
+  await page.getByTestId('nav-profile').click();
+  await expect(page.getByText('Сопоставление подтверждено')).toBeVisible();
+  await page.getByTitle('Выйти').click();
+  await expect(page.getByTestId('login')).toBeVisible();
+
+  for (const account of [
+    { email: 'buddy@demo.example', role: 'Наставник' },
+    { email: 'teamlead@demo.example', role: 'Руководитель команды' },
+  ]) {
+    await loginWeb(page, account.email, initialPassword(account.email));
+    await expect(page.getByRole('heading', { name: 'Рабочее пространство в разработке' })).toBeVisible();
+    await expect(page.getByText(account.role, { exact: false }).first()).toBeVisible();
+    await page.getByRole('button', { name: 'Выйти из аккаунта' }).click();
     await expect(page.getByTestId('login')).toBeVisible();
   }
 });
@@ -48,7 +52,7 @@ test('intern opens calendar, notes, requests and mock AI', async ({ page }) => {
   await expect(page.getByText('AI-Buddy', { exact: true })).toBeVisible();
 });
 
-test('Web UX exposes task details, calendar, tools and role actions without writes', async ({ page }) => {
+test('intern Web UX exposes task details, calendar and tools without writes', async ({ page }) => {
   await page.goto('/');
   await loginWeb(page, 'backend.intern@demo.example', initialPassword('backend.intern@demo.example'));
   await page.getByTestId('nav-checklists').click();
@@ -63,17 +67,6 @@ test('Web UX exposes task details, calendar, tools and role actions without writ
   await page.getByTestId('nav-requests').click();
   await expect(page.locator('.catalog-list article').first()).toBeVisible();
   await expect(page.locator('.catalog-list button:disabled').first()).toBeVisible();
-  await page.getByTitle('Выйти').click();
-  await loginWeb(page, 'buddy@demo.example', initialPassword('buddy@demo.example'));
-  await page.getByTestId('nav-team').click();
-  await expect(page.getByRole('button', { name: '+ Стажёр' })).toHaveCount(0);
-  await page.getByTitle('Выйти').click();
-  await loginWeb(page, 'teamlead@demo.example', initialPassword('teamlead@demo.example'));
-  await page.getByTestId('nav-team').click();
-  await expect(page.getByRole('button', { name: '+ Стажёр' })).toHaveCount(0);
-  await page.getByRole('button', { name: '+ Задача' }).click();
-  await expect(page.getByRole('dialog').getByLabel('Позиция в профессиональном чек-листе')).toBeVisible();
-  await page.getByRole('button', { name: 'Закрыть' }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('.mobile-top')).toBeVisible();
   await page.locator('.mobile-top button').click();
