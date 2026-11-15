@@ -30,6 +30,7 @@ function findTarget(selectors: string[]): Element | null {
 const pageZoom = () => Number.parseFloat(document.documentElement.style.zoom) || 1;
 
 const GAP = 28;
+const BOT_BUBBLE_ROOM = 150;
 const PAD = 8;
 const EDGE = 16;
 
@@ -91,6 +92,14 @@ function Tour({ onNavigate, onDone }: Props) {
 
   // Элемент может появиться чуть позже (данные ещё грузятся) — ищем несколько секунд
   const measure = useCallback(() => {
+    if (step.corner) {
+      // Бади нарисован в закрытом shadow root: измерить его нельзя, он стоит в углу окна (72 px, отступ 24) и не зависит от zoom страницы
+      const zoom = pageZoom();
+      const pad = 18; // запас шире рамки персонажа, чтобы кольцо не сливалось с его собственной обводкой
+      const size = 72 + pad * 2;
+      setBox({ top: (innerHeight - 96 - pad) / zoom, left: (innerWidth - 96 - pad) / zoom, width: size / zoom, height: size / zoom });
+      return true;
+    }
     const element = findTarget(step.targets);
     if (!element) { setBox(null); return false; }
     element.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -118,8 +127,13 @@ function Tour({ onNavigate, onDone }: Props) {
     const zoom = pageZoom();
     const area = { width: document.documentElement.clientWidth / zoom, height: document.documentElement.clientHeight / zoom };
     const size = { width: bubble.offsetWidth, height: bubble.offsetHeight };
+    if (step.corner && box) {
+      // над персонажем: ниже стоит его собственная всплывашка («Привет! У меня есть сводка…»), она рисуется поверх всего
+      setPos({ top: Math.max(EDGE, box.top - BOT_BUBBLE_ROOM - size.height), left: Math.max(EDGE, area.width - size.width - EDGE) });
+      return;
+    }
     setPos(box ? placeBubble(box, size, area) : placeBubble({ top: area.height / 2, left: area.width / 2, width: 0, height: 0 }, size, area));
-  }, [box, index]);
+  }, [box, index, step.corner]);
 
   useEffect(() => { nextRef.current?.focus(); }, [index]);
 

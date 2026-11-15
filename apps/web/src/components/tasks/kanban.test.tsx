@@ -31,7 +31,7 @@ describe('KanbanBoard', () => {
     data.stages[0].items.push(item({ title: 'Проверенная задача', status: 'verified' }));
     render(<KanbanBoard checklist={data} token="tok" refresh={vi.fn()} />);
     const titles = screen.getAllByRole('heading', { level: 3 }).map(h => h.textContent);
-    expect(titles).toEqual(['Недоступно', 'Активно', 'Завершено', 'Проверено']);
+    expect(titles).toEqual(['Активно', 'Завершено', 'Проверено', 'Недоступно']);
     expect(within(column('Недоступно')).getByText('Третья задача')).toBeInTheDocument();
     expect(within(column('Активно')).getByText('Вторая задача')).toBeInTheDocument();
     expect(within(column('Завершено')).getByText('Первая задача')).toBeInTheDocument();
@@ -119,8 +119,10 @@ describe('KanbanBoard', () => {
 });
 
 describe('отправка результата и история (карточка с проверкой)', () => {
-  const board = (refresh = vi.fn().mockResolvedValue(undefined)) =>
+  const board = (refresh = vi.fn().mockResolvedValue(undefined)) => {
     render(<KanbanBoard checklist={checklistsResponse().professional} token="tok" refresh={refresh} />);
+    fireEvent.click(screen.getByRole('button', { name: /Открыть задачу «Доступ к репозиторию»/ }));
+  };
 
   it('отправляет результат задачи с проверкой', async () => {
     const refresh = vi.fn().mockResolvedValue(undefined);
@@ -128,7 +130,7 @@ describe('отправка результата и история (карточ�
     board(refresh);
     const send = screen.getByRole('button', { name: 'Отправить на проверку' });
     expect(send).toBeDisabled();
-    await userEvent.type(screen.getByLabelText('Что сделано'), 'Сделал');
+    await userEvent.type(screen.getByLabelText('Комментарий к результату'), 'Сделал');
     await userEvent.type(screen.getByLabelText('Ссылка на результат'), 'https://example.com/pr/1');
     await userEvent.click(send);
     expect(api.submitItem).toHaveBeenCalledWith('', 'tok', expect.any(String), { result_text: 'Сделал', result_url: 'https://example.com/pr/1' });
@@ -138,7 +140,7 @@ describe('отправка результата и история (карточ�
   it('показывает ошибку отправки результата и запасной текст', async () => {
     api.submitItem.mockRejectedValueOnce(new Error('Отказ сервера')).mockRejectedValueOnce('boom');
     board();
-    await userEvent.type(screen.getByLabelText('Что сделано'), 'Сделал');
+    await userEvent.type(screen.getByLabelText('Комментарий к результату'), 'Сделал');
     await userEvent.click(screen.getByRole('button', { name: 'Отправить на проверку' }));
     expect(await screen.findByText('Отказ сервера')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Отправить на проверку' }));
@@ -172,5 +174,50 @@ describe('отправка результата и история (карточ�
     expect(await screen.findByText('Нет истории')).toBeInTheDocument();
     await close(); await open();
     expect(await screen.findByText('Не удалось загрузить историю')).toBeInTheDocument();
+  });
+});
+
+describe('окно задачи', () => {
+  it('клик по карточке открывает окно с описанием, Esc и «Закрыть» его закрывают', async () => {
+    render(<KanbanBoard checklist={checklist()} token="tok" refresh={vi.fn()} />);
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await userEvent.click(within(activeCard()).getByRole('heading', { level: 4 }));
+    const dialog = screen.getByRole('dialog', { name: 'Вторая задача' });
+    expect(within(dialog).getByText('Ожидаемый результат')).toBeInTheDocument();
+    expect(within(dialog).getByText('Результат есть')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await userEvent.click(within(activeCard()).getByRole('button', { name: /Открыть задачу/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('задача без результата: в окне есть «Завершить», задача завершается и окно закрывается', async () => {
+    const refresh = vi.fn().mockResolvedValue(undefined);
+    api.completeItem.mockResolvedValue(undefined);
+    render(<KanbanBoard checklist={checklist()} token="tok" refresh={refresh} />);
+    await userEvent.click(within(activeCard()).getByRole('button', { name: /Открыть задачу/ }));
+    expect(screen.queryByLabelText('Комментарий к результату')).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Завершить' }));
+    await vi.waitFor(() => expect(api.completeItem).toHaveBeenCalledWith('', 'tok', expect.any(String)));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('недоступную задачу можно открыть, но завершить и отправить результат нельзя', async () => {
+    render(<KanbanBoard checklist={checklist()} token="tok" refresh={vi.fn()} />);
+    await userEvent.click(within(column('Недоступно')).getByRole('button', { name: /Открыть задачу/ }));
+    const dialog = screen.getByRole('dialog', { name: 'Третья задача' });
+    expect(within(dialog).getByText('Задача откроется, когда будет выполнена текущая.')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Завершить' })).toBeNull();
+  });
+
+  it('задача с результатом: в окне форма с комментарием и ссылкой и подсказка про файлы', () => {
+    render(<KanbanBoard checklist={checklistsResponse().professional} token="tok" refresh={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Открыть задачу «Доступ к репозиторию»/ }));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByLabelText('Комментарий к результату')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Ссылка на результат')).toBeInTheDocument();
+    expect(within(dialog).getByText(/Файл пока приложить нельзя/)).toBeInTheDocument();
   });
 });

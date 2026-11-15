@@ -35,7 +35,7 @@ describe('Onboarding', () => {
     // после перехода в задачи возврата на главную нет
     expect(onNavigate.mock.calls.slice(-1)[0][0]).toBe('tasks');
     await userEvent.click(screen.getByRole('button', { name: 'Назад' }));
-    expect(screen.getByRole('heading', { name: 'Заметки' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Что умеет Бади' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Далее' }));
     await userEvent.click(screen.getByRole('button', { name: 'Начать' }));
     expect(onDone).toHaveBeenCalledTimes(1);

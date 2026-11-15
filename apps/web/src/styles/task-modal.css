@@ -1,0 +1,57 @@
+/* Окно задачи: открывается по клику на карточку доски */
+.task-modal-backdrop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(37, 37, 37, 0.6); }
+.task-modal {
+  display: flex; flex-direction: column; box-sizing: border-box;
+  width: 720px; max-width: calc(100% - 32px); max-height: calc(100% - 32px);
+  overflow: hidden; border-radius: 32px; background: var(--cream); color: #252525;
+  font-family: var(--font-text);
+}
+.task-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; padding: 28px 32px; background: var(--pink); }
+.task-modal-head.is-completed { background: var(--green); }
+.task-modal-head.is-verified { background: #252525; color: #fff; }
+.task-modal-head.is-unavailable { background: #e8e8e8; }
+.task-modal-meta { display: block; margin-bottom: 6px; font-size: 14px; opacity: 0.7; }
+.task-modal-head h2 { margin: 0; font-family: var(--font-title); font-size: 28px; font-weight: 800; line-height: 1.2; }
+.task-modal-status { flex: none; padding: 6px 14px; border-radius: 999px; background: #fff; color: #252525; font-size: 14px; font-weight: 600; }
+.task-modal-body { display: flex; flex-direction: column; gap: 20px; padding: 24px 32px; overflow-y: auto; }
+.task-modal-body h3 { margin: 0 0 6px; font-family: var(--font-title); font-size: 18px; font-weight: 700; }
+.task-modal-body p { margin: 0; font-size: 16px; line-height: 1.45; color: #3a3a3a; }
+.task-modal-note { color: #6a6a6a !important; }
+.task-modal-error { padding: 10px 14px; border-radius: 16px; background: var(--pink-soft); color: #252525 !important; }
+.task-modal-form { display: flex; flex-direction: column; gap: 12px; }
+.task-modal-form .submission-form { display: flex; flex-direction: column; gap: 14px; }
+.task-modal-form label { display: flex; flex-direction: column; gap: 6px; font-size: 15px; font-weight: 600; }
+.task-modal-form textarea, .task-modal-form input {
+  box-sizing: border-box; width: 100%; padding: 12px 14px; border: 2px solid #d9d9d9; border-radius: 16px;
+  background: #fff; color: #252525; font: inherit; font-weight: 400;
+}
+.task-modal-form textarea { min-height: 110px; resize: vertical; }
+.task-modal-form textarea:focus, .task-modal-form input:focus { border-color: var(--pink); outline: none; }
+.task-modal-form .submission-form button, .task-modal-complete {
+  align-self: flex-start; padding: 14px 28px; border: 0; border-radius: 100px; background: #000; color: #fff; font: inherit; cursor: pointer;
+}
+.task-modal-form .submission-form button:disabled, .task-modal-complete:disabled { opacity: 0.45; cursor: default; }
+.task-modal .history { display: flex; flex-direction: column; gap: 10px; }
+.task-modal .link-button { align-self: flex-start; padding: 0; border: 0; background: none; color: #252525; font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
+.task-modal-foot { display: flex; justify-content: flex-end; gap: 12px; padding: 16px 32px 24px; }
+.task-modal-close { padding: 12px 28px; border: 2px solid #252525; border-radius: 100px; background: none; color: #252525; font: inherit; cursor: pointer; }
+.task-modal-close:hover { background: #252525; color: #fff; }
+
+/* глобальные кнопки legacy.css при наведении становятся зелёными — в окне задачи держим палитру макета */
+.task-modal-form .submission-form button:hover:not(:disabled), .task-modal button.task-modal-complete:hover:not(:disabled) { background: var(--pink); color: #000; transform: none; }
+.task-modal button.task-modal-close:hover:not(:disabled) { background: #252525; color: #fff; transform: none; }
+.task-modal button.task-modal-complete { padding: 12px 28px; border: 0; border-radius: 100px; background: #000; color: #fff; font: inherit; cursor: pointer; }
+.task-modal button.task-modal-complete:disabled { opacity: 0.45; cursor: default; }
+.task-modal .link-button:hover:not(:disabled) { background: none; transform: none; }
+
+/* Окно заметки */
+.note-modal { width: 640px; }
+.note-modal-head { background: var(--pink); }
+.note-modal-form { gap: 16px; }
+.note-modal-form label { font-size: 15px; font-weight: 600; }
+.note-modal-foot { padding: 0; align-items: center; }
+.note-modal-delete { margin-right: auto; padding: 8px 4px; border: 0; background: none !important; color: #c0392b; font: inherit; cursor: pointer; }
+.task-modal button.task-modal-complete:disabled, .note-modal-foot button:disabled { opacity: 0.45; cursor: default; }
+.task-modal button.note-modal-delete:hover:not(:disabled) { background: none; color: #8e2417; transform: none; }
+
+.note-modal textarea { resize: none; }

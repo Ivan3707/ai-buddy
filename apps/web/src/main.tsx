@@ -13,6 +13,8 @@ import './styles/figma.css';
 import './styles/staff.css';
 import './styles/portal.css';
 import './styles/kanban.css';
+import './styles/task-modal.css';
+import './styles/calendar-page.css';
 import './styles/admin.css';
 import './styles/onboarding.css';
 import './styles/notes.css';

@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { completeItem, type Checklist, type ChecklistItem } from '@ai-buddy/client';
-import { History, ReviewAction } from './TaskReview';
+import { CheckIcon, LockIcon } from '../icons';
+import { TaskModal } from './TaskModal';
 
 type Status = ChecklistItem['status'];
 
-/** Колонки доски: порядок и подписи заданы дизайнером. */
+/** Колонки доски: порядок и подписи по макету maintask.png (недоступные задачи справа). */
 export const KANBAN_COLUMNS: { status: Status; title: string }[] = [
-  { status: 'unavailable', title: 'Недоступно' },
   { status: 'active', title: 'Активно' },
   { status: 'completed', title: 'Завершено' },
   { status: 'verified', title: 'Проверено' },
+  { status: 'unavailable', title: 'Недоступно' },
 ];
 
 /** Единственный переход, который делает стажёр сам: активная задача -> «Завершено». Остальное — решение бэкенда и наставника. */
@@ -35,6 +36,8 @@ export function KanbanBoard({ checklist, token, refresh }: Props) {
   const [drag, setDrag] = useState<Drag | null>(null);
   const [picked, setPicked] = useState<{ id: string; over: boolean } | null>(null);
   const [flashID, setFlashID] = useState('');
+  const [openID, setOpenID] = useState('');
+  const justDragged = useRef(false);
   const gesture = useRef<Gesture | null>(null);
   const pointer = useRef({ x: 0, y: 0 });
   const frame = useRef(0);
@@ -42,6 +45,7 @@ export function KanbanBoard({ checklist, token, refresh }: Props) {
   const trackName = checklist.type === 'common' ? 'Общий' : 'Профессиональный';
   const cards = checklist.stages.flatMap(stage => stage.items.map(item => ({ item, stage })));
   const byID = useCallback((id: string) => cards.find(card => card.item.id === id)?.item, [cards]);
+  const opened = openID ? cards.find(card => card.item.id === openID) : undefined;
 
   const complete = async (item: ChecklistItem) => {
     setBusyID(item.id);
@@ -66,7 +70,7 @@ export function KanbanBoard({ checklist, token, refresh }: Props) {
       return;
     }
     if (item.requires_review) {
-      setNotice(`«${item.title}» принимает наставник: опишите результат в форме на карточке и отправьте на проверку.`);
+      setNotice(`«${item.title}» принимает наставник: откройте задачу, опишите результат и отправьте на проверку.`);
       setFlashID(item.id);
       setTimeout(() => setFlashID(''), 1600);
       return;
@@ -125,6 +129,11 @@ export function KanbanBoard({ checklist, token, refresh }: Props) {
     const wasDragging = g.active;
     const target = wasDragging ? overColumn(event.clientX, event.clientY) : null;
     stop();
+    if (wasDragging) {
+      // после переноса браузер всё равно шлёт click по карточке — окно задачи открывать не нужно
+      justDragged.current = true;
+      setTimeout(() => { justDragged.current = false; }, 0);
+    }
     if (wasDragging && item) drop(item, target);
   }
   function onCancel(event: PointerEvent) {
@@ -195,8 +204,10 @@ export function KanbanBoard({ checklist, token, refresh }: Props) {
                         style={style}
                         tabIndex={draggable ? 0 : undefined}
                         aria-describedby={draggable ? 'kanban-help' : undefined}
+                        data-review={item.requires_review ? 'true' : undefined}
                         onPointerDown={event => begin(event, item)}
                         onKeyDown={event => onKey(event, item)}
+                        onClick={() => { if (!justDragged.current) setOpenID(item.id); }}
                       >
                         <div className="kanban-card-top">
                           <span className="kanban-card-stage">
@@ -206,10 +217,16 @@ export function KanbanBoard({ checklist, token, refresh }: Props) {
                         </div>
                         <h4>{item.title}</h4>
                         {item.description && <p>{item.description}</p>}
-                        {item.estimated_minutes && <span className="kanban-card-time">≈ {item.estimated_minutes} мин</span>}
-                        {busyID === item.id && <span className="kanban-card-time">Сохраняем…</span>}
-                        {item.status === 'active' && item.requires_review && <ReviewAction item={item} token={token} refresh={refresh} />}
-                        {item.requires_review && <History itemID={item.id} token={token} />}
+                        <div className="kanban-card-bottom">
+                          <span className="kanban-card-time">
+                            {busyID === item.id ? 'Сохраняем…' : item.estimated_minutes ? `${item.estimated_minutes} мин` : ''}
+                          </span>
+                          <button type="button" className={`kanban-card-state is-${item.status}`} aria-label={`Открыть задачу «${item.title}»`} onClick={event => { event.stopPropagation(); setOpenID(item.id); }}>
+                            {item.status === 'active' && <LockIcon className="kanban-hover-lock" width={20} height={20} />}
+                            {item.status === 'unavailable' && <LockIcon width={20} height={20} />}
+                            {(item.status === 'completed' || item.status === 'verified') && <CheckIcon width={24} height={20} />}
+                          </button>
+                        </div>
                       </article>
                     </div>
                   );
@@ -219,6 +236,18 @@ export function KanbanBoard({ checklist, token, refresh }: Props) {
           );
         })}
       </div>
+      {opened && (
+        <TaskModal
+          item={opened.item}
+          stage={opened.stage}
+          token={token}
+          refresh={refresh}
+          busy={busyID === opened.item.id}
+          error={error}
+          onComplete={async () => { await complete(opened.item); setOpenID(''); }}
+          onClose={() => setOpenID('')}
+        />
+      )}
     </section>
   );
 }

@@ -49,7 +49,7 @@ export function StaffShell({ user, token, onLogout }: Props) {
         {view === 'home' && <StaffHomePage user={user} token={token} onNavigate={setView} />}
         {view === 'team' && <StaffTeamPage user={user} token={token} />}
         {view === 'mentor' && <MentorPage user={user} token={token} />}
-        {view === 'calendar' && <CalendarPage />}
+        {view === 'calendar' && <CalendarPage token={token} />}
         {view === 'admin' && (isAdmin ? <AdminPage token={token} /> : <p className="muted">Нет доступа к админ-панели.</p>)}
       </main>
       <SideTabs onProfile={() => setProfileOpen(true)} onNotes={() => setNotesOpen(true)} />

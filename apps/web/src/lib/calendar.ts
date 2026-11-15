@@ -29,3 +29,19 @@ export function monthTitle(year: number, month: number): string {
   const title = new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric' }).format(new Date(year, month, 1));
   return title.charAt(0).toUpperCase() + title.slice(1);
 }
+
+/** Ключ дня для группировки событий: локальная дата без времени. */
+export function dayKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+/** «11 декабря» — для заголовка панели дел выбранного дня. */
+export function dayMonthLabel(date: Date): string {
+  return new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long' }).format(date);
+}
+
+/** Склеивает дату и время «ЧЧ:ММ» в ISO-строку для API. */
+export function combineDateTime(date: Date, time: string): string {
+  const [hours, minutes] = time.split(':').map(Number);
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours || 0, minutes || 0).toISOString();
+}
