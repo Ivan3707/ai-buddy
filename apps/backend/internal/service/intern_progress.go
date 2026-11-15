@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 
@@ -28,21 +27,15 @@ func InitializeInternProgress(ctx context.Context, tx repository.DBTX, userID uu
 		return ErrInvalidProfession
 	}
 	for _, typ := range []string{"common", "professional"} {
-		var checklist uuid.UUID
-		err := tx.QueryRowContext(ctx, `SELECT id FROM checklists WHERE type=$1 AND ($1='common' OR profession=$2)`, typ, string(profession)).Scan(&checklist)
-		if errors.Is(err, sql.ErrNoRows) {
+		repo := repository.NewProgressRepository(tx)
+		checklist, err := repo.ChecklistForTrack(ctx, typ, profession)
+		if errors.Is(err, repository.ErrNotFound) {
 			return fmt.Errorf("missing %s checklist for profession %s", typ, profession)
 		}
 		if err != nil {
 			return err
 		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO user_checklist_progress(user_id,checklist_id,checklist_item_id,status,position,activated_at)
-    SELECT $1,$2,i.id,CASE WHEN i.position=(SELECT MIN(position) FROM checklist_items WHERE checklist_id=$2 AND (assigned_user_id IS NULL OR assigned_user_id=$1))
-      AND NOT EXISTS(SELECT 1 FROM user_checklist_progress p0 WHERE p0.user_id=$1 AND p0.checklist_id=$2) THEN 'active' ELSE 'unavailable' END,
-    i.position,NULL
-    FROM checklist_items i WHERE i.checklist_id=$2 AND (i.assigned_user_id IS NULL OR i.assigned_user_id=$1)
-    AND NOT EXISTS(SELECT 1 FROM user_checklist_progress p WHERE p.user_id=$1 AND p.checklist_item_id=i.id)`, userID, checklist)
-		if err != nil {
+		if err := repo.InitializeChecklist(ctx, userID, checklist); err != nil {
 			return fmt.Errorf("insert %s progress: %w", typ, err)
 		}
 	}

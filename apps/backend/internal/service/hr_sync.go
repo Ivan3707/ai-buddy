@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/model"
+	"github.com/nvkmaksim/ai-buddy/backend/internal/repository"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/security"
 )
 
@@ -27,11 +28,9 @@ type InitialCredential struct {
 // HRSynchronizer is the only production mechanism that creates accounts
 // (Mock HR snapshot -> users + onboarding progress).
 //
-// Architectural exception (ARCH-05): the synchronization executes SQL directly
-// instead of going through internal/repository. The whole run must stay one
-// transaction under a single advisory lock (identity resolution, email swaps,
-// inserts and progress initialization), which a set of per-entity repositories
-// would only obscure.
+// The whole run stays in one transaction under a single advisory lock; the
+// service resolves identities and assignments while HRSyncRepository performs
+// the PostgreSQL operations on the caller-owned transaction.
 type HRSynchronizer struct{ db *sql.DB }
 
 // ErrHRCommitUncertain means PostgreSQL did not confirm whether COMMIT took
@@ -125,7 +124,8 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
 		}
 	}()
 	// Serialize concurrent runs before any identity decisions.
-	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(80520263)`); err != nil {
+	repo := repository.NewHRSyncRepository(tx)
+	if err = repo.LockRun(ctx); err != nil {
 		return 0, err
 	}
 	type local struct {
@@ -134,26 +134,17 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
 		role        model.UserRole
 	}
 	byCorp, byEmail := map[string]local{}, map[string]local{}
-	rows, err := tx.QueryContext(ctx, `SELECT id, COALESCE(corporate_id,''), email, role FROM users FOR UPDATE`)
+	identities, err := repo.LockedIdentities(ctx)
 	if err != nil {
 		return 0, err
 	}
-	for rows.Next() {
-		var u local
-		if err = rows.Scan(&u.id, &u.corp, &u.email, &u.role); err != nil {
-			rows.Close()
-			return 0, err
-		}
+	for _, identity := range identities {
+		u := local{id: identity.ID, corp: identity.CorporateID, email: identity.Email, role: identity.Role}
 		if u.corp != "" {
 			byCorp[u.corp] = u
 		}
 		byEmail[strings.ToLower(u.email)] = u
 	}
-	if err = rows.Err(); err != nil {
-		rows.Close()
-		return 0, err
-	}
-	rows.Close()
 	// Resolve every identity before changing any row. Email is used only once
 	// to link legacy demo accounts that do not yet have a corporate ID.
 	resolved, used := map[string]uuid.UUID{}, map[uuid.UUID]string{}
@@ -188,7 +179,7 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
 				u = byEmail[strings.ToLower(e.Email)]
 			}
 			if !strings.EqualFold(u.email, e.Email) {
-				if _, err = tx.ExecContext(ctx, `UPDATE users SET email=$2 WHERE id=$1`, id, "hr-sync-"+id.String()+"@invalid.local"); err != nil {
+				if err = repo.ParkEmail(ctx, id); err != nil {
 					return 0, err
 				}
 			}
@@ -210,8 +201,7 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
 		}
 		id := uuid.New()
 		resolved[e.ID] = id
-		_, err = tx.ExecContext(ctx, `INSERT INTO users(id,corporate_id,email,password_hash,role,profession,department,team,first_name,last_name,telegram_username,birth_date,employed_since)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, id, e.ID, strings.ToLower(e.Email), hash, e.Role, hrProfessionValue(e.Profession), e.Department, e.Team, e.FirstName, e.LastName, e.Telegram, e.BirthDate, e.EmployedSince)
+		err = repo.Create(ctx, repository.HRProfile{ID: id, CorporateID: e.ID, Email: e.Email, PasswordHash: hash, Role: e.Role, Profession: hrProfessionValue(e.Profession), Department: e.Department, Team: e.Team, FirstName: e.FirstName, LastName: e.LastName, Telegram: e.Telegram, BirthDate: e.BirthDate, EmployedSince: e.EmployedSince})
 		if err != nil {
 			return 0, fmt.Errorf("create %s: %w", e.ID, err)
 		}
@@ -224,9 +214,7 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
 			buddy = resolved[e.BuddyID]
 			lead = resolved[e.ManagerID]
 		}
-		_, err = tx.ExecContext(ctx, `UPDATE users SET corporate_id=$2,email=$3,role=$4,profession=$5,department=$6,team=$7,buddy_id=$8,teamlead_id=$9,
-          first_name=COALESCE($10,first_name),last_name=COALESCE($11,last_name),telegram_username=COALESCE($12,telegram_username),
-          birth_date=COALESCE($13::date,birth_date),employed_since=COALESCE($14::date,employed_since) WHERE id=$1`, id, e.ID, strings.ToLower(e.Email), e.Role, hrProfessionValue(e.Profession), e.Department, e.Team, buddy, lead, e.FirstName, e.LastName, e.Telegram, e.BirthDate, e.EmployedSince)
+		err = repo.Update(ctx, repository.HRProfile{ID: id, CorporateID: e.ID, Email: e.Email, Role: e.Role, Profession: hrProfessionValue(e.Profession), Department: e.Department, Team: e.Team, BuddyID: buddy, TeamleadID: lead, FirstName: e.FirstName, LastName: e.LastName, Telegram: e.Telegram, BirthDate: e.BirthDate, EmployedSince: e.EmployedSince})
 		if err != nil {
 			return 0, fmt.Errorf("update %s: %w", e.ID, err)
 		}
