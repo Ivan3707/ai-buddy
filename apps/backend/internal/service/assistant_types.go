@@ -1,12 +1,6 @@
 package service
 
-import (
-	"encoding/json"
-	"time"
-
-	"github.com/google/uuid"
-	"github.com/nvkmaksim/ai-buddy/backend/internal/model"
-)
+import "github.com/nvkmaksim/ai-buddy/backend/internal/model"
 
 // ---------------------------------------------------------------- DTOs (contracts/backend.openapi.json)
 //
@@ -14,29 +8,8 @@ import (
 // they are read and written only by AssistantService and mirror the API shape. MentorQuestion is a domain entity
 // shared with internal/repository, so it lives in internal/model; the alias keeps the service API unchanged.
 
-type PendingAction struct {
-	ID        uuid.UUID       `json:"id"`
-	Type      string          `json:"type"`
-	Params    json.RawMessage `json:"params"`
-	Summary   string          `json:"summary"`
-	Status    string          `json:"status"`
-	Error     *string         `json:"error,omitempty"`
-	CreatedAt time.Time       `json:"created_at"`
-}
-
-type ServiceRequest struct {
-	ID       uuid.UUID `json:"id"`
-	Number   string    `json:"number"`
-	Type     string    `json:"type"`
-	Status   string    `json:"status"`
-	Approver string    `json:"approver,omitempty"`
-	// DecisionComment is the teamlead's comment on the decision; Requester is filled for the approver's view only.
-	DecisionComment string          `json:"decision_comment,omitempty"`
-	Requester       string          `json:"requester,omitempty"`
-	Params          json.RawMessage `json:"params"`
-	CreatedAt       time.Time       `json:"created_at"`
-	UpdatedAt       time.Time       `json:"updated_at"`
-}
+type PendingAction = model.PendingAction
+type ServiceRequest = model.ServiceRequest
 
 type MentorQuestion = model.MentorQuestion
 
@@ -46,25 +19,8 @@ type ActionResult struct {
 	MentorQuestion *MentorQuestion `json:"mentor_question,omitempty"`
 }
 
-type ChatMessage struct {
-	ID           uuid.UUID       `json:"id"`
-	Role         string          `json:"role"`
-	Content      string          `json:"content"`
-	Sources      json.RawMessage `json:"sources,omitempty"`
-	Action       *PendingAction  `json:"action,omitempty"`
-	FinishReason *string         `json:"finish_reason,omitempty"`
-	Feedback     *string         `json:"feedback"`
-	CreatedAt    time.Time       `json:"created_at"`
-}
-
-type ChatMetrics struct {
-	QuestionsTotal       int      `json:"questions_total"`
-	AnsweredByBot        int      `json:"answered_by_bot"`
-	EscalatedToMentor    int      `json:"escalated_to_mentor"`
-	DeflectionRate       *float64 `json:"deflection_rate"`
-	ActionsExecuted      int      `json:"actions_executed"`
-	EstimatedMinutesSave int      `json:"estimated_mentor_minutes_saved"`
-}
+type ChatMessage = model.ChatMessage
+type ChatMetrics = model.ChatMetrics
 
 type PageContext struct {
 	URL       string `json:"url"`
@@ -103,7 +59,4 @@ type UserContext struct {
 	AllowedActions []string         `json:"allowed_actions"`
 }
 
-type ChatTurn struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
+type ChatTurn = model.ChatTurn

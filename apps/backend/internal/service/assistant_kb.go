@@ -76,15 +76,8 @@ func (s *AssistantService) HintTurn(ctx context.Context, userID uuid.UUID, conve
 		return out, err
 	}
 	err = withTransaction(ctx, s.db, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `INSERT INTO chat_messages (conversation_id, role, content) VALUES ($1, 'user', $2)`, out.ConversationID, hit.Question); err != nil {
-			return err
-		}
-		if err := tx.QueryRowContext(ctx, `
-			INSERT INTO chat_messages (conversation_id, role, content, sources, finish_reason, created_at)
-			VALUES ($1, 'assistant', $2, $3, 'hint', clock_timestamp()) RETURNING id`, out.ConversationID, out.Text, []byte(out.Sources)).Scan(&out.MessageID); err != nil {
-			return err
-		}
-		_, err := tx.ExecContext(ctx, `UPDATE chat_conversations SET updated_at = now() WHERE id = $1`, out.ConversationID)
+		var err error
+		out.MessageID, err = repository.NewAssistantRepository(tx).AddHintTurn(ctx, out.ConversationID, hit.Question, out.Text, out.Sources)
 		return err
 	})
 	return out, err

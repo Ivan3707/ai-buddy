@@ -301,3 +301,51 @@ func (r *ProgressRepository) UpdateStatus(
 
 	return nil
 }
+
+func (r *ProgressRepository) ChecklistForTrack(ctx context.Context, typ string, profession model.Profession) (uuid.UUID, error) {
+	var id uuid.UUID
+	err := r.db.QueryRowContext(ctx, `SELECT id FROM checklists WHERE type=$1 AND ($1='common' OR profession=$2)`, typ, string(profession)).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return uuid.Nil, ErrNotFound
+	}
+	return id, err
+}
+
+func (r *ProgressRepository) InitializeChecklist(ctx context.Context, userID, checklistID uuid.UUID) error {
+	_, err := r.db.ExecContext(ctx, `INSERT INTO user_checklist_progress(user_id,checklist_id,checklist_item_id,status,position,activated_at)
+	SELECT $1,$2,i.id,CASE WHEN i.position=(SELECT MIN(position) FROM checklist_items WHERE checklist_id=$2 AND(assigned_user_id IS NULL OR assigned_user_id=$1))AND NOT EXISTS(SELECT 1 FROM user_checklist_progress p0 WHERE p0.user_id=$1 AND p0.checklist_id=$2)THEN 'active' ELSE 'unavailable' END,
+	i.position,CASE WHEN i.position=(SELECT MIN(position) FROM checklist_items WHERE checklist_id=$2 AND(assigned_user_id IS NULL OR assigned_user_id=$1))AND NOT EXISTS(SELECT 1 FROM user_checklist_progress p0 WHERE p0.user_id=$1 AND p0.checklist_id=$2)THEN now() END
+	FROM checklist_items i WHERE i.checklist_id=$2 AND(assigned_user_id IS NULL OR assigned_user_id=$1)AND NOT EXISTS(SELECT 1 FROM user_checklist_progress p WHERE p.user_id=$1 AND p.checklist_item_id=i.id)`, userID, checklistID)
+	return err
+}
+
+func (r *ProgressRepository) OwnerAndChecklist(ctx context.Context, progressID uuid.UUID) (uuid.UUID, uuid.UUID, error) {
+	var userID, checklistID uuid.UUID
+	err := r.db.QueryRowContext(ctx, `SELECT user_id,checklist_id FROM user_checklist_progress WHERE id=$1`, progressID).Scan(&userID, &checklistID)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = ErrNotFound
+	}
+	return userID, checklistID, err
+}
+
+func (r *ProgressRepository) LockOwner(ctx context.Context, userID uuid.UUID) error {
+	var id uuid.UUID
+	err := r.db.QueryRowContext(ctx, `SELECT id FROM users WHERE id=$1 FOR SHARE`, userID).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	return err
+}
+
+func (r *ProgressRepository) TrackMatchesProfession(ctx context.Context, userID, checklistID uuid.UUID) (bool, error) {
+	var typ string
+	var checklistProfession, userProfession sql.NullString
+	err := r.db.QueryRowContext(ctx, `SELECT c.type,c.profession,u.profession FROM checklists c JOIN users u ON u.id=$1 WHERE c.id=$2`, userID, checklistID).Scan(&typ, &checklistProfession, &userProfession)
+	if err != nil {
+		return false, err
+	}
+	if typ != string(model.ChecklistTypeProfessional) {
+		return true, nil
+	}
+	return checklistProfession.Valid && userProfession.Valid && checklistProfession.String == userProfession.String, nil
+}

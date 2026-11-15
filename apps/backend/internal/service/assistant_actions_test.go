@@ -66,6 +66,10 @@ func TestValidateParamsLeaveAndQuestion(t *testing.T) {
 		{"leave too long", "leave_request", `{"kind":"vacation","date_from":"2026-01-01","date_to":"2026-04-01"}`, false},
 		{"question", "mentor_question", `{"question":"Где взять доступ?"}`, true},
 		{"blank question", "mentor_question", `{"question":"  "}`, false},
+		{"question at Unicode limit", "mentor_question", `{"question":"` + strings.Repeat("я", maxMentorQuestion) + `"}`, true},
+		{"question over Unicode limit", "mentor_question", `{"question":"` + strings.Repeat("я", maxMentorQuestion+1) + `"}`, false},
+		{"context at Unicode limit", "mentor_question", `{"question":"Где?","context":"` + strings.Repeat("ё", maxMentorContext) + `"}`, true},
+		{"context over Unicode limit", "mentor_question", `{"question":"Где?","context":"` + strings.Repeat("ё", maxMentorContext+1) + `"}`, false},
 		{"unknown kind", "deploy", `{}`, false},
 	}
 	for _, tc := range cases {

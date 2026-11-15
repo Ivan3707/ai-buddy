@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -47,6 +46,8 @@ const (
 	maxAccessResource      = 200
 	maxAccessJustification = 500
 	maxLeaveComment        = 500
+	maxMentorQuestion      = 2000
+	maxMentorContext       = 2000
 )
 
 // accessLevelAllowed is the self-service policy: no role gets admin access through a request (demo; admin rights are
@@ -87,7 +88,12 @@ func validateParams(kind string, raw json.RawMessage) (any, error) {
 		return p, nil
 	case "mentor_question":
 		var p questionParams
-		if json.Unmarshal(raw, &p) != nil || strings.TrimSpace(p.Question) == "" {
+		if json.Unmarshal(raw, &p) != nil {
+			return nil, ErrActionInvalid
+		}
+		p.Question = strings.TrimSpace(p.Question)
+		p.Context = strings.TrimSpace(p.Context)
+		if p.Question == "" || runeLen(p.Question) > maxMentorQuestion || runeLen(p.Context) > maxMentorContext {
 			return nil, ErrActionInvalid
 		}
 		return p, nil
@@ -95,28 +101,12 @@ func validateParams(kind string, raw json.RawMessage) (any, error) {
 	return nil, ErrActionInvalid
 }
 
-func (s *AssistantService) action(ctx context.Context, q interface {
-	QueryRowContext(context.Context, string, ...any) *sql.Row
-}, userID, actionID uuid.UUID, lock bool) (PendingAction, json.RawMessage, error) {
-	query := `SELECT id, type, params, summary, status, error, created_at, result FROM assistant_actions WHERE id = $1 AND user_id = $2`
-	if lock {
-		query += ` FOR UPDATE`
-	}
-	var a PendingAction
-	var result []byte
-	err := q.QueryRowContext(ctx, query, actionID, userID).
-		Scan(&a.ID, &a.Type, &a.Params, &a.Summary, &a.Status, &a.Error, &a.CreatedAt, &result)
-	if errors.Is(err, sql.ErrNoRows) {
-		return a, nil, repository.ErrNotFound
-	}
-	return a, result, err
-}
-
 // Confirm executes a pending action once (idempotent: a repeated confirm returns the stored result).
 func (s *AssistantService) Confirm(ctx context.Context, user *model.User, actionID uuid.UUID) (ActionResult, error) {
 	var out ActionResult
 	err := withTransaction(ctx, s.db, func(tx *sql.Tx) error {
-		a, stored, err := s.action(ctx, tx, user.ID, actionID, true)
+		repo := repository.NewAssistantRepository(tx)
+		a, stored, err := repo.Action(ctx, user.ID, actionID, true)
 		if err != nil {
 			return err
 		}
@@ -135,7 +125,7 @@ func (s *AssistantService) Confirm(ctx context.Context, user *model.User, action
 			if user.Role == model.RoleIntern {
 				msg = "Стажёрам доступ admin не выдаётся"
 			}
-			if _, uerr := tx.ExecContext(ctx, `UPDATE assistant_actions SET status = 'failed', error = $2, updated_at = now() WHERE id = $1`, a.ID, msg); uerr != nil {
+			if uerr := repo.FailAction(ctx, a.ID, msg); uerr != nil {
 				return uerr
 			}
 			a.Status, a.Error = "failed", &msg
@@ -149,35 +139,25 @@ func (s *AssistantService) Confirm(ctx context.Context, user *model.User, action
 		out = ActionResult{Action: a}
 		if a.Type == "mentor_question" {
 			q := params.(questionParams)
-			mq := MentorQuestion{InternID: user.ID, InternName: fullName(user.FirstName, user.LastName), Question: q.Question,
-				Context: q.Context, Status: "open", EscalationLevel: "mentor"}
-			if err := tx.QueryRowContext(ctx, `
-				INSERT INTO mentor_questions (intern_id, buddy_id, action_id, question, context)
-				VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at`,
-				user.ID, user.BuddyID, a.ID, truncate(q.Question, 2000), truncate(q.Context, 2000)).Scan(&mq.ID, &mq.CreatedAt); err != nil {
+			mq, err := repo.CreateMentorQuestion(ctx, user.ID, user.BuddyID, a.ID, q.Question, q.Context)
+			if err != nil {
 				return fmt.Errorf("store question: %w", err)
 			}
-			mq.EscalatedAt = mq.CreatedAt
+			mq.InternName = fullName(user.FirstName, user.LastName)
 			out.MentorQuestion = &mq
 		} else {
 			prefix, approver := "ACC", "Владелец ресурса (демо)"
 			if a.Type == "leave_request" {
 				prefix, approver = "ABS", s.leaveApprover(ctx, tx, user)
 			}
-			var r ServiceRequest
-			if err := tx.QueryRowContext(ctx, `
-				INSERT INTO service_requests (user_id, action_id, number, type, approver, params)
-				VALUES ($1, $2, $3 || '-' || lpad(nextval('service_request_number_seq')::text, 6, '0'), $4, $5, $6)
-				RETURNING id, number, type, status, approver, params, created_at, updated_at`,
-				user.ID, a.ID, prefix, a.Type, approver, []byte(a.Params)).
-				Scan(&r.ID, &r.Number, &r.Type, &r.Status, &r.Approver, &r.Params, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			r, err := repo.CreateServiceRequest(ctx, user.ID, a.ID, prefix, a.Type, approver, a.Params)
+			if err != nil {
 				return fmt.Errorf("store request: %w", err)
 			}
 			out.Request = &r
 		}
 		result, _ := json.Marshal(out)
-		_, err = tx.ExecContext(ctx, `UPDATE assistant_actions SET status = 'executed', result = $2, updated_at = now() WHERE id = $1`, a.ID, result)
-		return err
+		return repo.CompleteAction(ctx, a.ID, result)
 	})
 	return out, err
 }
@@ -185,7 +165,8 @@ func (s *AssistantService) Confirm(ctx context.Context, user *model.User, action
 func (s *AssistantService) leaveApprover(ctx context.Context, tx *sql.Tx, user *model.User) string {
 	if user.TeamleadID != nil {
 		var first, last *string
-		if tx.QueryRowContext(ctx, `SELECT first_name, last_name FROM users WHERE id = $1`, *user.TeamleadID).Scan(&first, &last) == nil {
+		first, last, err := repository.NewAssistantRepository(tx).UserName(ctx, *user.TeamleadID)
+		if err == nil {
 			if name := fullName(first, last); name != "" {
 				return name + " (руководитель)"
 			}
@@ -238,7 +219,8 @@ func (s *AssistantService) Cancel(ctx context.Context, userID, actionID uuid.UUI
 	var a PendingAction
 	err := withTransaction(ctx, s.db, func(tx *sql.Tx) error {
 		var err error
-		a, _, err = s.action(ctx, tx, userID, actionID, true)
+		repo := repository.NewAssistantRepository(tx)
+		a, _, err = repo.Action(ctx, userID, actionID, true)
 		if err != nil {
 			return err
 		}
@@ -246,8 +228,7 @@ func (s *AssistantService) Cancel(ctx context.Context, userID, actionID uuid.UUI
 			return ErrActionExecuted
 		}
 		a.Status = "cancelled"
-		_, err = tx.ExecContext(ctx, `UPDATE assistant_actions SET status = 'cancelled', updated_at = now() WHERE id = $1`, a.ID)
-		return err
+		return repo.CancelAction(ctx, a.ID)
 	})
 	return a, err
 }

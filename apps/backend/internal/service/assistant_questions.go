@@ -62,12 +62,7 @@ func (s *AssistantService) Answer(ctx context.Context, staff *model.User, id uui
 		if !updated {
 			return ErrQuestionAnswered
 		}
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO chat_messages (conversation_id, role, content, finish_reason)
-			SELECT m.conversation_id, 'assistant', $2, 'mentor_answer'
-			FROM mentor_questions mq JOIN chat_messages m ON m.action_id = mq.action_id
-			WHERE mq.id = $1 LIMIT 1`, id, text)
-		return err
+		return repository.NewAssistantRepository(tx).AddMentorAnswer(ctx, id, text)
 	})
 	if err != nil {
 		return q, err
@@ -87,9 +82,7 @@ func (s *AssistantService) Draft(ctx context.Context, staff *model.User, id uuid
 		return nil, err
 	}
 	payload := map[string]any{"question": q.Question, "context": q.Context}
-	var intern model.User
-	if err := s.db.QueryRowContext(ctx, `SELECT id, role, profession, buddy_id, first_name, team FROM users WHERE id = $1`, q.InternID).
-		Scan(&intern.ID, &intern.Role, &intern.Profession, &intern.BuddyID, &intern.FirstName, &intern.Team); err == nil {
+	if intern, err := repository.NewAssistantRepository(s.db).UserForContext(ctx, q.InternID); err == nil {
 		if uc, err := s.UserContext(ctx, &intern); err == nil {
 			payload["user_context"] = uc
 		}

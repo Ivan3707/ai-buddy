@@ -2,8 +2,6 @@ package app
 
 import (
 	"context"
-	"database/sql"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -15,6 +13,7 @@ import (
 	"github.com/nvkmaksim/ai-buddy/backend/internal/repository"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/security"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/service"
+	"github.com/nvkmaksim/ai-buddy/backend/migrations"
 )
 
 func env(key, fallback string) string {
@@ -55,9 +54,10 @@ func Run() error {
 	personalTasks := service.NewPersonalTaskService(db)
 	userService := service.NewUserService(db)
 	admin := service.NewAdminService(db, env("AI_URL", "http://127.0.0.1:8001"), hints)
+	readiness := repository.NewReadinessRepository(db, migrations.Versions())
 	admin.OpenForAll = os.Getenv("ADMIN_OPEN_FOR_ALL") == "1"
 	deps := handler.Dependencies{
-		Ready:            func(ctx context.Context) error { return checkReady(ctx, db) },
+		Ready:            func(ctx context.Context) error { return checkReady(ctx, readiness) },
 		Feedback:         service.NewFeedbackService(db, service.MockAnalytics{DB: db, Unavailable: os.Getenv("ANALYTICS_MOCK_UNAVAILABLE") == "1"}),
 		Auth:             auth,
 		Sessions:         auth,
@@ -106,15 +106,12 @@ func Run() error {
 }
 
 // checkReady: без миграций и загруженного каталога пользовательские API бесполезны, поэтому сервис не должен считаться готовым.
-func checkReady(ctx context.Context, db *sql.DB) error {
+type readinessChecker interface {
+	Check(context.Context) error
+}
+
+func checkReady(ctx context.Context, readiness readinessChecker) error {
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
-	var items int
-	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM checklist_items`).Scan(&items); err != nil {
-		return errors.New("database is not migrated")
-	}
-	if items == 0 {
-		return errors.New("checklist catalog is not loaded")
-	}
-	return nil
+	return readiness.Check(ctx)
 }

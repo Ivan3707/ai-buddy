@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"path"
 	"strings"
-	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -45,28 +44,9 @@ type CommentFile struct {
 	Data     []byte
 }
 
-type TaskAttachment struct {
-	ID          uuid.UUID
-	Filename    string
-	ContentType string
-	Size        int
-}
-
-type TaskComment struct {
-	ID          uuid.UUID
-	AuthorID    uuid.UUID
-	AuthorName  string
-	AuthorRole  model.UserRole
-	Body        string
-	CreatedAt   time.Time
-	Attachments []TaskAttachment
-}
-
-type AttachmentFile struct {
-	Filename    string
-	ContentType string
-	Data        []byte
-}
+type TaskAttachment = model.TaskAttachment
+type TaskComment = model.TaskComment
+type AttachmentFile = model.AttachmentFile
 
 type TaskCommentService struct{ db *sql.DB }
 
@@ -85,28 +65,21 @@ func (s *TaskCommentService) threadProgress(ctx context.Context, viewer *model.U
 			return uuid.Nil, ErrCommentInvalid
 		}
 		owner = *internID
-		var buddyID, leadID *uuid.UUID
-		var role string
-		err := s.db.QueryRowContext(ctx, `SELECT role, buddy_id, teamlead_id FROM users WHERE id = $1`, owner).Scan(&role, &buddyID, &leadID)
-		if errors.Is(err, sql.ErrNoRows) {
+		target, err := repository.NewUserRepository(s.db).GetByID(ctx, owner)
+		if errors.Is(err, repository.ErrNotFound) {
 			return uuid.Nil, repository.ErrNotFound
 		}
 		if err != nil {
 			return uuid.Nil, err
 		}
-		mine := role == string(model.RoleIntern) &&
-			((viewer.Role == model.RoleBuddy && buddyID != nil && *buddyID == viewer.ID) ||
-				(viewer.Role == model.RoleTeamlead && leadID != nil && *leadID == viewer.ID))
+		mine := target.Role == model.RoleIntern &&
+			((viewer.Role == model.RoleBuddy && target.BuddyID != nil && *target.BuddyID == viewer.ID) ||
+				(viewer.Role == model.RoleTeamlead && target.TeamleadID != nil && *target.TeamleadID == viewer.ID))
 		if !mine {
 			return uuid.Nil, ErrCommentForbidden
 		}
 	}
-	var progressID uuid.UUID
-	err := s.db.QueryRowContext(ctx, `SELECT id FROM user_checklist_progress WHERE user_id = $1 AND checklist_item_id = $2`, owner, itemID).Scan(&progressID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return uuid.Nil, repository.ErrNotFound
-	}
-	return progressID, err
+	return repository.NewTaskCommentRepository(s.db).ProgressID(ctx, owner, itemID)
 }
 
 func displayName(first, last, email string) string {
@@ -121,50 +94,7 @@ func (s *TaskCommentService) List(ctx context.Context, viewer *model.User, itemI
 	if err != nil {
 		return nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT c.id, c.author_id, c.author_role, c.body, c.created_at, COALESCE(u.first_name,''), COALESCE(u.last_name,''), u.email
-		FROM task_comments c JOIN users u ON u.id = c.author_id
-		WHERE c.progress_id = $1 ORDER BY c.created_at, c.id`, progressID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := []TaskComment{}
-	index := map[uuid.UUID]int{}
-	for rows.Next() {
-		var c TaskComment
-		var role, first, last, email string
-		if err := rows.Scan(&c.ID, &c.AuthorID, &role, &c.Body, &c.CreatedAt, &first, &last, &email); err != nil {
-			return nil, err
-		}
-		c.AuthorRole = model.UserRole(role)
-		c.AuthorName = displayName(first, last, email)
-		c.Attachments = []TaskAttachment{}
-		index[c.ID] = len(out)
-		out = append(out, c)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	files, err := s.db.QueryContext(ctx, `
-		SELECT a.id, a.comment_id, a.filename, a.content_type, a.size_bytes
-		FROM task_attachments a JOIN task_comments c ON c.id = a.comment_id
-		WHERE c.progress_id = $1 ORDER BY a.created_at, a.id`, progressID)
-	if err != nil {
-		return nil, err
-	}
-	defer files.Close()
-	for files.Next() {
-		var a TaskAttachment
-		var commentID uuid.UUID
-		if err := files.Scan(&a.ID, &commentID, &a.Filename, &a.ContentType, &a.Size); err != nil {
-			return nil, err
-		}
-		if i, ok := index[commentID]; ok {
-			out[i].Attachments = append(out[i].Attachments, a)
-		}
-	}
-	return out, files.Err()
+	return repository.NewTaskCommentRepository(s.db).List(ctx, progressID)
 }
 
 // SanitizeFilename keeps the base name, drops control characters and caps the length.
@@ -234,15 +164,14 @@ func (s *TaskCommentService) Add(ctx context.Context, author *model.User, itemID
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	c := TaskComment{AuthorID: author.ID, AuthorRole: author.Role, Body: body, Attachments: []TaskAttachment{}}
-	if err := tx.QueryRowContext(ctx, `INSERT INTO task_comments (progress_id, author_id, author_role, body) VALUES ($1,$2,$3,$4) RETURNING id, created_at`,
-		progressID, author.ID, string(author.Role), body).Scan(&c.ID, &c.CreatedAt); err != nil {
+	repo := repository.NewTaskCommentRepository(tx)
+	c, err := repo.AddComment(ctx, progressID, author.ID, author.Role, body)
+	if err != nil {
 		return nil, err
 	}
 	for _, p := range prepared {
-		a := TaskAttachment{Filename: p.name, ContentType: p.contentType, Size: len(p.data)}
-		if err := tx.QueryRowContext(ctx, `INSERT INTO task_attachments (comment_id, filename, content_type, size_bytes, data) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-			c.ID, a.Filename, a.ContentType, a.Size, p.data).Scan(&a.ID); err != nil {
+		a, err := repo.AddAttachment(ctx, c.ID, p.name, p.contentType, p.data)
+		if err != nil {
 			return nil, err
 		}
 		c.Attachments = append(c.Attachments, a)
@@ -250,35 +179,21 @@ func (s *TaskCommentService) Add(ctx context.Context, author *model.User, itemID
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
-	var first, last, email string
-	_ = s.db.QueryRowContext(ctx, `SELECT COALESCE(first_name,''), COALESCE(last_name,''), email FROM users WHERE id = $1`, author.ID).Scan(&first, &last, &email)
-	c.AuthorName = displayName(first, last, email)
+	c.AuthorName, _ = repository.NewTaskCommentRepository(s.db).AuthorName(ctx, author.ID)
 	return &c, nil
 }
 
 // Attachment returns the file if the viewer may see its thread (the owner intern, their buddy or teamlead).
 func (s *TaskCommentService) Attachment(ctx context.Context, viewer *model.User, id uuid.UUID) (*AttachmentFile, error) {
-	var f AttachmentFile
-	var owner uuid.UUID
-	var buddyID, leadID *uuid.UUID
-	err := s.db.QueryRowContext(ctx, `
-		SELECT a.filename, a.content_type, a.data, p.user_id, u.buddy_id, u.teamlead_id
-		FROM task_attachments a
-		JOIN task_comments c ON c.id = a.comment_id
-		JOIN user_checklist_progress p ON p.id = c.progress_id
-		JOIN users u ON u.id = p.user_id
-		WHERE a.id = $1`, id).Scan(&f.Filename, &f.ContentType, &f.Data, &owner, &buddyID, &leadID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, repository.ErrNotFound
-	}
+	access, err := repository.NewTaskCommentRepository(s.db).Attachment(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	ok := owner == viewer.ID ||
-		(viewer.Role == model.RoleBuddy && buddyID != nil && *buddyID == viewer.ID) ||
-		(viewer.Role == model.RoleTeamlead && leadID != nil && *leadID == viewer.ID)
+	ok := access.Owner == viewer.ID ||
+		(viewer.Role == model.RoleBuddy && access.BuddyID != nil && *access.BuddyID == viewer.ID) ||
+		(viewer.Role == model.RoleTeamlead && access.TeamleadID != nil && *access.TeamleadID == viewer.ID)
 	if !ok {
 		return nil, ErrCommentForbidden
 	}
-	return &f, nil
+	return &access.File, nil
 }
