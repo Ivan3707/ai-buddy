@@ -15,26 +15,35 @@ Web обращается к backend через `/api`. В текущей сбо�
 | Web-сборка | Node.js 22 (`node:22-alpine`); React 19.1.0, TypeScript 5.8.3, Vite 6.4.6 по `apps/web/package.json` |
 | AI-контейнер | Python 3.12 (`apps/ai/Dockerfile`); для backend важны только контракты `/chat` и `/hint` |
 
-Для первого запуска на Windows нужны PowerShell, Docker Desktop, Go 1.26 и Goose в `PATH`. Node.js и Python нужны только для локальных JS/контрактных проверок: Compose собирает Web и AI сам. Порты по умолчанию: Web `127.0.0.1:5173`, Backend `127.0.0.1:8080`, PostgreSQL `127.0.0.1:5433`.
+Основной терминал на Windows — **Git Bash**. Нужны Docker Desktop, Go 1.26, Goose в `PATH` и доступный `powershell.exe`; сам обязательный bootstrap остаётся PowerShell-скриптом. Node.js и Python нужны только для локальных JS/контрактных проверок: Compose собирает Web и AI сам. Порты по умолчанию: Web `127.0.0.1:5173`, Backend `127.0.0.1:8080`, PostgreSQL `127.0.0.1:5433`.
 
-## Первый запуск через Docker Compose
+## Первый запуск через обязательный bootstrap
 
-Из корня репозитория в PowerShell:
+Из корня репозитория в Git Bash:
 
-```powershell
-Copy-Item .env.example .env
+```bash
+cp .env.example .env
 # Замените DB_PASSWORD и JWT_SECRET в .env на свои случайные значения.
 # JWT_SECRET должен содержать не менее 32 символов.
 go install github.com/pressly/goose/v3/cmd/goose@v3.24.1
-$env:Path = "$(go env GOPATH)\bin;$env:Path"
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\scripts\bootstrap.ps1
+export PATH="$(go env GOPATH)/bin:$PATH"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/bootstrap.ps1
 docker compose -p ai-buddy ps
 ```
 
-`bootstrap.ps1` запускает PostgreSQL, проверяет историю миграций (допустима любая версия от 1 до последней в `apps/backend/migrations`) и применяет недостающие миграции через Goose. Затем `cmd/init-catalog` загружает общий и профессиональные чек-листы из `apps/backend/scripts`, `cmd/sync-hr` синхронизирует `data/corporate_employees.json`, а Compose собирает и запускает AI, backend и Web с ожиданием healthcheck. Скрипт не преобразует старую несовместимую схему и не сбрасывает данные. Нужен свободный набор портов; их можно изменить в `.env`. Для независимого стенда у bootstrap есть параметры `-ProjectName`, `-EnvFile`, `-CredentialsDirectory`.
+`scripts/bootstrap.ps1` — обязательная точка первоначального развёртывания. Он запускает PostgreSQL, проверяет историю миграций (допустима любая версия от 1 до последней в `apps/backend/migrations`) и применяет недостающие миграции через Goose. Затем `cmd/init-catalog` загружает общий и профессиональные чек-листы из `apps/backend/scripts`, `cmd/sync-hr` синхронизирует `data/corporate_employees.json`, а Compose собирает и запускает AI, backend и Web с ожиданием healthcheck. Скрипт не преобразует старую несовместимую схему, не очищает БД и не сбрасывает данные. Нужен свободный набор портов; их можно изменить в `.env`. Для независимого стенда у bootstrap есть параметры `-ProjectName`, `-EnvFile`, `-CredentialsDirectory`.
 
-Откройте <http://127.0.0.1:5173>. `GET http://127.0.0.1:8080/health` возвращает liveness backend (процесс жив). `GET /ready` — readiness: 200 только если миграции применены и каталог чек-листов загружен; его использует healthcheck Compose. Поэтому прямой `docker compose up` на пустой БД не объявит backend готовым и не запустит web: сначала выполните `.\scripts\bootstrap.ps1`. Для повторного запуска уже подготовленного стенда: `docker compose -p ai-buddy up -d --build --wait`. Эта команда сама не выполняет миграцию и Mock HR sync. После изменения синтетического HR-снимка повторно запустите `.\scripts\bootstrap.ps1`: работающий backend читает справочник только при старте, а Dockerfile копирует JSON в образ, поэтому нужна пересборка и перезапуск. Остановка без удаления PostgreSQL volume: `docker compose -p ai-buddy stop`.
+Откройте <http://127.0.0.1:5173>. Проверки из Git Bash: `curl -i http://127.0.0.1:8080/health` возвращает liveness процесса, а `curl -i http://127.0.0.1:8080/ready` возвращает 200 только при доступной PostgreSQL, актуальной версии всех Goose-миграций и непустом каталоге. При неполной подготовке `/ready` возвращает 503. Поэтому прямой `docker compose up` на пустой БД не является заменой bootstrap: сначала выполните `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./scripts/bootstrap.ps1`.
+
+Для повторного запуска уже подготовленной и мигрированной БД допустим `docker compose -p ai-buddy up -d --build --wait`; он сам не применяет миграции, не инициализирует каталог и не запускает Mock HR Sync. После новых миграций или изменения синтетического HR-снимка снова запускайте bootstrap. Остановка без удаления PostgreSQL volume: `docker compose -p ai-buddy stop`. Не используйте `docker compose down -v`, если данные нужно сохранить.
+
+PostgreSQL integration tests используют только отдельный временный контейнер с `tmpfs` и не читают `.env` приложения:
+
+```bash
+bash scripts/test-backend-postgres.sh
+```
+
+Никогда не подставляйте рабочий DSN в `TEST_DATABASE_URL` и не запускайте тесты против Compose-БД. Подробности: [инструкция PostgreSQL-тестов](docs/testing/postgres-integration-git-bash.md).
 
 ## Тестовые учётные записи
 
@@ -95,8 +104,8 @@ Backend реализует API ассистента из `contracts/backend.open
 
 ## Расширение Chrome (apps/extension)
 
-```powershell
-$env:BACKEND_ORIGIN = "http://127.0.0.1:8080"   # адрес Backend (BACKEND_PORT)
+```bash
+export BACKEND_ORIGIN='http://127.0.0.1:8080'   # адрес Backend (BACKEND_PORT)
 npm run build --workspace @ai-buddy/extension
 ```
 
@@ -116,39 +125,19 @@ npm run build --workspace @ai-buddy/extension
 Контракт: `/api/admin/*` в `contracts/backend.openapi.json`, `/v1/admin/*` в `contracts/ai.openapi.json`.
 
 ## Проверки
-Команды ниже выполняются из корня репозитория в PowerShell. Без `TEST_DATABASE_URL` Go запускает доступные unit/handler-тесты; PostgreSQL integration-тесты пропускаются. `RUN_E2E=1` включает opt-in E2E и требует тестовую БД. Не направляйте эти переменные на БД приложения `app` или нагрузочный стенд. Для общего и профессионального каталога тестовые фикстуры используют уникальные ограничения, поэтому пакеты запускаются последовательно: `-p 1`.
+Команды ниже выполняются из корня репозитория в Git Bash. Без `TEST_DATABASE_URL` Go запускает доступные unit/handler-тесты; PostgreSQL integration-тесты пропускаются. Не направляйте тестовые переменные на БД приложения или нагрузочный стенд.
 
-```powershell
-Push-Location apps/backend
+```bash
+cd apps/backend
 go test -p 1 -count=1 ./...
 go vet ./...
-Pop-Location
+cd ../..
 ```
 
-Для полного integration/E2E используйте **отдельный временный PostgreSQL** без существующих Docker volumes. Следующие команды создают только собственный контейнер с `tmpfs`; имя контейнера должно быть свободно. Goose должен быть доступен в `PATH`.
+Полный integration/E2E запускается готовым безопасным сценарием. Он создаёт отдельный PostgreSQL с `tmpfs`, применяет актуальные миграции, включает `RUN_E2E=1` и гарантированно останавливает контейнер:
 
-```powershell
-docker run --rm -d --name ai-buddy-doc-test-db --tmpfs /var/lib/postgresql/data:rw,size=256m -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_DB=ai_buddy_verify_docs -p 127.0.0.1::5432 postgres:16-alpine
-for ($attempt = 0; $attempt -lt 30; $attempt++) {
-    docker exec ai-buddy-doc-test-db pg_isready -U postgres -d ai_buddy_verify_docs *> $null
-    if ($LASTEXITCODE -eq 0) { break }
-    Start-Sleep -Seconds 1
-}
-if ($LASTEXITCODE -ne 0) { throw 'Тестовый PostgreSQL не стал готовым' }
-$testPort = ((docker port ai-buddy-doc-test-db 5432/tcp) -split ':')[-1]
-$env:TEST_DATABASE_URL = "postgres://postgres@127.0.0.1:$testPort/ai_buddy_verify_docs?sslmode=disable"
-$env:TEST_CATALOG_DATABASE_URL = "postgres://postgres@127.0.0.1:$testPort/ai_buddy_verify_catalog?sslmode=disable"
-goose -dir apps/backend/migrations postgres $env:TEST_DATABASE_URL up
-docker exec ai-buddy-doc-test-db psql -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'CREATE DATABASE ai_buddy_verify_catalog'
-goose -dir apps/backend/migrations postgres $env:TEST_CATALOG_DATABASE_URL up
-Push-Location apps/backend
-go test -p 1 -count=1 ./...           # unit + PostgreSQL integration
-$env:RUN_E2E = '1'
-go test -p 1 -count=1 ./...           # полный набор, включая opt-in E2E
-go vet ./...
-Pop-Location
-Remove-Item Env:RUN_E2E, Env:TEST_DATABASE_URL, Env:TEST_CATALOG_DATABASE_URL
-docker stop ai-buddy-doc-test-db
+```bash
+bash scripts/test-backend-postgres.sh
 ```
 
 Тест `TestOpenPostgresLive` имеет отдельный opt-in флаг `VERIFY_DATABASE_CONNECTION=1` и переменные `DB_*`; приведённый безопасный прогон его не включает. Для воспроизведения **точного** результата покрытия 81,19% использовались Go 1.26.0 в Linux-контейнере, `RUN_E2E=1`, отдельные базы и команда `go test -p 1 -count=1 -coverpkg=./... -coverprofile=coverage.out ./...`; детали окружения и результаты — в [отчёте](docs/testing/backend-test-report.md). Race detector требует Linux/CGO/GCC; ранее подтверждённый прогон приведён там же.
@@ -163,22 +152,22 @@ docker stop ai-buddy-doc-test-db
 
 Для статической проверки двух OpenAPI-спецификаций нужны `jsonschema` и `openapi-spec-validator` в изолированном Python-окружении. Следующие версии прошли проверку на Python 3.13.15:
 
-```powershell
+```bash
 py -3 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install 'jsonschema==4.26.0' 'openapi-spec-validator==0.9.0'
-.\.venv\Scripts\python.exe scripts/check_contracts.py
+./.venv/Scripts/python.exe -m pip install 'jsonschema==4.26.0' 'openapi-spec-validator==0.9.0'
+./.venv/Scripts/python.exe scripts/check_contracts.py
 ```
 
 Для live-проверки запустите Compose и используйте первый файл учётных данных Mock HR, содержащий `buddy@demo.example`:
 
-```powershell
-$env:E2E_CREDENTIALS_FILE = '<абсолютный путь к приватному файлу первого HR Sync>'
-$env:CHECK_LIVE = '1'
-.\.venv\Scripts\python.exe scripts/check_contracts.py
-Remove-Item Env:CHECK_LIVE
+```bash
+export E2E_CREDENTIALS_FILE='C:/absolute/path/to/first-hr-sync.json'
+export CHECK_LIVE=1
+./.venv/Scripts/python.exe scripts/check_contracts.py
+unset CHECK_LIVE
 ```
 
-Web и общий JS-клиент можно проверить отдельно из корня репозитория: `npm.cmd ci`, `npm.cmd test`, `npm.cmd run build`. `npm.cmd` работает в PowerShell даже при запрете запуска `npm.ps1`. Browser E2E (`npm.cmd run test:e2e`) дополнительно требует работающий Compose, `E2E_CREDENTIALS_FILE` и установленный Chromium для Playwright. Здесь Web упомянут только как клиент backend и как проверенная временная заглушка ролей; внутренняя реализация Web и AI не входит в отчёт Backend.
+Web, Extension и общий JS-клиент проверяются из корня репозитория командами `npm ci`, `npm test`, `npm run build`. Browser E2E (`npm run test:e2e`) дополнительно требует работающий Compose, `E2E_CREDENTIALS_FILE` и установленный Chromium для Playwright.
 
 ## Известные ограничения и материалы
 
