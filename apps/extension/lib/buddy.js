@@ -69,7 +69,7 @@ export function toView(state) {
     form: state.form,
     sources: state.sources
       .filter(source => /^https?:\/\//.test(source.url)) // no javascript:/data: links in the page
-      .map(source => ({id: source.id, title: source.title, url: source.url, snippet: source.snippet || ''})),
+      .map(source => ({id: source.id, title: source.title, url: source.url, snippet: source.snippet || '', ...(source.refs ? {refs: source.refs} : {})})),
     card: action ? {
       id: action.id,
       title: actionTitle(action.type),

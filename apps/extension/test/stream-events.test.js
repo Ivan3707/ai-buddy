@@ -117,6 +117,7 @@ test('normalizers and parseEventData', () => {
   assert.deepEqual(parseEventData('{"a":1}'), {a: 1});
   assert.deepEqual(normalizeSources([{id: 'a', title: 'b', url: 'c', snippet: ''}, {id: 'x'}]), [{id: 'a', title: 'b', url: 'c'}]);
   assert.deepEqual(normalizeSources(undefined), []);
+  assert.deepEqual(normalizeSources([{id: 'a', title: 'b', url: 'c', refs: [2, 4]}, {id: 'd', title: 'e', url: 'f', refs: ['x']}]), [{id: 'a', title: 'b', url: 'c', refs: [2, 4]}, {id: 'd', title: 'e', url: 'f'}]);
   assert.deepEqual(normalizeAction({id: 'a', type: 't', summary: 's', error: 'boom'}), {id: 'a', type: 't', summary: 's', status: 'pending', params: {}, error: 'boom'});
   assert.equal(normalizeAction(null), null);
 });

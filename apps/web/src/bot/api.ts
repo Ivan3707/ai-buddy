@@ -1,7 +1,7 @@
 // Bot API for the web app: streaming chat (SSE over fetch), actions, requests, hints and the buddy side.
 // Contract: contracts/backend.openapi.json. Same-origin '' base: nginx proxies /api to the backend.
 
-export type Source = { id: string; title: string; url: string; snippet?: string };
+export type Source = { id: string; title: string; url: string; snippet?: string; refs?: number[] };
 export type ActionType = 'leave_request' | 'access_request' | 'mentor_question';
 export type PendingAction = {
   id: string; type: ActionType; params: Record<string, string>; summary: string;
