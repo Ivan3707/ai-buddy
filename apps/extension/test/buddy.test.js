@@ -100,6 +100,8 @@ test('display name: profile name, a real-looking email name, or nothing', () => 
   assert.equal(displayName({email: 'intern@demo.local'}), '');
   assert.equal(displayName({email: 'a.b-1@x'}), '');
   assert.equal(displayName(null), '');
+  assert.equal(displayName({first_name: ' Ольга ', email: 'buddy@demo.example'}), 'Ольга');
+  assert.equal(displayName({email: 'buddy@demo.example'}), '');
 });
 
 test('bubble layout stays inside the window and moves up near the bottom edge', async () => {
