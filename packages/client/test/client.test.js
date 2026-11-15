@@ -80,3 +80,27 @@ test('task comments: multipart upload without a manual Content-Type, query for s
     assert.equal(blob.type, 'application/pdf');
   } finally { globalThis.fetch = original; }
 });
+
+test('teamlead checklist edits, staff history and demo completion use the documented routes', async () => {
+  const original = globalThis.fetch;
+  const seen = [];
+  try {
+    globalThis.fetch = async (url, init) => {
+      seen.push([url, init.method, init.body ? JSON.parse(init.body) : undefined]);
+      if (init.method === 'PATCH' || init.method === 'DELETE') return new Response(null, {status:204});
+      if (url.endsWith('/complete-checklists')) return new Response(JSON.stringify({intern_id:'i', items_completed:3, submissions_approved:1}));
+      return new Response(JSON.stringify([{id:'s', status:'rejected', reviewed_by:'b', review_comment:'redo'}]));
+    };
+    const { updateInternTask, removeInternTask, getInternSubmissionHistory, adminCompleteChecklists } = await import('../index.js');
+    assert.equal(await updateInternTask('', 'token', 'i', 't', {title:'New'}), undefined);
+    assert.equal(await removeInternTask('', 'token', 'i', 't'), undefined);
+    assert.equal((await getInternSubmissionHistory('', 'token', 'i', 't'))[0].review_comment, 'redo');
+    assert.equal((await adminCompleteChecklists('', 'token', 'i')).items_completed, 3);
+    assert.deepEqual(seen, [
+      ['/api/teamlead/interns/i/checklist-items/t', 'PATCH', {title:'New'}],
+      ['/api/teamlead/interns/i/checklist-items/t', 'DELETE', undefined],
+      ['/api/staff/interns/i/checklist-items/t/submissions', 'GET', undefined],
+      ['/api/admin/accounts/i/complete-checklists', 'POST', undefined],
+    ]);
+  } finally { globalThis.fetch = original; }
+});

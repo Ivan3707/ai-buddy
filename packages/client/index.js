@@ -63,6 +63,18 @@ export function getTeamleads(baseUrl, token) { return apiRequest(baseUrl, '/api/
 export function getBuddies(baseUrl, token) { return apiRequest(baseUrl, '/api/staff/buddies', { token }); }
 export function getInternProgress(baseUrl, token, internID) { return apiRequest(baseUrl, `/api/staff/interns/${encodeURIComponent(internID)}/progress`, { token }); }
 export function createPersonalTask(baseUrl, token, internID, input) { return apiRequest(baseUrl, `/api/teamlead/interns/${encodeURIComponent(internID)}/checklist-items`, { token, method: 'POST', body: input }); }
+export function updateInternTask(baseUrl, token, internID, itemID, patch) {
+  return apiRequest(baseUrl, `/api/teamlead/interns/${encodeURIComponent(internID)}/checklist-items/${encodeURIComponent(itemID)}`, { token, method: 'PATCH', body: patch });
+}
+export function removeInternTask(baseUrl, token, internID, itemID) {
+  return apiRequest(baseUrl, `/api/teamlead/interns/${encodeURIComponent(internID)}/checklist-items/${encodeURIComponent(itemID)}`, { token, method: 'DELETE' });
+}
+export function getInternSubmissionHistory(baseUrl, token, internID, itemID) {
+  return apiRequest(baseUrl, `/api/staff/interns/${encodeURIComponent(internID)}/checklist-items/${encodeURIComponent(itemID)}/submissions`, { token });
+}
+export function adminCompleteChecklists(baseUrl, token, userID) {
+  return apiRequest(baseUrl, `/api/admin/accounts/${encodeURIComponent(userID)}/complete-checklists`, { token, method: 'POST' });
+}
 export function getCorporateProfile(baseUrl, token) { return apiRequest(baseUrl, '/api/corporate/me', { token }); }
 export function listCorporateTools(baseUrl, token) { return apiRequest(baseUrl, '/api/corporate/tools', { token }); }
 export function listAccessRequests(baseUrl, token) { return apiRequest(baseUrl, '/api/corporate/access-requests', { token }); }

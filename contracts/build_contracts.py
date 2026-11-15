@@ -132,7 +132,7 @@ SHARED = {
         "properties": {
             "user_id": {"type": "string"},
             "display_name": {"type": "string"},
-            "role": {"type": "string", "enum": ["intern", "buddy"]},
+            "role": {"type": "string", "enum": ["intern", "buddy", "teamlead"]},
             "profession": {"type": ["string", "null"], "enum": ["backend", "frontend", "ml", None]},
             "team": {"type": "string"},
             "buddy_name": {"type": "string"},
@@ -363,6 +363,85 @@ BACKEND_ONLY = {
                                             "description": "What was wrong; only kept with rating=down. Shown to the admin, not to mentors."}}},
     "AnswerMentorQuestion": {"type": "object", "additionalProperties": False, "required": ["answer"],
                              "properties": {"answer": {"type": "string", "minLength": 1, "maxLength": 4000}}},
+    "ChecklistItem": {
+        "type": "object",
+        "required": ["id", "title", "description", "expected_result", "requires_review", "estimated_minutes", "due_at",
+                     "position", "status", "completed_at", "returned_for_rework", "rework_comment", "personal"],
+        "description": "One task of the intern's checklist as this intern sees it: the teamlead's per-intern edits "
+                       "(title, description, expected_result, estimated_minutes, due_at) are already applied and removed "
+                       "tasks are not listed.",
+        "properties": {
+            "id": {"type": "string", "format": "uuid", "description": "Checklist item id (same for all interns for catalog tasks)"},
+            "title": {"type": "string"}, "description": {"type": "string"},
+            "expected_result": {"type": ["string", "null"]},
+            "requires_review": {"type": "boolean"},
+            "estimated_minutes": {"type": ["integer", "null"]},
+            "due_at": {"type": ["string", "null"], "format": "date-time"},
+            "position": {"type": "integer", "description": "Position in this intern's checklist (gaps possible after removals)"},
+            "status": {"type": "string", "enum": ["unavailable", "active", "completed", "verified"],
+                       "description": "completed + requires_review = waiting for the buddy's review; verified = approved"},
+            "completed_at": {"type": ["string", "null"], "format": "date-time"},
+            "returned_for_rework": {"type": "boolean",
+                                    "description": "The buddy returned (rejected) the latest submission and the intern has not "
+                                                   "resubmitted yet. Status is 'active' again: the task belongs in the 'Активно' column."},
+            "rework_comment": {"type": ["string", "null"], "description": "The buddy's comment of that return; null when not returned"},
+            "personal": {"type": "boolean", "description": "Added for this intern by the teamlead (not from the shared catalog)"},
+        },
+    },
+    "ChecklistStage": {
+        "type": "object", "required": ["id", "title", "week_start", "week_end", "goal", "expected_result", "position", "items"],
+        "properties": {"id": {"type": "string", "format": "uuid"}, "title": {"type": "string"},
+                       "week_start": {"type": "integer"}, "week_end": {"type": "integer"}, "goal": {"type": "string"},
+                       "expected_result": {"type": "string"}, "position": {"type": "integer"},
+                       "items": {"type": "array", "items": ref("ChecklistItem")}},
+    },
+    "Checklist": {
+        "type": "object",
+        "required": ["id", "name", "type", "profession", "stages", "total_items", "completed_items", "completion_percent"],
+        "properties": {"id": {"type": "string", "format": "uuid"}, "name": {"type": "string"},
+                       "type": {"type": "string", "enum": ["common", "professional"]},
+                       "profession": {"type": ["string", "null"], "enum": ["backend", "frontend", "ml", None]},
+                       "stages": {"type": "array", "items": ref("ChecklistStage")},
+                       "total_items": {"type": "integer"},
+                       "completed_items": {"type": "integer", "description": "verified, or completed without review"},
+                       "completion_percent": {"type": "number"}},
+    },
+    "ProgressSummary": {
+        "type": "object", "required": ["user_id", "total_items", "completed_items", "completion_percent", "common", "professional"],
+        "description": "Both checklists of the intern and the overall counts over both (same for the buddy and the teamlead).",
+        "properties": {"user_id": {"type": "string", "format": "uuid"}, "total_items": {"type": "integer"},
+                       "completed_items": {"type": "integer"}, "completion_percent": {"type": "number"},
+                       "common": ref("Checklist"), "professional": ref("Checklist")},
+    },
+    "SubmissionHistoryEntry": {
+        "type": "object",
+        "required": ["id", "progress_id", "attempt_number", "result_text", "result_url", "status", "submitted_at",
+                     "reviewed_at", "reviewed_by", "review_comment"],
+        "description": "One attempt of a task with its review result; lists are oldest attempt first.",
+        "properties": {"id": {"type": "string", "format": "uuid"}, "progress_id": {"type": "string", "format": "uuid"},
+                       "attempt_number": {"type": "integer", "minimum": 1},
+                       "result_text": {"type": ["string", "null"]}, "result_url": {"type": ["string", "null"]},
+                       "status": {"type": "string", "enum": ["pending", "approved", "rejected"]},
+                       "submitted_at": {"type": "string", "format": "date-time"},
+                       "reviewed_at": {"type": ["string", "null"], "format": "date-time"},
+                       "reviewed_by": {"type": ["string", "null"], "format": "uuid", "description": "Reviewer (the buddy) user id"},
+                       "review_comment": {"type": ["string", "null"]}},
+    },
+    "InternTaskPatch": {
+        "type": "object", "additionalProperties": False, "minProperties": 1,
+        "description": "Teamlead's change of one task for ONE intern. Omitted or null fields keep their current value; "
+                       "values cannot be reset to the catalog ones in this version.",
+        "properties": {"title": {"type": "string", "minLength": 1, "maxLength": 255},
+                       "description": {"type": "string"}, "expected_result": {"type": "string"},
+                       "estimated_minutes": {"type": "integer", "minimum": 1},
+                       "due_at": {"type": "string", "format": "date-time"}},
+    },
+    "DemoCompletion": {
+        "type": "object", "required": ["intern_id", "items_completed", "submissions_approved"],
+        "properties": {"intern_id": {"type": "string", "format": "uuid"},
+                       "items_completed": {"type": "integer", "description": "Tasks changed by this call (0 on a repeated call)"},
+                       "submissions_approved": {"type": "integer", "description": "Pending submissions approved by this call"}},
+    },
     "ChatMetrics": {
         "type": "object", "description": "Product metrics for the demo dashboard / presentation",
         "properties": {
@@ -805,6 +884,86 @@ backend_paths.update({
         "description": "Buddy only: aggregated assistant metrics for own interns.",
         "responses": {"200": json_resp("Success", ref("ChatMetrics"))}}},
 })
+
+# ---- checklists: typed responses and per-intern edits (backend-owned paths, extended in place; idempotent)
+INTERN_PARAM = {"name": "internID", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
+ITEM_PARAM = {"name": "itemID", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}
+backend_paths["/api/checklists"]["get"].update({
+    "security": BEARER,
+    "description": "Intern only: the intern's common and professional checklists with progress. Items carry "
+                   "returned_for_rework / rework_comment (task returned by the buddy) and personal.",
+    "responses": {"200": json_resp("Intern's common and professional checklists", {
+        "type": "object", "required": ["common", "professional"],
+        "properties": {"common": ref("Checklist"), "professional": ref("Checklist")}}),
+        "403": json_resp("Not an intern", ERROR)}})
+backend_paths["/api/progress"]["get"].update({
+    "security": BEARER,
+    "responses": {"200": json_resp("Progress", ref("ProgressSummary")), "403": json_resp("Not an intern", ERROR)}})
+backend_paths["/api/staff/interns/{internID}/progress"]["get"].update({
+    "security": BEARER,
+    "description": "Assigned buddy or assigned teamlead: both checklists (common and professional) of the intern and the "
+                   "overall counts over both. Items carry returned_for_rework, rework_comment and personal.",
+    "responses": {"200": json_resp("Progress", ref("ProgressSummary")), "403": json_resp("Not buddy or teamlead", ERROR),
+                  "404": json_resp("Intern not assigned", ERROR)}})
+backend_paths["/api/checklist-items/{itemID}/submissions"]["get"].update({
+    "security": BEARER,
+    "description": "Intern only: own submission history of the task, oldest attempt first.",
+    "responses": {"200": json_resp("Submission history", {"type": "array", "items": ref("SubmissionHistoryEntry")})}})
+review_op = backend_paths["/api/buddy/submissions/{submissionID}/review"]["post"]
+review_op["description"] = (
+    "Buddy only: approve or return a submission of the buddy's intern. A teamlead gets 403 (teamleads read the history "
+    "via GET /api/staff/interns/{internID}/checklist-items/{itemID}/submissions but never review).")
+review_op.setdefault("responses", {})["403"] = json_resp("Not a buddy (teamleads cannot review)", ERROR)
+create_task = backend_paths["/api/teamlead/interns/{internID}/checklist-items"]["post"]
+create_task["description"] = (
+    "Assigned teamlead inserts a personal item for THIS intern at a 1-based position of the common or professional "
+    "checklist (checklist_type, default professional). The checklist response includes nullable due_at; existing "
+    "completed and active statuses are preserved.")
+create_task["requestBody"]["content"]["application/json"]["schema"]["properties"]["checklist_type"] = {
+    "type": "string", "enum": ["common", "professional"], "default": "professional"}
+create_task["responses"]["201"] = json_resp("Personal task ID", {
+    "type": "object", "required": ["id"], "properties": {"id": {"type": "string", "format": "uuid"}}})
+backend_paths.update({
+    "/api/staff/interns/{internID}/checklist-items/{itemID}/submissions": {"get": {
+        "operationId": "getInternSubmissionHistory", "security": BEARER, "parameters": [INTERN_PARAM, ITEM_PARAM],
+        "description": "Read-only review history of one task of an intern, oldest attempt first: the intern's buddy or the "
+                       "intern's teamlead. Works for tasks the teamlead removed too.",
+        "responses": {"200": json_resp("Submission history", {"type": "array", "items": ref("SubmissionHistoryEntry")}),
+                      "400": json_resp("Invalid ID", ERROR), "403": json_resp("Not buddy or teamlead", ERROR),
+                      "404": json_resp("Intern not assigned to the caller, or the task is not in the intern's checklists", ERROR)}}},
+    "/api/teamlead/interns/{internID}/checklist-items/{itemID}": {
+        "patch": {
+            "operationId": "updateInternTask", "security": BEARER, "parameters": [INTERN_PARAM, ITEM_PARAM],
+            "description": "Assigned teamlead changes a task (catalog or personal) for THIS intern only: stored as per-intern "
+                           "overrides, the shared catalog and other interns are not changed. Status and review flag are not editable.",
+            "requestBody": json_body(ref("InternTaskPatch")),
+            "responses": {"204": {"description": "Updated"},
+                          "400": json_resp("Invalid ID, empty patch, empty title, estimate < 1 or invalid due_at", ERROR),
+                          "403": json_resp("Not teamlead", ERROR),
+                          "404": json_resp("Intern not assigned, or the task is not in (or was removed from) the intern's checklists", ERROR),
+                          "409": json_resp("Task belongs to the intern's previous profession track", ERROR)}},
+        "delete": {
+            "operationId": "removeInternTask", "security": BEARER, "parameters": [INTERN_PARAM, ITEM_PARAM],
+            "description": "Assigned teamlead removes a task from THIS intern's checklist (soft delete; idempotent). The task "
+                           "disappears from /api/checklists and progress counts; its submissions and comments are kept. If it "
+                           "was the intern's current catalog task, the next one becomes active.",
+            "responses": {"204": {"description": "Removed (or already removed)"},
+                          "400": json_resp("Invalid ID", ERROR), "403": json_resp("Not teamlead", ERROR),
+                          "404": json_resp("Intern not assigned, or the task is not in the intern's checklists", ERROR),
+                          "409": json_resp("Task belongs to the intern's previous profession track", ERROR)}}},
+    "/api/admin/accounts/{userID}/complete-checklists": {"post": {
+        "operationId": "adminCompleteChecklists", "security": BEARER,
+        "parameters": [{"name": "userID", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+        "description": "DEMO ONLY (admin panel): mark every task of the intern's current checklists done so both reach 100% "
+                       "and the web app offers the checklist feedback form. Review tasks become verified and pending "
+                       "submissions are approved on behalf of the intern's buddy (comment 'Демо: ...'). Idempotent. Guarded "
+                       "like other admin routes: teamlead only, or any signed-in user with ADMIN_OPEN_FOR_ALL=1 (then an "
+                       "intern may pass their own id).",
+        "responses": {"200": json_resp("Done", ref("DemoCompletion")), "400": json_resp("Invalid user ID", ERROR),
+                      "401": json_resp("Unauthorized", ERROR), "403": ADMIN_FORBIDDEN,
+                      "404": json_resp("No such intern", ERROR)}}},
+})
+
 backend_spec = {
     "openapi": "3.1.0",
     "info": {"title": "AI-buddy backend (public)", "version": "0.2.0",

@@ -6,15 +6,27 @@ export type PersonRef = { id: string; first_name: string | null; last_name: stri
 export type User = { id: string; email: string; role: Role; profession: Profession | null; created_at: string; first_name: string | null; last_name: string | null; telegram_username: string | null; department: string | null; team: string | null; buddy?: PersonRef; teamlead?: PersonRef; age_years: number | null; tenure_months: number | null };
 export type LoginResponse = { access_token: string; refresh_token: string; token_type: string; expires_in: number; is_first_login: boolean; user: User };
 export type RefreshResponse = { access_token: string; refresh_token: string; token_type: string; expires_in: number };
-export type ChecklistItem = { id: string; title: string; description: string; expected_result: string | null; requires_review: boolean; estimated_minutes: number | null; due_at: string | null; position: number; status: ChecklistStatus; completed_at: string | null };
+export type ChecklistItem = { id: string; title: string; description: string; expected_result: string | null; requires_review: boolean; estimated_minutes: number | null; due_at: string | null; position: number; status: ChecklistStatus; completed_at: string | null;
+  /** Backend always sends the next three fields (optional here only for older fixtures). The buddy returned the latest submission and the intern has not resubmitted: status is 'active' again ("Активно"). */
+  returned_for_rework?: boolean;
+  /** The buddy's comment of that return; null when not returned. */
+  rework_comment?: string | null;
+  /** Added for this intern by the teamlead (not from the shared catalog). */
+  personal?: boolean };
 export type ChecklistStage = { id: string; title: string; week_start: number; week_end: number; goal: string; expected_result: string; position: number; items: ChecklistItem[] };
 export type Checklist = { id: string; name: string; type: 'common' | 'professional'; profession: Profession | null; stages: ChecklistStage[]; total_items: number; completed_items: number; completion_percent: number };
 export type ChecklistsResponse = { common: Checklist; professional: Checklist };
 export type Submission = { id: string; progress_id: string; attempt_number: number; result_text: string | null; result_url: string | null; status: SubmissionStatus; submitted_at: string };
-export type SubmissionHistory = Submission & { reviewed_at: string | null; review_comment: string | null };
+export type SubmissionHistory = Submission & { reviewed_at: string | null; reviewed_by?: string | null; review_comment: string | null };
 export type PendingSubmission = { id: string; intern_id: string; item_id: string; item_title: string; attempt_number: number; result_text: string | null; result_url: string | null; submitted_at: string };
 export type ChatResponse = { answer: string; sources: { id: string; title: string; url: string }[]; mode: 'mock' };
-export type ProgressResponse = { user_id: string; total_items: number; completed_items: number; completion_percent: number; common?: Checklist; professional: Checklist };
+/** Buddy and teamlead both receive common and professional; totals are over both checklists. */
+export type ProgressResponse = { user_id: string; total_items: number; completed_items: number; completion_percent: number; common: Checklist; professional: Checklist };
+export type ChecklistType = 'common' | 'professional';
+/** Per-intern change of one task; omitted fields keep their value. */
+export type InternTaskPatch = { title?: string; description?: string; expected_result?: string; estimated_minutes?: number; due_at?: string };
+/** DEMO admin action result. */
+export type DemoCompletion = { intern_id: string; items_completed: number; submissions_approved: number };
 export type CorporateProfile = { id: string; email: string; role: Role; profession?: Profession; department: string; team: string; manager_id?: string; buddy_id?: string; allowed_tools: string[] };
 export type AccessRequest = { id: string; tool: string; ticket_number: string; status: string; created_at: string };
 export type Note = { id: string; title: string; content: string; updated_at: string };
@@ -41,7 +53,15 @@ export function getAssignedInterns(baseUrl: string, token: string): Promise<User
 export function getTeamleads(baseUrl: string, token: string): Promise<User[]>;
 export function getBuddies(baseUrl: string, token: string): Promise<User[]>;
 export function getInternProgress(baseUrl: string, token: string, internID: string): Promise<ProgressResponse>;
-export function createPersonalTask(baseUrl: string, token: string, internID: string, input: { position: number; title: string; description: string; expected_result: string; estimated_minutes: number; requires_review: boolean; due_at?: string | null }): Promise<{ id: string }>;
+export function createPersonalTask(baseUrl: string, token: string, internID: string, input: { position: number; title: string; description: string; expected_result: string; estimated_minutes: number; requires_review: boolean; due_at?: string | null; checklist_type?: ChecklistType }): Promise<{ id: string }>;
+/** Teamlead: change a task for this intern only (PATCH /api/teamlead/interns/{internID}/checklist-items/{itemID}). */
+export function updateInternTask(baseUrl: string, token: string, internID: string, itemID: string, patch: InternTaskPatch): Promise<void>;
+/** Teamlead: remove a task from this intern's checklist (soft delete, idempotent). */
+export function removeInternTask(baseUrl: string, token: string, internID: string, itemID: string): Promise<void>;
+/** Buddy or teamlead: review history of an intern's task (read-only). */
+export function getInternSubmissionHistory(baseUrl: string, token: string, internID: string, itemID: string): Promise<SubmissionHistory[]>;
+/** DEMO admin action: complete all checklists of the intern to 100%. */
+export function adminCompleteChecklists(baseUrl: string, token: string, userID: string): Promise<DemoCompletion>;
 export function getCorporateProfile(baseUrl: string, token: string): Promise<CorporateProfile>;
 export function listCorporateTools(baseUrl: string, token: string): Promise<{tool: string; allowed: boolean}[]>;
 export function listAccessRequests(baseUrl: string, token: string): Promise<AccessRequest[]>;
