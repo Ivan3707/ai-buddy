@@ -80,8 +80,8 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	`).Scan(&version); err != nil {
 		t.Fatalf("read goose version: %v", err)
 	}
-	if version != 5 {
-		t.Fatalf("test database must be at Goose v1, got v%d", version)
+	if version != 7 {
+		t.Fatalf("test database must be at Goose v7, got v%d", version)
 	}
 
 	// Only one common and one backend professional checklist are permitted.
@@ -177,15 +177,18 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	users := repository.NewUserRepository(db)
 	progress := service.NewProgressService(db)
 	userService := service.NewUserService(db)
+	personalTasks := service.NewPersonalTaskService(db)
 	server := httptest.NewServer(handler.NewRouter("", handler.Dependencies{
-		Auth:          service.NewAuthService(users, jwtService),
-		Users:         users,
-		JWT:           jwtService,
-		Team:          userService,
-		PersonalTasks: service.NewPersonalTaskService(db),
-		Checklists:    service.NewChecklistService(db),
-		Items:         progress,
-		Submissions:   progress,
+		Auth:             service.NewAuthService(users, jwtService),
+		Users:            users,
+		JWT:              jwtService,
+		Team:             userService,
+		PersonalTasks:    personalTasks,
+		ChecklistEditor:  personalTasks,
+		StaffSubmissions: progress,
+		Checklists:       service.NewChecklistService(db),
+		Items:            progress,
+		Submissions:      progress,
 	}))
 	defer server.Close()
 	client := &http.Client{Timeout: 12 * time.Second}
@@ -278,9 +281,31 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	created, err := service.NewUserService(db).CreateInternWithAssignments(ctx, internEmail, internHash, model.ProfessionBackend, buddyID, teamleadID, time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), "Test", "Intern", "", "Engineering", "Backend")
+	// Accounts are created in the product only by HR sync; the fixture inserts
+	// the intern directly and reuses the shared progress initializer.
+	internProfession := model.ProfessionBackend
+	birthDate := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	employedSince := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	firstName, lastName, telegram, department, team := "Test", "Intern", "", "Engineering", "Backend"
+	created := &model.User{
+		Email: internEmail, PasswordHash: internHash, Role: model.RoleIntern, Profession: &internProfession,
+		BuddyID: &buddyID, TeamleadID: &teamleadID, BirthDate: &birthDate, EmployedSince: &employedSince,
+		FirstName: &firstName, LastName: &lastName, TelegramUsername: &telegram, Department: &department, Team: &team,
+	}
+	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
+		t.Fatalf("begin E2E intern fixture: %v", err)
+	}
+	if err := repository.NewUserRepository(tx).Create(ctx, created); err != nil {
+		_ = tx.Rollback()
 		t.Fatalf("create E2E intern fixture: %v", err)
+	}
+	if err := service.InitializeInternProgress(ctx, tx, created.ID, internProfession); err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("initialize E2E intern progress: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit E2E intern fixture: %v", err)
 	}
 	internID = created.ID
 	request(http.MethodPut, "/api/buddy/interns/"+internID.String()+"/teamlead", buddyToken, map[string]string{"teamlead_id": teamleadID.String()}, http.StatusNotFound, nil)
@@ -337,8 +362,8 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	}
 	var leadProgress progressResponseDTO
 	request(http.MethodGet, "/api/staff/interns/"+internID.String()+"/progress", teamleadToken, nil, http.StatusOK, &leadProgress)
-	if leadProgress.Common != nil || leadProgress.TotalItems != len(professionalItems) || leadProgress.Professional.TotalItems != len(professionalItems) {
-		t.Fatalf("teamlead progress: %+v", leadProgress)
+	if leadProgress.Common == nil || leadProgress.TotalItems != len(commonItems)+len(professionalItems) || leadProgress.Professional.TotalItems != len(professionalItems) {
+		t.Fatalf("teamlead progress must include both checklists: %+v", leadProgress)
 	}
 	request(http.MethodGet, "/api/staff/interns/"+internID.String()+"/progress", otherBuddyToken, nil, http.StatusNotFound, nil)
 	request(http.MethodPost, "/api/teamlead/interns/"+internID.String()+"/checklist-items", buddyToken, map[string]any{"position": 1, "title": "denied", "expected_result": "x", "estimated_minutes": 30}, http.StatusForbidden, nil)
@@ -419,6 +444,23 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 		itemState(afterReject.Professional.Stages, professionalItems[0]).CompletedAt != nil {
 		t.Fatal("rejected item must be active, with zero completed items and no completed_at")
 	}
+	if returned := itemState(afterReject.Professional.Stages, professionalItems[0]); !returned.ReturnedRework ||
+		returned.ReworkComment == nil || *returned.ReworkComment != "Add tests" {
+		t.Fatalf("rejected item must be marked returned_for_rework with the comment: %+v", returned)
+	}
+	if itemState(afterReject.Professional.Stages, professionalItems[1]).ReturnedRework {
+		t.Fatal("untouched item marked as returned")
+	}
+	// Teamlead reads the history but never reviews.
+	staffHistoryPath := "/api/staff/interns/" + internID.String() + "/checklist-items/" + professionalItems[0].String() + "/submissions"
+	var staffHistory []submissionHistoryDTO
+	request(http.MethodGet, staffHistoryPath, teamleadToken, nil, http.StatusOK, &staffHistory)
+	if len(staffHistory) != 1 || staffHistory[0].Status != model.SubmissionRejected || staffHistory[0].ReviewedBy == nil || *staffHistory[0].ReviewedBy != buddyID.String() {
+		t.Fatalf("teamlead history: %+v", staffHistory)
+	}
+	request(http.MethodGet, staffHistoryPath, buddyToken, nil, http.StatusOK, &staffHistory)
+	request(http.MethodGet, staffHistoryPath, otherBuddyToken, nil, http.StatusNotFound, nil)
+	request(http.MethodGet, staffHistoryPath, internToken, nil, http.StatusForbidden, nil)
 
 	var attempt2 submissionDTO
 	request(http.MethodPost, reviewItemPath+"/submissions", internToken,
@@ -426,6 +468,11 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	if attempt2.AttemptNumber != 2 || attempt2.ID == attempt1.ID || attempt2.Status != model.SubmissionPending {
 		t.Fatalf("retry should create pending attempt #2: %+v", attempt2)
 	}
+	if itemState(getChecklists(internToken).Professional.Stages, professionalItems[0]).ReturnedRework {
+		t.Fatal("resubmitted item is still marked returned_for_rework")
+	}
+	request(http.MethodPost, "/api/buddy/submissions/"+attempt2.ID+"/review", teamleadToken,
+		map[string]any{"approved": true}, http.StatusForbidden, nil)
 	var history []submissionHistoryDTO
 	request(http.MethodGet, reviewItemPath+"/submissions", internToken, nil, http.StatusOK, &history)
 	if len(history) != 2 || history[0].AttemptNumber != 1 || history[0].Status != model.SubmissionRejected ||
@@ -479,6 +526,39 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 	updated := getChecklists(internToken)
 	if updated.Professional.Stages[0].Items[0].ID != inserted["id"] || updated.Professional.Stages[0].Items[1].Status != model.StatusVerified || updated.Professional.Stages[0].Items[2].Status != model.StatusActive {
 		t.Fatalf("personal task changed existing progress: %+v", updated.Professional)
+	}
+	// Teamlead edits this intern's checklist: the change is per-intern, the catalog is not touched.
+	editPath := "/api/teamlead/interns/" + internID.String() + "/checklist-items/"
+	request(http.MethodPatch, editPath+inserted["id"], teamleadToken, map[string]any{"title": "Renamed for intern", "estimated_minutes": 45}, http.StatusNoContent, nil)
+	request(http.MethodPatch, editPath+inserted["id"], teamleadToken, map[string]any{}, http.StatusBadRequest, nil)
+	request(http.MethodPatch, editPath+inserted["id"], buddyToken, map[string]any{"title": "x"}, http.StatusForbidden, nil)
+	request(http.MethodPatch, editPath+commonItems[0].String(), teamleadToken, map[string]any{"title": "Common, own wording"}, http.StatusNoContent, nil)
+	edited := getChecklists(internToken)
+	if item := itemState(edited.Professional.Stages, uuid.MustParse(inserted["id"])); item.Title != "Renamed for intern" || item.EstimatedMinutes == nil || *item.EstimatedMinutes != 45 || !item.Personal {
+		t.Fatalf("personal task edit: %+v", item)
+	}
+	if item := itemState(edited.Common.Stages, commonItems[0]); item.Title != "Common, own wording" || item.Personal {
+		t.Fatalf("catalog task override: %+v", item)
+	}
+	var catalogTitle string
+	if err := db.QueryRowContext(ctx, `SELECT title FROM checklist_items WHERE id=$1`, commonItems[0]).Scan(&catalogTitle); err != nil || catalogTitle == "Common, own wording" {
+		t.Fatalf("catalog changed by a per-intern edit: %q %v", catalogTitle, err)
+	}
+	// Removing the intern's active catalog task hides it and keeps the intern moving.
+	request(http.MethodDelete, editPath+professionalItems[1].String(), teamleadToken, nil, http.StatusNoContent, nil)
+	request(http.MethodDelete, editPath+professionalItems[1].String(), teamleadToken, nil, http.StatusNoContent, nil)
+	request(http.MethodPatch, editPath+professionalItems[1].String(), teamleadToken, map[string]any{"title": "gone"}, http.StatusNotFound, nil)
+	request(http.MethodDelete, editPath+uuid.NewString(), teamleadToken, nil, http.StatusNotFound, nil)
+	afterRemove := getChecklists(internToken)
+	for _, stage := range afterRemove.Professional.Stages {
+		for _, item := range stage.Items {
+			if item.ID == professionalItems[1].String() {
+				t.Fatal("removed task is still in the intern's checklist")
+			}
+		}
+	}
+	if afterRemove.Professional.TotalItems != 2 || afterRemove.Professional.CompletedItems != 1 {
+		t.Fatalf("progress after removal: %+v", afterRemove.Professional)
 	}
 	t.Log("E2E passed: auth, intern creation, checklists, completion, reject/retry, review, permissions and DB persistence")
 }

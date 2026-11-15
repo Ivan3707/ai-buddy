@@ -19,6 +19,17 @@ func NewRouter(
 		})
 	})
 
+	// /health — liveness (процесс жив). /ready — readiness: БД подготовлена (миграции + каталог), его использует Compose.
+	mux.HandleFunc("GET /ready", func(w http.ResponseWriter, r *http.Request) {
+		if deps.Ready != nil {
+			if err := deps.Ready(r.Context()); err != nil {
+				send(w, http.StatusServiceUnavailable, map[string]string{"status": "not_ready", "reason": err.Error()})
+				return
+			}
+		}
+		send(w, http.StatusOK, map[string]string{"status": "ready"})
+	})
+
 	authenticated := func(handler http.Handler) http.Handler {
 		if deps.SessionCheck != nil {
 			return middleware.Authenticate(deps.JWT, deps.Users, deps.SessionCheck)(handler)
@@ -43,9 +54,10 @@ func NewRouter(
 			Checklists: deps.Checklists,
 		}.RegisterProgressRoutes(mux, authenticated)
 	}
-	if deps.PersonalTasks != nil {
+	if deps.PersonalTasks != nil || deps.ChecklistEditor != nil {
 		Dependencies{
-			PersonalTasks: deps.PersonalTasks,
+			PersonalTasks:   deps.PersonalTasks,
+			ChecklistEditor: deps.ChecklistEditor,
 		}.RegisterPersonalTaskRoutes(mux, authenticated)
 	}
 	if deps.Hints != nil {
@@ -65,9 +77,10 @@ func NewRouter(
 		Dependencies{Team: deps.Team}.RegisterTeamRoutes(mux, authenticated)
 	}
 	Dependencies{
-		Checklists:  deps.Checklists,
-		Items:       deps.Items,
-		Submissions: deps.Submissions,
+		Checklists:       deps.Checklists,
+		Items:            deps.Items,
+		Submissions:      deps.Submissions,
+		StaffSubmissions: deps.StaffSubmissions,
 	}.RegisterChecklistRoutes(mux, authenticated)
 	if deps.Feedback != nil {
 		Dependencies{Feedback: deps.Feedback}.RegisterFeedbackRoutes(mux, authenticated)

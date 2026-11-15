@@ -146,7 +146,7 @@ export function BuddyHost({ token, user, onNavigate }: { token: string; user: Us
           seen[key] = q.status;
         }
       } else {
-        const open = (await bot.questions(token, 'open')).length;
+        const open = user.role === 'buddy' ? (await bot.questions(token, 'open')).length : 0; // mentor questions are buddy-only (403 for others)
         const waiting = (await bot.staffRequests(token)).filter(r => r.request.status === 'pending_approval').length;
         const key = `staff-${open}-${waiting}`;
         if ((open || waiting) && seen.staff !== key)
@@ -156,7 +156,7 @@ export function BuddyHost({ token, user, onNavigate }: { token: string; user: Us
       seen.init = '1';
       write(localStorage, seenKey, seen);
     } catch { /* offline or token refresh in progress: try next time */ }
-  }, [extension, intern, push, seenKey]);
+  }, [extension, intern, push, seenKey, user.role]);
 
   useEffect(() => {
     const first = setTimeout(() => void poll(), 2500); // after the greeting

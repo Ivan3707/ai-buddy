@@ -47,7 +47,7 @@ export function NotesDrawer({ open, token, onClose }: Props) {
 
   if (!open) return null;
   return (
-    <div className="drawer-backdrop" onClick={onClose}>
+    <div className="drawer-backdrop notes-backdrop" onClick={onClose}>
       <aside className="drawer notes-drawer" role="dialog" aria-label="Заметки" onClick={event => event.stopPropagation()}>
         <header className="drawer-header">
           <span className="drawer-icon"><img src="/icons/notes.svg" alt="" width={23} height={26} /></span>
@@ -82,16 +82,16 @@ export function NotesDrawer({ open, token, onClose }: Props) {
         </div>
       </aside>
       {draft && (
-        <div className="task-modal-backdrop" onClick={event => { event.stopPropagation(); setDraft(null); }}>
-          <section className="task-modal note-modal" role="dialog" aria-modal="true" aria-label={draft.id ? 'Заметка' : 'Новая заметка'} onClick={event => event.stopPropagation()}>
-            <header className="task-modal-head note-modal-head">
+        <div className="note-backdrop" onClick={event => { event.stopPropagation(); setDraft(null); }}>
+          <section className="note-modal" role="dialog" aria-modal="true" aria-label={draft.id ? 'Заметка' : 'Новая заметка'} onClick={event => event.stopPropagation()}>
+            <header className="note-modal-head">
               <div>
-                <span className="task-modal-meta">{draft.id ? `Изменена ${formatDateTime(notes.find(note => note.id === draft.id)?.updated_at ?? new Date().toISOString())}` : 'Новая заметка'}</span>
+                <span className="note-modal-meta">{draft.id ? `Изменена ${formatDateTime(notes.find(note => note.id === draft.id)?.updated_at ?? new Date().toISOString())}` : 'Новая заметка'}</span>
                 <h2>{draft.title.trim() || 'Без названия'}</h2>
               </div>
             </header>
-            <form className="task-modal-body task-modal-form note-modal-form" onSubmit={event => { event.preventDefault(); void save(); }}>
-              {error && <p className="task-modal-error" role="alert">{error}</p>}
+            <form className="note-modal-form" onSubmit={event => { event.preventDefault(); void save(); }}>
+              {error && <p className="note-modal-error" role="alert">{error}</p>}
               <label>Заголовок
                 <input aria-label="Заголовок" placeholder="О чём заметка" maxLength={120} value={draft.title} autoFocus
                   onChange={event => setDraft({ ...draft, title: event.target.value })} />
@@ -100,10 +100,10 @@ export function NotesDrawer({ open, token, onClose }: Props) {
                 <textarea aria-label="Текст заметки" placeholder="Что важно запомнить" rows={9} value={draft.content}
                   onChange={event => setDraft({ ...draft, content: event.target.value })} />
               </label>
-              <div className="task-modal-foot note-modal-foot">
+              <div className="note-modal-foot">
                 {draft.id && <button type="button" className="note-modal-delete" disabled={busy} onClick={() => void remove()}>Удалить</button>}
-                <button type="button" className="task-modal-close" disabled={busy} onClick={() => setDraft(null)}>Закрыть</button>
-                <button type="submit" className="task-modal-complete" disabled={busy}>{busy ? 'Сохраняем…' : 'Сохранить'}</button>
+                <button type="button" className="note-modal-close" disabled={busy} onClick={() => setDraft(null)}>Закрыть</button>
+                <button type="submit" className="note-modal-save" disabled={busy}>{busy ? 'Сохраняем…' : 'Сохранить'}</button>
               </div>
             </form>
           </section>

@@ -75,6 +75,11 @@ describe('TaskTable', () => {
     expect(screen.getAllByText(/Описание задачи/)).toHaveLength(2);
   });
 
+  it('показывает руководителя из профиля или прочерк', () => {
+    render(<TaskTable checklist={checklist()} onOpen={() => undefined} managerName="Новикова Буся" />);
+    expect(screen.getAllByText('Новикова Буся').length).toBeGreaterThan(0);
+  });
+
   it('открывает окно задачи по клику на название, а не на другие ячейки; недоступные не открываются', () => {
     const onOpen = vi.fn();
     render(<TaskTable checklist={checklist()} onOpen={onOpen} />);

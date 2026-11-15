@@ -15,6 +15,7 @@ export const internUser: User = {
   tenure_months: null,
 };
 
+export const leadUser: User = { ...internUser, id: 'u-lead', email: 'lead@example.com', role: 'teamlead', profession: null };
 export const buddyUser: User = { ...internUser, id: 'u-buddy', email: 'buddy@example.com', role: 'buddy', profession: null };
 
 let counter = 0;
@@ -31,6 +32,9 @@ export function item(over: Partial<ChecklistItem> = {}): ChecklistItem {
     position: counter,
     status: 'unavailable',
     completed_at: null,
+    returned_for_rework: false,
+    rework_comment: null,
+    personal: false,
     ...over,
   };
 }

@@ -81,6 +81,7 @@ func (s *AuthService) Refresh(ctx context.Context, token string) (string, string
 	}
 	return access, id.String() + "." + next, int64(s.jwt.TTL().Seconds()), nil
 }
+
 // sessionVerifier is implemented by the Postgres store; fakes without it simply cannot link sessions.
 type sessionVerifier interface {
 	Verify(context.Context, uuid.UUID, string) (uuid.UUID, error)

@@ -48,7 +48,7 @@ func TestMLInternGetsCommonAndProfessionalProgress(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _, _ = db.ExecContext(context.Background(), `DELETE FROM users WHERE id=$1`, buddy.ID) })
-	intern, err := NewUserService(db).CreateIntern(ctx, "ml-intern-"+uuid.NewString()+"@example.com", "hash", model.ProfessionML, buddy.ID)
+	intern, err := createTestIntern(ctx, db, "ml-intern-"+uuid.NewString()+"@example.com", "hash", model.ProfessionML, buddy.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

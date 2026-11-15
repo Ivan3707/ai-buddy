@@ -402,6 +402,52 @@ func (s *ProgressService) ListSubmissions(
 	return submissions, nil
 }
 
+// ListInternSubmissions is the read-only review history of one item of one intern for staff: the
+// intern's buddy or the intern's teamlead (the teamlead may read the history but never reviews).
+// Anyone else gets ErrInternNotAssigned, an item outside the intern's checklists repository.ErrNotFound.
+func (s *ProgressService) ListInternSubmissions(
+	ctx context.Context,
+	actor *model.User,
+	internID uuid.UUID,
+	itemID uuid.UUID,
+) ([]model.ChecklistItemSubmission, error) {
+	intern, err := repository.NewUserRepository(s.db).GetByID(ctx, internID)
+	if errors.Is(err, repository.ErrNotFound) {
+		return nil, ErrInternNotAssigned
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get submission history intern: %w", err)
+	}
+	if !StaffCanSeeIntern(actor, intern) {
+		return nil, ErrInternNotAssigned
+	}
+	progress, err := repository.NewProgressRepository(s.db).
+		GetByUserAndItemRead(ctx, internID, itemID)
+	if err != nil {
+		return nil, fmt.Errorf("get submission history progress: %w", err)
+	}
+	submissions, err := repository.NewSubmissionRepository(s.db).
+		ListByProgressID(ctx, progress.ID)
+	if err != nil {
+		return nil, fmt.Errorf("list submission history: %w", err)
+	}
+	return submissions, nil
+}
+
+// StaffCanSeeIntern: the target is an intern and the actor is their buddy or their teamlead.
+func StaffCanSeeIntern(actor, target *model.User) bool {
+	if actor == nil || target == nil || target.Role != model.RoleIntern {
+		return false
+	}
+	switch actor.Role {
+	case model.RoleBuddy:
+		return target.BuddyID != nil && *target.BuddyID == actor.ID
+	case model.RoleTeamlead:
+		return target.TeamleadID != nil && *target.TeamleadID == actor.ID
+	}
+	return false
+}
+
 func (s *ProgressService) ListPendingSubmissions(
 	ctx context.Context,
 	buddyID uuid.UUID,

@@ -12,6 +12,9 @@ type checklistItemDTO struct {
 	Position         int                   `json:"position"`
 	Status           model.ChecklistStatus `json:"status"`
 	CompletedAt      *string               `json:"completed_at"`
+	ReturnedRework   bool                  `json:"returned_for_rework"`
+	ReworkComment    *string               `json:"rework_comment"`
+	Personal         bool                  `json:"personal"`
 }
 
 type checklistStageDTO struct {
@@ -59,6 +62,7 @@ type submissionDTO struct {
 type submissionHistoryDTO struct {
 	submissionDTO
 	ReviewedAt    *string `json:"reviewed_at"`
+	ReviewedBy    *string `json:"reviewed_by"`
 	ReviewComment *string `json:"review_comment"`
 }
 

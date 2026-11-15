@@ -14,7 +14,7 @@ import (
 	"github.com/nvkmaksim/ai-buddy/backend/internal/repository"
 )
 
-func TestUserService_CreateIntern(t *testing.T) {
+func TestInitializeInternProgress_CommonAndProfessional(t *testing.T) {
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is not set")
@@ -74,13 +74,12 @@ func TestUserService_CreateIntern(t *testing.T) {
 		}
 	})
 
-	// Вызываем сервис.
-	svc := NewUserService(db)
-
+	// Создаём стажёра через общий инициализатор прогресса (как HR sync).
 	email := "test-" + uuid.NewString() + "@example.com"
 
-	user, err := svc.CreateIntern(
+	user, err := createTestIntern(
 		ctx,
+		db,
 		email,
 		"test-password-hash",
 		profession,
@@ -140,6 +139,20 @@ func TestUserService_CreateIntern(t *testing.T) {
 		t.Errorf("expected 1 active professional item, got %d", activeByChecklist[professionalID])
 	}
 
+	// Повторная инициализация идемпотентна: прогресс не дублируется.
+	if err := withTransaction(ctx, db, func(tx *sql.Tx) error {
+		return InitializeInternProgress(ctx, tx, user.ID, profession)
+	}); err != nil {
+		t.Fatalf("repeat progress initialization: %v", err)
+	}
+	again, err := progressRepo.GetByUserID(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("get user progress again: %v", err)
+	}
+	if len(again) != len(progress) {
+		t.Fatalf("repeat initialization changed progress: %d -> %d", len(progress), len(again))
+	}
+
 	// Удаляем пользователя отдельно: тест проверяет и его создание.
 	if _, err := db.ExecContext(ctx, "DELETE FROM users WHERE id = $1", user.ID); err != nil {
 		t.Errorf("cleanup test user: %v", err)
@@ -147,7 +160,15 @@ func TestUserService_CreateIntern(t *testing.T) {
 
 }
 
-func TestUserService_CreateIntern_Rollback(t *testing.T) {
+func TestInitializeInternProgressRejectsUnknownProfession(t *testing.T) {
+	// Проверка выполняется до обращения к БД, поэтому nil-соединение безопасно.
+	err := InitializeInternProgress(context.Background(), nil, uuid.New(), model.Profession("designer"))
+	if !errors.Is(err, ErrInvalidProfession) {
+		t.Fatalf("expected ErrInvalidProfession, got %v", err)
+	}
+}
+
+func TestInitializeInternProgress_RollbackWithoutProfessionalChecklist(t *testing.T) {
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
 		t.Skip("TEST_DATABASE_URL is not set")
@@ -193,7 +214,6 @@ func TestUserService_CreateIntern_Rollback(t *testing.T) {
 		}
 	})
 
-	svc := NewUserService(db)
 	userRepo := repository.NewUserRepository(db)
 
 	email := "rollback-" + uuid.NewString() + "@example.com"
@@ -221,8 +241,9 @@ func TestUserService_CreateIntern_Rollback(t *testing.T) {
 	})
 
 	// Профессионального чек-листа нет.
-	_, err = svc.CreateIntern(
+	_, err = createTestIntern(
 		ctx,
+		db,
 		email,
 		"test-password-hash",
 		profession,

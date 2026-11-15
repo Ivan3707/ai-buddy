@@ -46,6 +46,24 @@ func TestChat(t *testing.T) {
 	}
 }
 
+// The legacy /api/chat must keep working when the AI service runs with a real model (mode=llm), not only in mock mode.
+func TestChatAcceptsLLMMode(t *testing.T) {
+	ai := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		send(w, http.StatusOK, chatResponse{Answer: "ответ модели", Sources: []source{}, Mode: "llm"})
+	}))
+	defer ai.Close()
+
+	handler, token, _ := newTestHandler(t, ai.URL)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, authorizedRequest(http.MethodPost, "/api/chat", `{"message":"hi"}`, token))
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d, want %d: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), `"mode":"llm"`) {
+		t.Fatalf("mode was not relayed: %s", w.Body.String())
+	}
+}
+
 func TestChatRequiresAuthentication(t *testing.T) {
 	handler, _, _ := newTestHandler(t, "")
 

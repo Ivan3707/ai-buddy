@@ -44,7 +44,7 @@
 
 /* ───────── Доска задач по макету maintask.png: цветные колонки, карточки с кружком состояния ───────── */
 .kanban-columns { gap: 19px; }
-.kanban-column { padding: 20px; border-radius: 34px; background: var(--pink); color: #000; }
+.kanban-column { padding: 20px; border-radius: 34px; background: var(--pink); color: #252525; }
 .kanban-column.is-completed { background: var(--green); }
 .kanban-column.is-verified { background: #252525; color: #fff; }
 .kanban-column.is-unavailable { background: #e8e8e8; color: #555; }
@@ -82,12 +82,12 @@
  * «Проверено»: чёрная карточка с розовым кружком и белой галочкой. */
 .kanban-card { box-sizing: border-box; min-height: 234px; gap: 10px; padding: 20px 23px 20px 20px; border-radius: 32px; }
 .kanban-card h4 { color: #252525; }
-.kanban-card p { color: #000; }
+.kanban-card p { color: #252525; }
 .kanban-card-stage, .kanban-card-time { color: #808080; }
 .kanban-card-bottom { margin-top: auto; }
 .kanban-card.is-draggable { min-height: 234px; }
 
-.kanban-card.is-verified { background: #000; }
+.kanban-card.is-verified { background: #252525; }
 .kanban-card.is-verified h4, .kanban-card.is-verified p { color: #fff; }
 .kanban-card.is-verified .kanban-card-stage, .kanban-card.is-verified .kanban-card-time { color: #777; }
 
@@ -99,7 +99,7 @@
 .kanban-card.is-active:active .kanban-card-stage, .kanban-card.is-active:active .kanban-card-time,
 .kanban-card.is-active.is-dragging .kanban-card-stage, .kanban-card.is-active.is-dragging .kanban-card-time { color: rgba(255, 255, 255, 0.7); }
 .kanban-card.is-active:active p, .kanban-card.is-active.is-dragging p { color: rgba(255, 255, 255, 0.9); }
-.kanban-card.is-active:active h4, .kanban-card.is-active.is-dragging h4 { color: #000; }
+.kanban-card.is-active:active h4, .kanban-card.is-active.is-dragging h4 { color: #252525; }
 .kanban-card.is-active:active button.kanban-card-state, .kanban-card.is-active.is-dragging button.kanban-card-state,
 .kanban-card.is-active:active button.kanban-card-state:hover:not(:disabled) { background: #252525; }
 .kanban-card.is-active:active .kanban-card-state svg path, .kanban-card.is-active.is-dragging .kanban-card-state svg path { fill: #fff; }
@@ -109,8 +109,11 @@
 .kanban .kanban-card button.kanban-link { margin: 0; padding: 0; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; font-size: 14px; text-decoration: underline; cursor: pointer; opacity: 0.8; white-space: nowrap; }
 .kanban .kanban-card button.kanban-link:hover { opacity: 1; background: none; }
 .kanban .kanban-card button.kanban-next { margin: 0; padding: 6px 14px; border: 0; border-radius: 999px; background: #252525; color: #fff; font: inherit; font-size: 14px; cursor: pointer; white-space: nowrap; }
-.kanban .kanban-card button.kanban-next:hover:not(:disabled) { background: #000; }
+.kanban .kanban-card button.kanban-next:hover:not(:disabled) { background: #252525; }
 .kanban .kanban-card button.kanban-next:disabled { opacity: 0.6; cursor: default; }
 
 /* кнопка следующего этапа на карточке (наша логика, оформление в стиле макета) */
 .kanban .kanban-card button.kanban-next { align-self: flex-start; }
+
+.rework-badge { display: inline-block; align-self: flex-start; background: #252525; color: #fff; border-radius: 999px; padding: 2px 10px; font-size: 12px; line-height: 18px; }
+.rework-note { display: grid; gap: 6px; margin-top: 8px; }

@@ -90,3 +90,22 @@ describe('calendar', () => {
     expect(WEEKDAYS).toHaveLength(7);
   });
 });
+
+import { daySpan, defaultDayOfMonth } from './calendar';
+
+describe('calendar spans and month change', () => {
+  const ev = (a: string, b: string) => ({ starts_at: new Date(a).toISOString(), ends_at: new Date(b).toISOString() });
+  it('classifies single and multi-day coverage', () => {
+    const events = [ev('2026-11-10T10:00', '2026-11-10T11:00'), ev('2026-11-12T10:00', '2026-11-14T11:00')];
+    expect(daySpan(events, new Date(2026, 10, 10))).toBe('single');
+    expect(daySpan(events, new Date(2026, 10, 11))).toBeNull();
+    expect(daySpan(events, new Date(2026, 10, 12))).toBe('start');
+    expect(daySpan(events, new Date(2026, 10, 13))).toBe('mid');
+    expect(daySpan(events, new Date(2026, 10, 14))).toBe('end');
+  });
+  it('selects a day inside the shown month', () => {
+    const today = new Date(2026, 10, 15);
+    expect(defaultDayOfMonth(2026, 11, today)).toEqual(new Date(2026, 11, 1));
+    expect(defaultDayOfMonth(2026, 10, today)).toEqual(today);
+  });
+});

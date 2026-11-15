@@ -201,6 +201,7 @@ func (d Dependencies) refreshHandler() http.HandlerFunc {
 		send(w, 200, map[string]any{"access_token": access, "refresh_token": refresh, "token_type": "Bearer", "expires_in": ttl})
 	}
 }
+
 // linkHandler: POST /api/auth/link {refresh_token} -> a new session (access + refresh) of the same user.
 func (d Dependencies) linkHandler() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

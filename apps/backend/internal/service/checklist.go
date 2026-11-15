@@ -15,6 +15,10 @@ type ChecklistItemProgress struct {
 	Item        model.ChecklistItem
 	Status      model.ChecklistStatus
 	CompletedAt *time.Time
+	// ReturnedForRework: the buddy rejected the latest submission and the intern has not resubmitted;
+	// the item is active again. ReworkComment is that rejection comment.
+	ReturnedForRework bool
+	ReworkComment     *string
 }
 
 type ChecklistStageWithProgress struct {
@@ -108,6 +112,11 @@ func (s *ChecklistService) GetByUserID(
 		return nil, fmt.Errorf("get user checklist progress: %w", err)
 	}
 
+	returned, err := repository.NewSubmissionRepository(tx).ListReturnedForRework(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("get returned checklist items: %w", err)
+	}
+
 	expectedItems := make(map[uuid.UUID]uuid.UUID,
 		len(commonItems)+len(professionalItems),
 	)
@@ -146,6 +155,7 @@ func (s *ChecklistService) GetByUserID(
 		commonStages,
 		commonItems,
 		progressByItemID,
+		returned,
 	)
 	if err != nil {
 		return nil, err
@@ -156,6 +166,7 @@ func (s *ChecklistService) GetByUserID(
 		professionalStages,
 		professionalItems,
 		progressByItemID,
+		returned,
 	)
 	if err != nil {
 		return nil, err
@@ -185,6 +196,7 @@ func buildChecklistWithProgress(
 	stages []model.ChecklistStage,
 	items []model.ChecklistItem,
 	progressByItemID map[uuid.UUID]model.UserChecklistProgress,
+	returned map[uuid.UUID]string,
 ) (ChecklistWithProgress, error) {
 	result := ChecklistWithProgress{
 		Checklist:  checklist,
@@ -227,6 +239,12 @@ func buildChecklistWithProgress(
 			Item:        item,
 			Status:      itemProgress.Status,
 			CompletedAt: itemProgress.CompletedAt,
+		}
+		if comment, ok := returned[item.ID]; ok && itemProgress.Status == model.StatusActive {
+			itemResult.ReturnedForRework = true
+			if comment != "" {
+				itemResult.ReworkComment = &comment
+			}
 		}
 
 		if itemProgress.Status == model.StatusVerified ||

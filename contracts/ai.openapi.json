@@ -1032,7 +1032,8 @@
             "type": "string",
             "enum": [
               "intern",
-              "buddy"
+              "buddy",
+              "teamlead"
             ]
           },
           "profession": {

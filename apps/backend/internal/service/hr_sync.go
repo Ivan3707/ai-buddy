@@ -24,6 +24,14 @@ type InitialCredential struct {
 	Password    string `json:"password"`
 }
 
+// HRSynchronizer is the only production mechanism that creates accounts
+// (Mock HR snapshot -> users + onboarding progress).
+//
+// Architectural exception (ARCH-05): the synchronization executes SQL directly
+// instead of going through internal/repository. The whole run must stay one
+// transaction under a single advisory lock (identity resolution, email swaps,
+// inserts and progress initialization), which a set of per-entity repositories
+// would only obscure.
 type HRSynchronizer struct{ db *sql.DB }
 
 // ErrHRCommitUncertain means PostgreSQL did not confirm whether COMMIT took
@@ -226,25 +234,8 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
 			continue
 		}
 		// Add only missing progress; old profession progress is retained for history.
-		for _, typ := range []string{"common", "professional"} {
-			var checklist uuid.UUID
-			err = tx.QueryRowContext(ctx, `SELECT id FROM checklists WHERE type=$1 AND ($1='common' OR profession=$2)`, typ, hrProfessionValue(e.Profession)).Scan(&checklist)
-			if errors.Is(err, sql.ErrNoRows) {
-				return 0, fmt.Errorf("missing %s checklist for %s", typ, e.ID)
-			}
-			if err != nil {
-				return 0, err
-			}
-			_, err = tx.ExecContext(ctx, `INSERT INTO user_checklist_progress(user_id,checklist_id,checklist_item_id,status,position,activated_at)
-    SELECT $1,$2,i.id,CASE WHEN i.position=(SELECT MIN(position) FROM checklist_items WHERE checklist_id=$2 AND (assigned_user_id IS NULL OR assigned_user_id=$1))
-      AND NOT EXISTS(SELECT 1 FROM user_checklist_progress p0 WHERE p0.user_id=$1 AND p0.checklist_id=$2) THEN 'active' ELSE 'unavailable' END,
-    i.position,CASE WHEN i.position=(SELECT MIN(position) FROM checklist_items WHERE checklist_id=$2 AND (assigned_user_id IS NULL OR assigned_user_id=$1))
-      AND NOT EXISTS(SELECT 1 FROM user_checklist_progress p0 WHERE p0.user_id=$1 AND p0.checklist_id=$2) THEN now() END
-    FROM checklist_items i WHERE i.checklist_id=$2 AND (i.assigned_user_id IS NULL OR i.assigned_user_id=$1)
-    AND NOT EXISTS(SELECT 1 FROM user_checklist_progress p WHERE p.user_id=$1 AND p.checklist_item_id=i.id)`, id, checklist)
-			if err != nil {
-				return 0, fmt.Errorf("initialize progress for %s: %w", e.ID, err)
-			}
+		if err = InitializeInternProgress(ctx, tx, id, *e.Profession); err != nil {
+			return 0, fmt.Errorf("initialize progress for %s: %w", e.ID, err)
 		}
 	}
 	if err = publish(credentials); err != nil {

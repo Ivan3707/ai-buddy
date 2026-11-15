@@ -81,7 +81,7 @@ func chatHandler(aiURL string) http.Handler {
 			decoder.Decode(&reply) != nil ||
 			decoder.Decode(&struct{}{}) != io.EOF ||
 			reply.Answer == "" ||
-			reply.Mode != "mock" ||
+			(reply.Mode != "mock" && reply.Mode != "llm") || // AiMode in contracts: mock (offline) or llm (real model)
 			reply.Sources == nil {
 			send(w, http.StatusBadGateway, map[string]string{"error": "invalid AI response"})
 			return

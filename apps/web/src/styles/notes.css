@@ -22,3 +22,28 @@
 .notes-link.danger { margin-right: auto; color: #ff9a8a; }
 .notes-save { padding: 8px 20px; border: 0; border-radius: 999px; background: var(--pink); color: #1a1a1a; cursor: pointer; font: inherit; font-weight: 700; }
 .notes-save:disabled { opacity: 0.6; }
+
+/* Окно заметки: по центру экрана поверх панели. Стили самодостаточны (не зависят от окна задачи). */
+.note-backdrop { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(37, 37, 37, 0.6); }
+.note-modal { display: flex; flex-direction: column; box-sizing: border-box; width: 640px; max-width: 100%; max-height: 100%; overflow: hidden; border-radius: 32px; background: var(--cream); color: #252525; }
+.note-modal-head { padding: 24px 32px; background: var(--pink); color: #252525; }
+.note-modal-meta { display: block; margin-bottom: 6px; font-size: 14px; opacity: 0.7; }
+.note-modal-head h2 { margin: 0; font-size: 26px; line-height: 1.2; overflow-wrap: anywhere; }
+.note-modal-form { display: flex; flex-direction: column; gap: 16px; padding: 24px 32px; overflow-y: auto; }
+.note-modal-form label { display: flex; flex-direction: column; gap: 6px; font-size: 15px; font-weight: 600; }
+.note-modal-form input, .note-modal-form textarea { box-sizing: border-box; width: 100%; padding: 12px 14px; border: 2px solid #d9d9d9; border-radius: 16px; background: #fff; color: #252525; font: inherit; font-weight: 400; }
+.note-modal-form textarea { min-height: 160px; resize: none; }
+.note-modal-form input:focus, .note-modal-form textarea:focus { border-color: var(--pink); outline: none; }
+.note-modal-error { margin: 0; padding: 10px 14px; border-radius: 16px; background: var(--pink-soft); color: #252525; }
+.note-modal-foot { display: flex; justify-content: flex-end; align-items: center; gap: 12px; }
+.note-modal-foot button { padding: 12px 28px; border-radius: 100px; font: inherit; cursor: pointer; }
+.note-modal-foot button:disabled { opacity: 0.45; cursor: default; }
+.note-modal-close { border: 2px solid #252525; background: none; color: #252525; }
+.note-modal-close:hover:not(:disabled) { background: #252525; color: #fff; transform: none; }
+.note-modal-save { border: 0; background: var(--pink); color: #252525; font-weight: 700; }
+.note-modal-save:hover:not(:disabled) { background: #252525; color: #fff; transform: none; }
+.note-modal-foot .note-modal-delete { margin-right: auto; padding: 8px 4px; border: 0; background: none; color: #252525; text-decoration: underline; }
+.note-modal-foot .note-modal-delete:hover:not(:disabled) { background: none; color: #252525; transform: none; }
+/* заметки в панели: минималистичные, ч/б + розовый акцент */
+.notes-list button { border-left: 4px solid var(--pink); }
+.notes-error { background: var(--pink); color: #252525; }

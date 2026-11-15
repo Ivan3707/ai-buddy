@@ -29,6 +29,16 @@ function findTarget(selectors: string[]): Element | null {
 
 const pageZoom = () => Number.parseFloat(document.documentElement.style.zoom) || 1;
 
+/** Бади нарисован в закрытом shadow root: измерить его нельзя, но виджет пишет текущие координаты в атрибуты своего host. */
+export function botBox(viewW: number, viewH: number, zoom: number, host: HTMLElement | null = document.querySelector('ai-buddy-character')): Box {
+  const size = Number(host?.dataset.buddySize) || 72;
+  const x = host?.dataset.buddyX === undefined ? viewW - size - 24 : Number(host.dataset.buddyX);
+  const y = host?.dataset.buddyY === undefined ? viewH - size - 24 : Number(host.dataset.buddyY);
+  const pad = 18; // запас шире рамки персонажа, чтобы кольцо не сливалось с его собственной обводкой
+  return { top: (y - pad) / zoom, left: (x - pad) / zoom, width: (size + pad * 2) / zoom, height: (size + pad * 2) / zoom };
+}
+const sameBox = (a: Box, b: Box) => a.top === b.top && a.left === b.left && a.width === b.width && a.height === b.height;
+
 const GAP = 28;
 const BOT_BUBBLE_ROOM = 150;
 const PAD = 8;
@@ -93,11 +103,7 @@ function Tour({ onNavigate, onDone }: Props) {
   // Элемент может появиться чуть позже (данные ещё грузятся) — ищем несколько секунд
   const measure = useCallback(() => {
     if (step.corner) {
-      // Бади нарисован в закрытом shadow root: измерить его нельзя, он стоит в углу окна (72 px, отступ 24) и не зависит от zoom страницы
-      const zoom = pageZoom();
-      const pad = 18; // запас шире рамки персонажа, чтобы кольцо не сливалось с его собственной обводкой
-      const size = 72 + pad * 2;
-      setBox({ top: (innerHeight - 96 - pad) / zoom, left: (innerWidth - 96 - pad) / zoom, width: size / zoom, height: size / zoom });
+      setBox(prev => { const next = botBox(innerWidth, innerHeight, pageZoom()); return prev && sameBox(prev, next) ? prev : next; });
       return true;
     }
     const element = findTarget(step.targets);
@@ -117,9 +123,11 @@ function Tour({ onNavigate, onDone }: Props) {
       if (measure() || tries > 30) globalThis.clearInterval(timer);
     }, 100);
     const onResize = () => { measure(); };
+    // Бади можно перетащить прямо во время тура: следим за его положением
+    const follow = step.corner ? globalThis.setInterval(measure, 300) : undefined;
     globalThis.addEventListener('resize', onResize);
-    return () => { globalThis.clearInterval(timer); globalThis.removeEventListener('resize', onResize); };
-  }, [measure]);
+    return () => { globalThis.clearInterval(timer); if (follow) globalThis.clearInterval(follow); globalThis.removeEventListener('resize', onResize); };
+  }, [measure, step.corner]);
 
   useLayoutEffect(() => {
     const bubble = bubbleRef.current;
@@ -127,9 +135,10 @@ function Tour({ onNavigate, onDone }: Props) {
     const zoom = pageZoom();
     const area = { width: document.documentElement.clientWidth / zoom, height: document.documentElement.clientHeight / zoom };
     const size = { width: bubble.offsetWidth, height: bubble.offsetHeight };
-    if (step.corner && box) {
-      // над персонажем: ниже стоит его собственная всплывашка («Привет! У меня есть сводка…»), она рисуется поверх всего
-      setPos({ top: Math.max(EDGE, box.top - BOT_BUBBLE_ROOM - size.height), left: Math.max(EDGE, area.width - size.width - EDGE) });
+    if (step.corner && box && box.top > area.height / 2) {
+      // персонаж в нижней половине: подсказка над ним, ниже стоит его собственная всплывашка («Привет! У меня есть сводка…»)
+      const left = Math.min(Math.max(EDGE, box.left + box.width / 2 - size.width / 2), area.width - size.width - EDGE);
+      setPos({ top: Math.max(EDGE, box.top - BOT_BUBBLE_ROOM - size.height), left: Math.max(EDGE, left) });
       return;
     }
     setPos(box ? placeBubble(box, size, area) : placeBubble({ top: area.height / 2, left: area.width / 2, width: 0, height: 0 }, size, area));

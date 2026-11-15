@@ -106,7 +106,7 @@ class Stage(BaseModel):
 class UserContext(BaseModel):
     user_id: str
     display_name: str | None = None
-    role: Literal["intern", "buddy"]
+    role: Literal["intern", "buddy", "teamlead"]
     profession: Literal["backend", "frontend", "ml"] | None = None
     team: str | None = None
     buddy_name: str | None = None

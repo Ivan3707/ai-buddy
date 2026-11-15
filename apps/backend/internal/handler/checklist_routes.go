@@ -34,8 +34,15 @@ func (d Dependencies) RegisterChecklistRoutes(
 		"GET /api/buddy/submissions",
 		authenticated(buddyOnly(d.pendingSubmissionsHandler())),
 	)
+	// Only the buddy reviews: a teamlead gets 403 here (and ProgressService.ReviewSubmission rejects non-buddies too).
 	mux.Handle(
 		"POST /api/buddy/submissions/{submissionID}/review",
 		authenticated(buddyOnly(d.reviewSubmissionHandler())),
 	)
+	if d.StaffSubmissions != nil {
+		mux.Handle(
+			"GET /api/staff/interns/{internID}/checklist-items/{itemID}/submissions",
+			authenticated(middleware.RequireRole(model.RoleBuddy, model.RoleTeamlead)(d.staffSubmissionHistoryHandler())),
+		)
+	}
 }

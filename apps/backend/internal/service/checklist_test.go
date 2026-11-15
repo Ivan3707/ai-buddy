@@ -48,7 +48,7 @@ func TestBuildChecklistWithProgressCountsOnlyConfirmedWork(t *testing.T) {
 				ordinaryID: {ChecklistItemID: ordinaryID, Status: tc.ordinary},
 				reviewedID: {ChecklistItemID: reviewedID, Status: tc.reviewed},
 			}
-			got, err := buildChecklistWithProgress(model.Checklist{ID: checklistID}, []model.ChecklistStage{stage}, items, progress)
+			got, err := buildChecklistWithProgress(model.Checklist{ID: checklistID}, []model.ChecklistStage{stage}, items, progress, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -59,6 +59,39 @@ func TestBuildChecklistWithProgressCountsOnlyConfirmedWork(t *testing.T) {
 				t.Fatalf("review status changed: %s", got.Items[1].Status)
 			}
 		})
+	}
+}
+
+func TestBuildChecklistWithProgressMarksReturnedForRework(t *testing.T) {
+	checklistID, stageID := uuid.New(), uuid.New()
+	returnedID, staleID, silentID := uuid.New(), uuid.New(), uuid.New()
+	items := []model.ChecklistItem{
+		{ID: returnedID, ChecklistID: checklistID, StageID: stageID, RequiresReview: true},
+		{ID: staleID, ChecklistID: checklistID, StageID: stageID, RequiresReview: true},
+		{ID: silentID, ChecklistID: checklistID, StageID: stageID, RequiresReview: true},
+	}
+	progress := map[uuid.UUID]model.UserChecklistProgress{
+		returnedID: {ChecklistItemID: returnedID, Status: model.StatusActive},
+		// a stale entry for an item that is no longer active must not be shown as returned
+		staleID:  {ChecklistItemID: staleID, Status: model.StatusCompleted},
+		silentID: {ChecklistItemID: silentID, Status: model.StatusActive},
+	}
+	returned := map[uuid.UUID]string{returnedID: "add tests", staleID: "old", silentID: ""}
+	got, err := buildChecklistWithProgress(model.Checklist{ID: checklistID}, []model.ChecklistStage{{ID: stageID, ChecklistID: checklistID}}, items, progress, returned)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.Items[0].ReturnedForRework || got.Items[0].ReworkComment == nil || *got.Items[0].ReworkComment != "add tests" {
+		t.Fatalf("returned item: %+v", got.Items[0])
+	}
+	if got.Items[1].ReturnedForRework {
+		t.Fatalf("completed item marked as returned: %+v", got.Items[1])
+	}
+	if !got.Items[2].ReturnedForRework || got.Items[2].ReworkComment != nil {
+		t.Fatalf("returned item without comment: %+v", got.Items[2])
+	}
+	if !got.Stages[0].Items[0].ReturnedForRework {
+		t.Fatal("stage view lost the rework marker")
 	}
 }
 
@@ -270,8 +303,9 @@ func createChecklistTestIntern(
 		t.Fatalf("create buddy: %v", err)
 	}
 
-	user, err := NewUserService(db).CreateIntern(
+	user, err := createTestIntern(
 		ctx,
+		db,
 		email,
 		"test-password-hash",
 		profession,

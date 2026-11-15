@@ -11,6 +11,9 @@ export function UserIcon(props: SVGProps<SVGSVGElement>) {
 export function PencilIcon(props: SVGProps<SVGSVGElement>) {
   return <svg {...base} {...props}><path d="m4 20 1-4L16.5 4.5a2.1 2.1 0 0 1 3 3L8 19l-4 1Z" /><path d="M14.5 6.5l3 3" /></svg>;
 }
+export function PaperclipIcon(props: SVGProps<SVGSVGElement>) {
+  return <svg {...base} {...props}><path d="m20 11-8.2 8.2a5 5 0 0 1-7-7l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" /></svg>;
+}
 export function LockIcon(props: SVGProps<SVGSVGElement>) {
   // Значок из макета: закрытый замок #D9D9D9
   return (

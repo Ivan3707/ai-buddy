@@ -38,25 +38,30 @@ describe('ProfileDrawer', () => {
   });
 
   it('показывает личный кабинет: ФИО, стаж, прогресс и данные о себе', () => {
-    render(<ProfileDrawer user={internUser} progress={progress} open onClose={() => undefined} />);
+    const user = { ...internUser, first_name: 'Спайк', last_name: 'Кузнецов', age_years: 25, tenure_months: 3, department: 'Департамент', team: 'Отдел аналитики',
+      teamlead: { id: 't', first_name: 'Буся', last_name: 'Новикова', telegram_username: null },
+      buddy: { id: 'b', first_name: 'Иван', last_name: 'Иванов', telegram_username: null } };
+    render(<ProfileDrawer user={user} progress={progress} open onClose={() => undefined} />);
     const dialog = screen.getByRole('dialog', { name: 'Профиль' });
     expect(within(dialog).getByRole('heading', { name: 'Личный кабинет' })).toBeInTheDocument();
     expect(within(dialog).getByRole('heading', { name: /Кузнецов/ })).toBeInTheDocument();
     expect(within(dialog).getByText('25 лет')).toBeInTheDocument();
+    expect(within(dialog).getByText('3 месяца')).toBeInTheDocument();
     expect(within(dialog).getByText('5 %')).toBeInTheDocument();
     expect(within(dialog).getByText('1/20')).toBeInTheDocument();
     expect(within(dialog).getByText('в работе: 2')).toBeInTheDocument();
     expect(within(dialog).getByRole('progressbar', { name: 'Общий прогресс стажировки' })).toHaveAttribute('aria-valuenow', '5');
     const about = within(dialog).getByRole('region', { name: 'О себе' });
-    expect(about).toHaveTextContent('Бэкенд-разработчик');
-    expect(about).toHaveTextContent('Руководитель');
-    expect(about).toHaveTextContent('Наставник');
+    expect(about).toHaveTextContent('Backend-разработчик');
+    expect(about).toHaveTextContent('Новикова Буся');
+    expect(about).toHaveTextContent('Иванов Иван');
+    expect(about).toHaveTextContent('Отдел аналитики');
     expect(dialog).not.toHaveTextContent(internUser.email);
   });
 
   it('показывает прочерк без профессии', () => {
     render(<ProfileDrawer user={{ ...internUser, profession: null }} progress={progress} open onClose={() => undefined} />);
-    expect(within(screen.getByRole('region', { name: 'О себе' })).getByText('—')).toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'О себе' })).getAllByText('—').length).toBeGreaterThan(0);
   });
 
   it('закрывается по Esc и по клику на фон, внутри панели не закрывается', async () => {

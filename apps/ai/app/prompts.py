@@ -86,7 +86,7 @@ TOOL_TO_ACTION = {tool["function"]["name"]: action for action, tool in TOOLS.ite
 # Access levels each verified role may request. Mirrors the company policy "interns never get admin";
 # Backend enforces it again on confirm. Here it shapes the tool schema, so the model cannot even
 # produce a forbidden value - safety does not depend on retrieval finding the policy paragraph.
-ACCESS_LEVELS_BY_ROLE = {"intern": ["read", "write"], "buddy": ["read", "write", "admin"]}
+ACCESS_LEVELS_BY_ROLE = {"intern": ["read", "write"], "buddy": ["read", "write", "admin"], "teamlead": ["read", "write", "admin"]}
 
 
 FORM_DESCRIPTION = ("Показать стажёру форму для заполнения (заявка, заметка, событие, вопрос наставнику). "

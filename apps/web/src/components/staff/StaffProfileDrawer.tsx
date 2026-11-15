@@ -17,7 +17,7 @@ export function StaffProfileDrawer({ user, open, onClose }: Props) {
   const parts = personName(user).split(' ');
   return (
     <div className="drawer-backdrop" onClick={onClose}>
-      <aside className="drawer" role="dialog" aria-label="Профиль" onClick={event => event.stopPropagation()}>
+      <aside className="drawer staff-drawer" role="dialog" aria-label="Профиль" onClick={event => event.stopPropagation()}>
         <header className="drawer-header">
           <span className="drawer-icon"><img src="/icons/user.svg" alt="" width={33} height={33} /></span>
           <h2>Личный кабинет</h2>

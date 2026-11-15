@@ -19,6 +19,7 @@
   if (globalThis.AIBuddyWidget) return;
 
   const SIZE = 72;
+  const SUMMARY_QUESTION = 'Дай краткую сводку на сегодня: мои задачи, заявки и что делать дальше.';
   const MIN = {w: 300, h: 340};
   const DEFAULT_SIZE = {
     compact: () => ({w: 380, h: 560}),
@@ -199,6 +200,7 @@
     function place() {
       pos = clamp(pos);
       char.style.transform = `translate(${pos.x}px, ${pos.y}px)`;
+      host.dataset.buddyX = String(Math.round(pos.x)); host.dataset.buddyY = String(Math.round(pos.y)); host.dataset.buddySize = String(SIZE); // the site tour reads where Бади stands now
       placeFloating();
     }
     function placeFloating() {
@@ -1038,7 +1040,7 @@
         await store.set(KEYS.greeting, today);
         const name = user?.name ? `, ${user.name}` : '';
         void say(signedIn ? `Привет${name}! У меня есть сводка на сегодня.` : 'Привет! Я Бади, помогу с онбордингом. Войди, и начнём.',
-          {button: signedIn ? 'Показать' : 'Войти', onClick: openChat});
+          {button: signedIn ? 'Показать' : 'Войти', onClick: async () => { await openChat(); if (signedIn) ask(SUMMARY_QUESTION); }});
         return;
       }
       if (!opt.pageContext) return;
@@ -1076,6 +1078,7 @@
       isShown: () => host.isConnected,
       hide() { host.remove(); },
       async syncPosition() { const at = fromStored(await store.get(KEYS.pos)); if (at) { pos = at; place(); } },
+      position: () => ({x: pos.x, y: pos.y, size: SIZE}),
       isOpen: () => !chat.hidden,
       refresh: refreshSession, // the session changed outside the widget (single sign-on with the site)
       open: openChat,
@@ -1107,7 +1110,7 @@
   function CSS() {
     return `
     /* Дизайн сайта: тёмный графит, кремовые карточки, зелёный, розовый и голубой акценты, кнопки-«таблетки». */
-    :host{all:initial;--ink:#252525;--black:#000;--cream:#fffbfb;--green:#a7cb77;--pink:#f09cb4;--pink-soft:#f6c4d2;--blue:#9ec4f8;--grey:#d9d9d9;--grey-soft:#ececec;--muted:#6b6b6b;--danger:#b3261e}
+    :host{all:initial;--ink:#252525;--black:#252525;--cream:#fffbfb;--green:#a7cb77;--pink:#f09cb4;--pink-soft:#f6c4d2;--blue:#9ec4f8;--grey:#d9d9d9;--grey-soft:#ececec;--muted:#6b6b6b;--danger:#b3261e}
     *{box-sizing:border-box;font-family:'Manrope Variable','Manrope','Montserrat','Segoe UI',system-ui,sans-serif}
     [hidden]{display:none!important}
     .char{position:fixed;left:0;top:0;width:${SIZE}px;height:${SIZE}px;touch-action:none}
@@ -1161,8 +1164,8 @@
     button:disabled{opacity:.5;cursor:default}
     .primary{background:var(--black);color:#fff;font-weight:700}
     .ghost{background:transparent;color:#fff;padding:2px 10px}.ghost:hover{background:rgba(255,255,255,.18)}
-    .noext{position:absolute;right:-2px;bottom:2px;width:20px;height:20px;border-radius:50%;background:#ffb020;color:#1a1a1a;font:800 12px/20px system-ui;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.3);pointer-events:none}.noext[hidden]{display:none}
-    .ext{font-size:12px;font-weight:700;background:#ffb020;color:#1a1a1a;border-radius:999px}.ext:hover{background:#ffc24d}.ext[hidden]{display:none}
+    .noext{position:absolute;right:-2px;bottom:2px;width:20px;height:20px;border-radius:50%;background:var(--pink);color:#252525;font:800 12px/20px system-ui;text-align:center;box-shadow:0 1px 4px rgba(0,0,0,.3);pointer-events:none}.noext[hidden]{display:none}
+    .ext{font-size:12px;font-weight:700;background:var(--pink);color:#252525;border-radius:999px}.ext:hover{background:var(--pink-soft)}.ext[hidden]{display:none}
     .install ol{margin:6px 0 10px;padding-left:20px}.install li{margin:2px 0}.install-link{display:inline-block;padding:6px 14px;border-radius:999px;background:var(--ink);color:#fff;text-decoration:none;font-weight:700;font-size:13px}
     .mode{font-size:17px;line-height:1}.out{font-size:12px;font-weight:600}
     .tabs{display:flex;gap:2px;padding:10px 16px 0;background:var(--cream);border-bottom:1px solid var(--grey);overflow-x:auto}
@@ -1251,8 +1254,8 @@
     .pad{padding:8px 4px;margin:0}
 
     /* ручка изменения размера */
-    .grip{position:absolute;width:18px;height:18px;z-index:2;opacity:.6;touch-action:none}
-    .grip:hover{opacity:1}
+    .grip{position:absolute;width:18px;height:18px;z-index:2;opacity:0;touch-action:none}
+    .grip:hover{opacity:.5}
     .grip::before{content:"";position:absolute;inset:4px;border-color:#9a9a9a;border-style:solid;border-width:0}
     .grip[data-corner=tl]{top:0;left:0;cursor:nwse-resize}.grip[data-corner=tl]::before{border-top-width:2px;border-left-width:2px;border-top-left-radius:6px;border-color:#fff}
     .grip[data-corner=tr]{top:0;right:0;cursor:nesw-resize}.grip[data-corner=tr]::before{border-top-width:2px;border-right-width:2px;border-top-right-radius:6px;border-color:#fff}

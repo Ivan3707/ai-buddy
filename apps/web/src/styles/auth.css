@@ -111,7 +111,7 @@
   background: transparent;
   color: #fff;
   font-family: 'Montserrat', var(--font);
-  font-size: calc(24 * var(--u));
+  font-size: calc(20 * var(--u));
   font-weight: 300;
 }
 .auth-field input:focus { border-color: #fff; outline: none; box-shadow: 0 0 0 3px #ffffff30; }
@@ -127,7 +127,7 @@
   padding: calc(12 * var(--u)) calc(164 * var(--u));
   border-radius: calc(32 * var(--u));
   font-family: 'Montserrat', var(--font);
-  font-size: calc(32 * var(--u));
+  font-size: calc(20 * var(--u));
   line-height: calc(39 * var(--u));
   font-weight: 400;
   letter-spacing: 0;

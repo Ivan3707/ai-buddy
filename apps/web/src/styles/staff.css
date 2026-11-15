@@ -215,3 +215,63 @@
 .mini-task.is-clickable { cursor: pointer; }
 .mini-task.is-clickable:hover { filter: brightness(0.97); }
 .mini-task.is-clickable:focus-visible { outline: 3px solid var(--pink); }
+
+/* ───────── Вкладки «Команды», окно проверки, карточки стажёров ───────── */
+.team-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.team-tabs button {
+  display: inline-flex; align-items: center; gap: 8px;
+  height: 42px; padding: 0 22px; border-radius: var(--radius-pill);
+  background: var(--cream); color: var(--ink); font-size: 15px; font-weight: 700;
+}
+.team-tabs button.is-selected { background: var(--ink); color: #fff; }
+.queue-row b { display: block; font-size: 15px; }
+.queue-row > span small { display: block; }
+.review-block { display: grid; gap: 6px; padding: 14px 16px; border-radius: 18px; background: #fff; }
+.review-block h3 { margin: 0; font-size: 15px; font-weight: 800; }
+.review-text { overflow-wrap: anywhere; white-space: pre-wrap; }
+.mini-task.is-review { background: var(--pink-soft); }
+.mini-task.is-done { background: var(--green); }
+.status-chip.is-review { background: var(--pink); color: #fff; }
+.status-chip.is-done { background: var(--green); }
+.desk-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.intern-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 14px; margin-top: 12px; }
+.intern-card { display: grid; gap: 10px; align-content: start; padding: 16px; border-radius: 24px; background: var(--grey); cursor: pointer; transition: transform 0.15s; }
+.intern-card:hover { transform: translateY(-2px); }
+.intern-card .intern-name, .intern-card .intern-cell { min-height: 0; padding: 10px 14px; border-radius: 18px; background: #fff; }
+.intern-card .intern-name { background: var(--pink); }
+.intern-name b { display: block; }
+.intern-name small, .intern-cell > small { display: block; font-size: 12px; font-weight: 400; color: var(--text-muted); }
+.intern-name small { color: var(--ink); }
+.intern-cell > small + * { margin-top: 2px; }
+.intern-card .intern-cell:last-child { display: block; }
+
+@media (max-width: 899px) {
+  .team-grid { grid-template-columns: 1fr; }
+  .queue-row { flex-direction: column; align-items: flex-start; }
+  .staff-card { padding: 16px; }
+  .progress-hero { flex-wrap: wrap; }
+  .mini-task { grid-template-columns: 1fr auto; }
+  .mini-task .mini-meta { grid-column: 1; }
+  .desk-head { flex-direction: column; }
+  .dialog { width: 96vw; }
+  .dialog-body { padding: 16px; }
+  .stat-value { font-size: 36px; }
+  .staff-drawer .drawer-body { width: 100%; padding: 16px; }
+  .staff-drawer .fact-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .staff-drawer .fact-card p { font-size: 17px; line-height: 1.3; white-space: normal; overflow-wrap: anywhere; }
+  .staff-drawer .person-card h3 { overflow-wrap: anywhere; }
+}
+@media (max-width: 480px) {
+  .staff-drawer .fact-row { grid-template-columns: 1fr; }
+  .team-tabs button { flex: 1; justify-content: center; padding: 0 12px; }
+}
+
+.mini-task-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: center; }
+.task-tools { display: inline-flex; gap: 6px; }
+.task-tools button { background: none; border: 1px solid #252525; color: #252525; border-radius: 999px; padding: 2px 10px; font-size: 12px; cursor: pointer; }
+.task-tools button.danger { border-color: var(--pink, #e5568f); color: var(--pink, #e5568f); }
+.demo-box { border: 1px dashed var(--pink, #e5568f); border-radius: 12px; padding: 10px 12px; display: grid; gap: 6px; margin-top: 12px; }
+.demo-box small { color: #808080; }
+.history-list { display: grid; gap: 8px; }
+.history-list .history-item { border-left: 3px solid #252525; padding-left: 8px; }

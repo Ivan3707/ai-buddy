@@ -78,7 +78,9 @@ func writeServiceError(w http.ResponseWriter, err error) {
 		})
 
 	case errors.Is(err, service.ErrInvalidSubmission),
-		errors.Is(err, service.ErrSubmissionRequired):
+		errors.Is(err, service.ErrSubmissionRequired),
+		errors.Is(err, service.ErrInvalidTask),
+		errors.Is(err, service.ErrInvalidChecklistType):
 		send(w, http.StatusBadRequest, map[string]string{
 			"error": err.Error(),
 		})

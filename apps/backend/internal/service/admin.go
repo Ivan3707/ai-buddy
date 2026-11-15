@@ -11,6 +11,10 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
+
+	"github.com/google/uuid"
+	"github.com/nvkmaksim/ai-buddy/backend/internal/model"
+	"github.com/nvkmaksim/ai-buddy/backend/internal/repository"
 )
 
 // Admin panel (teamlead only, enforced by the handler's role middleware): accounts, LLM status relayed from the AI
@@ -34,6 +38,9 @@ type AdminService struct {
 func NewAdminService(db *sql.DB, aiURL string, ticker HintTicker) *AdminService {
 	return &AdminService{db: db, aiURL: strings.TrimRight(aiURL, "/"), client: &http.Client{Timeout: 2 * time.Minute}, ticker: ticker}
 }
+
+// IsOpenForAll reports the demo flag for the handler, which only sees the service through an interface.
+func (s *AdminService) IsOpenForAll() bool { return s.OpenForAll }
 
 type AdminAccount struct {
 	ID             string     `json:"id"`
@@ -383,8 +390,9 @@ func (s *AdminService) count(ctx context.Context, query string) int {
 	return n
 }
 
-const overdueWhere = `p.status='active' AND p.activated_at IS NOT NULL AND i.estimated_minutes IS NOT NULL
-	AND p.activated_at + i.estimated_minutes * interval '1 minute' < now()`
+const overdueWhere = `p.status='active' AND p.hidden_at IS NULL AND p.activated_at IS NOT NULL
+	AND COALESCE(p.estimated_minutes_override, i.estimated_minutes) IS NOT NULL
+	AND p.activated_at + COALESCE(p.estimated_minutes_override, i.estimated_minutes) * interval '1 minute' < now()`
 
 func (s *AdminService) overdueCount(ctx context.Context) int {
 	return s.count(ctx, `SELECT count(*) FROM user_checklist_progress p JOIN checklist_items i ON i.id=p.checklist_item_id WHERE `+overdueWhere)
@@ -460,7 +468,7 @@ func (s *AdminService) CheckStuckTask(ctx context.Context) (StuckCheck, error) {
 	}
 	res.PendingAfter, res.ReadyAfter = after["pending"]+after["processing"], after["ready"]
 	res.OverdueTasks = s.overdueCount(ctx)
-	rows, err := s.db.QueryContext(ctx, `SELECT i.title, u.email, COALESCE(h.status,'none'), COALESCE(h.text,'')
+	rows, err := s.db.QueryContext(ctx, `SELECT COALESCE(p.title_override, i.title), u.email, COALESCE(h.status,'none'), COALESCE(h.text,'')
 		FROM user_checklist_progress p
 		JOIN checklist_items i ON i.id=p.checklist_item_id
 		JOIN users u ON u.id=p.user_id
@@ -479,4 +487,38 @@ func (s *AdminService) CheckStuckTask(ctx context.Context) (StuckCheck, error) {
 		res.Tasks = append(res.Tasks, t)
 	}
 	return res, rows.Err()
+}
+
+// DemoCompletion is the result of CompleteChecklists.
+type DemoCompletion struct {
+	InternID            string `json:"intern_id"`
+	ItemsCompleted      int64  `json:"items_completed"`
+	SubmissionsApproved int64  `json:"submissions_approved"`
+}
+
+// CompleteChecklists is a DEMO operation of the admin panel: it marks every visible task of the intern's current
+// checklists done (review tasks verified, pending submissions approved on behalf of the intern's buddy), so both
+// checklists reach 100% and the web app offers the checklist feedback form. Idempotent: a second call changes
+// nothing. repository.ErrNotFound when the user does not exist or is not an intern.
+func (s *AdminService) CompleteChecklists(ctx context.Context, actorID, internID uuid.UUID) (DemoCompletion, error) {
+	out := DemoCompletion{InternID: internID.String()}
+	err := withTransaction(ctx, s.db, func(tx *sql.Tx) error {
+		if err := repository.NewPersonalTaskRepository(tx).LockUser(ctx, internID); err != nil {
+			return err
+		}
+		user, err := repository.NewUserRepository(tx).GetByID(ctx, internID)
+		if err != nil {
+			return err
+		}
+		if user.Role != model.RoleIntern {
+			return repository.ErrNotFound
+		}
+		res, err := repository.NewInternChecklistRepository(tx).CompleteAll(ctx, internID, actorID)
+		if err != nil {
+			return err
+		}
+		out.ItemsCompleted, out.SubmissionsApproved = res.ItemsCompleted, res.SubmissionsApproved
+		return nil
+	})
+	return out, err
 }

@@ -17,7 +17,7 @@ body:has(.portal) { min-width: 0; background: #eef1f6; }
   color: #fff;
 }
 .portal-brand { display: inline-flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; }
-.portal-brand small { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: #f5cd47; color: #3d3200; }
+.portal-brand small { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 6px; background: var(--pink); color: #252525; }
 .portal-logo { font-size: 22px; }
 .portal-top nav { display: flex; gap: 22px; margin-right: auto; font-size: 15px; }
 .portal-top nav a, .portal-top nav span { color: #ffffffb3; text-decoration: none; padding: 17px 0; border-bottom: 3px solid transparent; }
@@ -35,7 +35,7 @@ body:has(.portal) { min-width: 0; background: #eef1f6; }
 .portal-kind { font-size: 13px; color: #5b6577; text-transform: uppercase; letter-spacing: 0.05em; }
 .portal-card h1 { margin: 2px 0 0; font-size: 30px; }
 .portal-card h2 { margin: 26px 0 10px; font-size: 18px; }
-.portal-status { padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 700; white-space: nowrap; background: #fff3d7; color: #8b5b00; }
+.portal-status { padding: 6px 14px; border-radius: 999px; font-size: 13px; font-weight: 700; white-space: nowrap; background: var(--pink); color: #252525; }
 .portal-status.is-approved { background: #dff3e6; color: #166534; }
 .portal-status.is-rejected { background: #fde4e1; color: #a12a2a; }
 .portal-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 28px; margin: 0; }

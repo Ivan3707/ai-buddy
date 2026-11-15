@@ -45,3 +45,31 @@ export function combineDateTime(date: Date, time: string): string {
   const [hours, minutes] = time.split(':').map(Number);
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours || 0, minutes || 0).toISOString();
 }
+
+export type DaySpan = 'single' | 'start' | 'mid' | 'end' | null;
+
+function startOfDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+/**
+ * Как день покрыт делами: 'single' — только однодневные дела (число в розовом круге),
+ * 'start' | 'mid' | 'end' — день внутри промежутка из нескольких дней (розовая плашка), null — дел нет.
+ */
+export function daySpan(events: { starts_at: string; ends_at: string }[], date: Date): DaySpan {
+  const day = startOfDay(date);
+  let result: DaySpan = null;
+  for (const event of events) {
+    const first = startOfDay(new Date(event.starts_at));
+    const last = Math.max(first, startOfDay(new Date(event.ends_at)));
+    if (day < first || day > last) continue;
+    if (first === last) { result = result ?? 'single'; continue; }
+    return day === first ? 'start' : day === last ? 'end' : 'mid';
+  }
+  return result;
+}
+
+/** День для выбора после перехода на другой месяц: сегодня, если он в этом месяце, иначе 1-е число. */
+export function defaultDayOfMonth(year: number, month: number, today: Date): Date {
+  return today.getFullYear() === year && today.getMonth() === month ? today : new Date(year, month, 1);
+}

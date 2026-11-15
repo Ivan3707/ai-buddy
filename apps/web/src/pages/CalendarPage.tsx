@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { ChevronIcon } from '../components/icons';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
-import { WEEKDAYS, combineDateTime, dayMonthLabel, isSameDay, monthGrid, monthTitle, shiftMonth } from '../lib/calendar';
+import { WEEKDAYS, combineDateTime, defaultDayOfMonth, dayMonthLabel, isSameDay, monthGrid, monthTitle, shiftMonth } from '../lib/calendar';
 
 type Props = { today?: Date; token?: string; initialDate?: Date };
 
@@ -34,6 +34,13 @@ export function CalendarPage({ today = new Date(), token, initialDate }: Props) 
   const dayEvents = eventsOf(selected);
   const heading = isSameDay(selected, today) ? 'Дела на сегодня' : `Дела на ${dayMonthLabel(selected)}`;
 
+  const changeMonth = (delta: number) => {
+    const next = shiftMonth(year, month, delta);
+    setMonth(next);
+    setSelected(defaultDayOfMonth(next.year, next.month, today));
+    setFormError('');
+  };
+
   const resetForm = () => { setAdding(false); setTitle(''); setDescription(''); setFrom('10:00'); setTo('11:00'); setFormError(''); };
 
   const submit = async (event: FormEvent) => {
@@ -60,11 +67,11 @@ export function CalendarPage({ today = new Date(), token, initialDate }: Props) 
     <div className="cal-page">
       <h1 className="cal-title">Календарь</h1>
       <div className="cal-switch" role="group" aria-label="Месяц">
-        <button type="button" aria-label="Предыдущий месяц" onClick={() => setMonth(shiftMonth(year, month, -1))}>
+        <button type="button" aria-label="Предыдущий месяц" onClick={() => changeMonth(-1)}>
           <ChevronIcon direction="left" />
         </button>
         <span className="cal-month">{monthTitle(year, month).replace(/\s*г\.$/, '')}</span>
-        <button type="button" aria-label="Следующий месяц" onClick={() => setMonth(shiftMonth(year, month, 1))}>
+        <button type="button" aria-label="Следующий месяц" onClick={() => changeMonth(1)}>
           <ChevronIcon direction="right" />
         </button>
       </div>
@@ -87,8 +94,8 @@ export function CalendarPage({ today = new Date(), token, initialDate }: Props) 
             <form className="cal-form" onSubmit={event => void submit(event)}>
               <input aria-label="Название дела" placeholder="Что нужно сделать" maxLength={120} value={title} autoFocus onChange={event => setTitle(event.target.value)} />
               <div className="cal-form-time">
-                <label>С<input type="time" value={from} onChange={event => setFrom(event.target.value)} /></label>
-                <label>До<input type="time" value={to} onChange={event => setTo(event.target.value)} /></label>
+                <label>с<input aria-label="Время начала" type="time" value={from} onChange={event => setFrom(event.target.value)} /></label>
+                <label>до<input aria-label="Время окончания" type="time" value={to} onChange={event => setTo(event.target.value)} /></label>
               </div>
               <textarea aria-label="Описание" placeholder="Описание (необязательно)" rows={3} value={description} onChange={event => setDescription(event.target.value)} />
               {formError && <p className="cal-error" role="alert">{formError}</p>}

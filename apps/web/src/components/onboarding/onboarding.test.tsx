@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { TOUR } from './content';
-import { Onboarding, placeBubble } from './Onboarding';
+import { Onboarding, botBox, placeBubble } from './Onboarding';
 
 describe('Onboarding', () => {
   it('приветствие содержит текст и четыре возможности', () => {
@@ -70,5 +70,26 @@ describe('placeBubble', () => {
     expect(wide.top).toBe(328);
     const low = placeBubble({ top: 800, left: 100, width: 1700, height: 200 }, bubble, area);
     expect(low.top).toBe(800 - 28 - 260);
+  });
+});
+
+describe('botBox', () => {
+  it('без виджета берёт правый нижний угол', () => {
+    expect(botBox(1000, 800, 1, null)).toEqual({ top: 800 - 72 - 24 - 18, left: 1000 - 72 - 24 - 18, width: 108, height: 108 });
+  });
+
+  it('следует за текущим положением Бади и учитывает zoom', () => {
+    const host = document.createElement('ai-buddy-character');
+    host.dataset.buddyX = '100'; host.dataset.buddyY = '50'; host.dataset.buddySize = '72';
+    expect(botBox(1000, 800, 1, host)).toEqual({ top: 32, left: 82, width: 108, height: 108 });
+    expect(botBox(1000, 800, 2, host)).toEqual({ top: 16, left: 41, width: 54, height: 54 });
+  });
+});
+
+describe('TOUR', () => {
+  it('шаг про обратную связь показывает колонку «Активно»', () => {
+    const step = TOUR.find(item => item.title === 'Обратная связь');
+    expect(step?.targets).toEqual(['.kanban-column.is-active']);
+    expect(step?.text.join(' ')).toContain('На доработку');
   });
 });

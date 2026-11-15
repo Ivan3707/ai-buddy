@@ -22,6 +22,12 @@ type checklistItemDTO struct {
 	Position         int                   `json:"position"`
 	Status           model.ChecklistStatus `json:"status"`
 	CompletedAt      *string               `json:"completed_at"`
+	// ReturnedForRework: the buddy returned the latest submission and the intern has not resubmitted yet
+	// (status is "active" again). ReworkComment is the buddy's comment of that return.
+	ReturnedForRework bool    `json:"returned_for_rework"`
+	ReworkComment     *string `json:"rework_comment"`
+	// Personal: the task was added for this intern by the teamlead (not from the shared catalog).
+	Personal bool `json:"personal"`
 }
 
 type checklistStageDTO struct {
@@ -69,6 +75,7 @@ type submissionDTO struct {
 type submissionHistoryDTO struct {
 	submissionDTO
 	ReviewedAt    *string `json:"reviewed_at"`
+	ReviewedBy    *string `json:"reviewed_by"`
 	ReviewComment *string `json:"review_comment"`
 }
 
@@ -152,16 +159,52 @@ func (d Dependencies) submissionHistoryHandler() http.Handler {
 			writeServiceError(w, err)
 			return
 		}
-		response := make([]submissionHistoryDTO, 0, len(history))
-		for _, submission := range history {
-			response = append(response, submissionHistoryDTO{
-				submissionDTO: toSubmissionDTO(submission),
-				ReviewedAt:    formatOptionalTime(submission.ReviewedAt),
-				ReviewComment: submission.ReviewComment,
-			})
-		}
-		send(w, http.StatusOK, response)
+		send(w, http.StatusOK, toSubmissionHistoryDTOs(history))
 	})
+}
+
+// staffSubmissionHistoryHandler: the intern's buddy or teamlead reads the review history of one task.
+// Interns of other staff are reported as 404, like GET /api/staff/interns/{internID}/progress.
+func (d Dependencies) staffSubmissionHistoryHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		internID, ok := parsePathUUID(w, r, "internID", "invalid intern ID")
+		if !ok {
+			return
+		}
+		itemID, ok := parsePathUUID(w, r, "itemID", "invalid checklist item ID")
+		if !ok {
+			return
+		}
+		user, _ := middleware.CurrentUser(r.Context())
+		history, err := d.StaffSubmissions.ListInternSubmissions(r.Context(), user, internID, itemID)
+		if errors.Is(err, service.ErrInternNotAssigned) {
+			send(w, http.StatusNotFound, map[string]string{"error": "intern not found"})
+			return
+		}
+		if err != nil {
+			writeServiceError(w, err)
+			return
+		}
+		send(w, http.StatusOK, toSubmissionHistoryDTOs(history))
+	})
+}
+
+func toSubmissionHistoryDTOs(history []model.ChecklistItemSubmission) []submissionHistoryDTO {
+	response := make([]submissionHistoryDTO, 0, len(history))
+	for _, submission := range history {
+		var reviewedBy *string
+		if submission.ReviewedBy != nil {
+			id := submission.ReviewedBy.String()
+			reviewedBy = &id
+		}
+		response = append(response, submissionHistoryDTO{
+			submissionDTO: toSubmissionDTO(submission),
+			ReviewedAt:    formatOptionalTime(submission.ReviewedAt),
+			ReviewedBy:    reviewedBy,
+			ReviewComment: submission.ReviewComment,
+		})
+	}
+	return response
 }
 
 func (d Dependencies) pendingSubmissionsHandler() http.Handler {
@@ -229,16 +272,19 @@ func toChecklistDTO(value service.ChecklistWithProgress) checklistDTO {
 		items := make([]checklistItemDTO, 0, len(stage.Items))
 		for _, item := range stage.Items {
 			items = append(items, checklistItemDTO{
-				ID:               item.Item.ID.String(),
-				Title:            item.Item.Title,
-				Description:      item.Item.Description,
-				ExpectedResult:   item.Item.ExpectedResult,
-				RequiresReview:   item.Item.RequiresReview,
-				EstimatedMinutes: item.Item.EstimatedMinutes,
-				DueAt:            formatOptionalTime(item.Item.DueAt),
-				Position:         item.Item.Position,
-				Status:           item.Status,
-				CompletedAt:      formatOptionalTime(item.CompletedAt),
+				ID:                item.Item.ID.String(),
+				Title:             item.Item.Title,
+				Description:       item.Item.Description,
+				ExpectedResult:    item.Item.ExpectedResult,
+				RequiresReview:    item.Item.RequiresReview,
+				EstimatedMinutes:  item.Item.EstimatedMinutes,
+				DueAt:             formatOptionalTime(item.Item.DueAt),
+				Position:          item.Item.Position,
+				Status:            item.Status,
+				CompletedAt:       formatOptionalTime(item.CompletedAt),
+				ReturnedForRework: item.ReturnedForRework,
+				ReworkComment:     item.ReworkComment,
+				Personal:          item.Item.AssignedUserID != nil,
 			})
 		}
 		stages = append(stages, checklistStageDTO{

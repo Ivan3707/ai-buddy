@@ -153,3 +153,15 @@
 .feedback .pill {
   font-size: 32px;
 }
+
+/* ───────── Заглавный текст не крупнее 20px (просьба дизайнера) ───────── */
+.greeting h1, .greeting p, .page-heading, .feedback h1, .feedback-lead, .feedback label,
+.checklist-card h2, .card-title, .mini-calendar h2, .task-table h2, .card-weeks,
+.task-table header strong, .tasks-title h2, .tasks-switch-btn, .kanban-column-head h3, .kanban-column-head span,
+.cal-title, .cal-month, .cal-today h2, .note-modal-head h2, .tm-head h2,
+.onb-welcome-head h2, .onb-welcome-body h3, .onb-bubble h3, .portal-logo, .portal-card h1,
+.drawer-header h2, .person-card h3, .fact-card h3, .progress-card h3, .about-card h3,
+.assistant-body label, .staff-card h2, .auth-title, .rating-field, .sidebar .brand, .nav-link {
+  font-size: 20px;
+}
+.feedback .pill { font-size: 20px; }

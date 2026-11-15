@@ -76,8 +76,10 @@ try {
     if ($state -eq '0|1') { throw 'В БД уже есть users без истории Goose; остановлено без миграции.' }
     if ($state -eq '1|1') {
       $version = docker compose @composeArgs exec -T postgres psql -U $env:DB_USER -d $env:DB_NAME -tAc 'SELECT COALESCE(MAX(version_id) FILTER (WHERE is_applied), 0) FROM goose_db_version' 2>$null
-      # 1 = schema only, 2 = + AI assistant tables (00002_assistant.sql); goose below brings 1 up to 2
-      if ($LASTEXITCODE -ne 0 -or ($version | Out-String).Trim() -notin @('1', '2')) { throw 'История Goose отличается от версий 1–2; существующую БД не мигрирую.' }
+      # допустимы версии 1..N, где N — номер последней миграции в apps/backend/migrations; goose ниже доведёт БД до N
+      $latest = (Get-ChildItem -LiteralPath (Join-Path $repoRoot 'apps/backend/migrations') -Filter '*.sql' | ForEach-Object { [int]($_.Name -split '_')[0] } | Measure-Object -Maximum).Maximum
+      $current = ($version | Out-String).Trim()
+      if ($LASTEXITCODE -ne 0 -or $current -notmatch '^\d+$' -or [int]$current -lt 1 -or [int]$current -gt $latest) { throw "История Goose вне диапазона 1–$latest; существующую БД не мигрирую." }
     } elseif ($state -ne '0|0') { throw 'Неожиданное состояние схемы PostgreSQL.' }
 
     Write-Host 'Применяю миграции Goose...'
