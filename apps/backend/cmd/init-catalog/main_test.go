@@ -50,7 +50,7 @@ func TestInitCatalogCLIIdempotentOnIsolatedDatabase(t *testing.T) {
 	defer db.Close()
 	ctx := context.Background()
 	var version int
-	if err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version_id),0) FROM goose_db_version WHERE is_applied`).Scan(&version); err != nil || version != 4 {
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version_id),0) FROM goose_db_version WHERE is_applied`).Scan(&version); err != nil || version != 5 {
 		t.Fatalf("schema version=%d err=%v", version, err)
 	}
 	t.Setenv("DB_HOST", u.Hostname())

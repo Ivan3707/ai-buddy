@@ -310,15 +310,17 @@
 .kanban-card.is-unavailable { background: rgba(217, 217, 217, 0.4); }
 .kanban-card.is-active { background: var(--pink); color: #000; }
 .kanban-card.is-active .kanban-card-stage, .kanban-card.is-active .kanban-card-time { color: #252525; }
-.kanban-card.is-completed { background: #fff; }
-.kanban-card.is-verified { background: #252525; color: #fff; }
-.kanban-card.is-verified .kanban-card-stage, .kanban-card.is-verified .kanban-card-time { color: #d9d9d9; }
-.kanban-card button { align-self: flex-start; margin-top: 6px; }
+.kanban-card.is-review { background: #fff; }
+.kanban-card.is-done { background: #252525; color: #fff; }
+.kanban-card.is-done .kanban-card-stage, .kanban-card.is-done .kanban-card-time { color: #d9d9d9; }
+.kanban-card.is-draggable, .kanban-card.is-review, .kanban-card.is-done, .kanban-card.is-active { cursor: pointer; }
 
 /* Состояния строки задачи (task.png). Активная: кружок белый → при наведении и нажатии чёрный.
  * Выполненная: чёрное название, розовый кружок с белой галочкой; при наведении и нажатии кружок остаётся
  * розовым, а галочка становится чёрной. Недоступная не реагирует. */
-.task-row:not(.is-locked) { cursor: pointer; }
+.task-row { cursor: default; }
+.task-row:not(.is-locked) .task-name { cursor: pointer; }
+.task-row:not(.is-locked) .task-name:focus-visible { outline: 3px solid var(--pink); outline-offset: 2px; }
 .task-check { display: none; }
 .task-check path { fill: #fff; }
 .task-row:not(.is-locked):hover .task-mark,

@@ -77,6 +77,9 @@ func NewRouter(
 	if deps.Assistant != nil {
 		RegisterAssistantRoutes(mux, authenticated, deps.Assistant)
 	}
+	if deps.TaskComments != nil {
+		RegisterTaskCommentRoutes(mux, authenticated, deps.TaskComments)
+	}
 	if deps.Admin != nil {
 		RegisterAdminRoutes(mux, authenticated, deps.Admin)
 	}

@@ -5,12 +5,19 @@ import { displayName } from '../lib/format';
 import { ChecklistCard } from '../components/home/ChecklistCard';
 import { MiniCalendar } from '../components/home/MiniCalendar';
 import { TaskTable } from '../components/home/TaskTable';
+import { TaskModal } from '../components/tasks/TaskModal';
+import { advanceItem } from '../lib/advance';
 
-type Props = { user: User; checklists: ChecklistsState; onOpenTasks: (type: 'common' | 'professional') => void };
+type Props = { user: User; token: string; checklists: ChecklistsState; onFeedback: () => void };
 
-export function HomePage({ user, checklists, onOpenTasks }: Props) {
+export function HomePage({ user, token, checklists, onFeedback }: Props) {
   const [selected, setSelected] = useState<'common' | 'professional'>('common');
   const { data, loading, error, refresh } = checklists;
+  const [openID, setOpenID] = useState('');
+  const [busy, setBusy] = useState(false);
+  const cards = data ? [data.common, data.professional].flatMap(list => list.stages.flatMap(stage => stage.items.map(item => ({ item, stage, list })))) : [];
+  const opened = cards.find(card => card.item.id === openID);
+  const allDone = !!data && data.common.completion_percent >= 100 && data.professional.completion_percent >= 100;
 
   return (
     <div className="home">
@@ -24,6 +31,12 @@ export function HomePage({ user, checklists, onOpenTasks }: Props) {
           {error} <button className="link" onClick={() => void refresh()}>Повторить</button>
         </p>
       )}
+      {allDone && (
+        <section className="feedback-banner" aria-label="Обратная связь">
+          <div><b>Вы прошли оба чек-листа!</b><span>Расскажите, что было полезным, а что стоит улучшить.</span></div>
+          <button type="button" className="pill pill-black pill-sm" onClick={onFeedback}>Оставить обратную связь</button>
+        </section>
+      )}
       {data && (
         <>
           <div className={`home-top is-${selected}`}>
@@ -35,7 +48,21 @@ export function HomePage({ user, checklists, onOpenTasks }: Props) {
             />
             <MiniCalendar />
           </div>
-          <TaskTable checklist={data[selected]} onOpen={() => onOpenTasks(selected)} />
+          <TaskTable checklist={data[selected]} onOpen={item => setOpenID(item.id)} />
+          {opened && (
+            <TaskModal
+              item={opened.item}
+              stage={opened.stage}
+              checklistName={opened.list.type === 'common' ? 'Общий' : 'Профессиональный'}
+              token={token}
+              busy={busy}
+              onClose={() => setOpenID('')}
+              onAdvance={async result => {
+                setBusy(true);
+                try { await advanceItem(token, opened.item, result); await refresh(); } finally { setBusy(false); }
+              }}
+            />
+          )}
         </>
       )}
     </div>

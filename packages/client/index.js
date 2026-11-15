@@ -6,14 +6,15 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiRequest(baseUrl, path, { token, method = 'GET', body } = {}) {
+export async function apiRequest(baseUrl, path, { token, method = 'GET', body, as = 'json' } = {}) {
   const headers = {};
-  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  const isForm = typeof FormData !== 'undefined' && body instanceof FormData; // the browser sets the multipart boundary itself
+  if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
   if (token) headers.Authorization = `Bearer ${token}`;
   const response = await fetch(`${baseUrl}${path}`, {
     method, headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: AbortSignal.timeout(15000),
+    body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
+    signal: AbortSignal.timeout(isForm || as === 'blob' ? 60000 : 15000),
   });
   if (!response.ok) {
     if (response.status === 401 && token && typeof globalThis.dispatchEvent === 'function') {
@@ -27,7 +28,7 @@ export async function apiRequest(baseUrl, path, { token, method = 'GET', body } 
     throw new ApiError(response.status, message);
   }
   if (response.status === 204) return undefined;
-  return response.json();
+  return as === 'blob' ? response.blob() : response.json();
 }
 
 export function chat(baseUrl, message, token) {
@@ -74,3 +75,17 @@ export function listEvents(baseUrl, token) { return apiRequest(baseUrl, '/api/ca
 export function createEvent(baseUrl, token, input) { return apiRequest(baseUrl, '/api/calendar/events', { token, method: 'POST', body: input }); }
 export function updateEvent(baseUrl, token, id, input) { return apiRequest(baseUrl, `/api/calendar/events/${encodeURIComponent(id)}`, { token, method: 'PUT', body: input }); }
 export function deleteEvent(baseUrl, token, id) { return apiRequest(baseUrl, `/api/calendar/events/${encodeURIComponent(id)}`, { token, method: 'DELETE' }); }
+export function listTaskComments(baseUrl, token, itemID, internID) {
+  const query = internID ? `?intern_id=${encodeURIComponent(internID)}` : '';
+  return apiRequest(baseUrl, `/api/checklist-items/${encodeURIComponent(itemID)}/comments${query}`, { token });
+}
+export function addTaskComment(baseUrl, token, itemID, { body = '', files = [], internId } = {}) {
+  const form = new FormData();
+  form.append('body', body);
+  if (internId) form.append('intern_id', internId);
+  for (const file of files) form.append('files', file, file.name);
+  return apiRequest(baseUrl, `/api/checklist-items/${encodeURIComponent(itemID)}/comments`, { token, method: 'POST', body: form });
+}
+export function fetchAttachment(baseUrl, token, attachmentID) {
+  return apiRequest(baseUrl, `/api/attachments/${encodeURIComponent(attachmentID)}`, { token, as: 'blob' });
+}

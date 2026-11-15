@@ -5,6 +5,7 @@ import {
 } from '@ai-buddy/client';
 import { ProgressRing } from '../components/home/ProgressRing';
 import { Dialog } from '../components/staff/Dialog';
+import { TaskModal } from '../components/tasks/TaskModal';
 import { formatDateTime, personName, professionLabel } from '../lib/format';
 
 type Props = { user: User; token: string };
@@ -24,6 +25,7 @@ export function StaffTeamPage({ user, token }: Props) {
   const [pending, setPending] = useState<PendingSubmission[]>([]);
   const [review, setReview] = useState<PendingSubmission | null>(null);
   const [comment, setComment] = useState('');
+  const [openTask, setOpenTask] = useState('');
   const isBuddy = user.role === 'buddy';
   const isLead = user.role === 'teamlead';
 
@@ -109,8 +111,10 @@ export function StaffTeamPage({ user, token }: Props) {
               {lists.map(({ title, checklist }) => (
                 <div key={title} className="mini-list">
                   <h3>{title}</h3>
-                  {checklist.stages.flatMap(stage => stage.items).map(item => (
-                    <div key={item.id} className={`mini-task is-${item.status}`}>
+                  {checklist.stages.flatMap(stage => stage.items.map(item => ({ item, stage }))).map(({ item, stage }) => (
+                    <div key={item.id} className={`mini-task is-${item.status} is-clickable`} role="button" tabIndex={0}
+                      onClick={() => setOpenTask(item.id)}
+                      onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setOpenTask(item.id); } }}>
                       <span className="mini-title">{item.title}</span>
                       <span className="mini-meta">{item.due_at ? formatDateTime(item.due_at) : ''}</span>
                       <span className={`status-chip is-${item.status}`}>{STATUS[item.status]}</span>
@@ -134,6 +138,15 @@ export function StaffTeamPage({ user, token }: Props) {
           ))}
         </section>
       )}
+
+      {openTask && selected && (() => {
+        const found = lists.flatMap(({ checklist }) => checklist.stages.flatMap(stage => stage.items.map(item => ({ item, stage, checklist }))))
+          .find(entry => entry.item.id === openTask);
+        return found ? (
+          <TaskModal item={found.item} stage={found.stage} checklistName={found.checklist.type === 'common' ? 'Общий' : 'Профессиональный'}
+            token={token} internId={selected} onClose={() => setOpenTask('')} />
+        ) : null;
+      })()}
 
       {review && (
         <Dialog title={review.item_title} onClose={() => setReview(null)}>

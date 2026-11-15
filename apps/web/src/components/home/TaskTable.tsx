@@ -1,9 +1,9 @@
-import type { Checklist } from '@ai-buddy/client';
+import type { Checklist, ChecklistItem } from '@ai-buddy/client';
 import { currentStage, isDone, weekLabel } from '../../lib/format';
 import { MANAGER_NAME } from '../../lib/stubs';
 import { CheckIcon, LockIcon } from '../icons';
 
-type Props = { checklist: Checklist; onOpen: () => void };
+type Props = { checklist: Checklist; onOpen: (item: ChecklistItem) => void };
 
 /** Задачи текущего этапа выбранного чек-листа. */
 export function TaskTable({ checklist, onOpen }: Props) {
@@ -28,9 +28,14 @@ export function TaskTable({ checklist, onOpen }: Props) {
           <article
             key={item.id}
             className={`task-row${locked ? ' is-locked' : ''}${isDone(item) ? ' is-done' : ''}`}
-            onClick={onOpen}
           >
-            <span className="task-name"><span className="task-mark">{mark}</span>{item.title}</span>
+            <span
+              className="task-name"
+              role={locked ? undefined : 'button'}
+              tabIndex={locked ? undefined : 0}
+              onClick={locked ? undefined : () => onOpen(item)}
+              onKeyDown={locked ? undefined : event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen(item); } }}
+            ><span className="task-mark">{mark}</span>{item.title}</span>
             <span className="task-cell">{locked ? 'Недоступно' : MANAGER_NAME}</span>
             <span className="task-cell">{locked || !stage ? 'Недоступно' : weekLabel(stage)}</span>
             <span className="task-cell task-comment">{locked ? 'Недоступно' : item.description}</span>

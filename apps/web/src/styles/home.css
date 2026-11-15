@@ -82,3 +82,8 @@
 .task-row.is-locked .task-cell { background: var(--grey-soft); color: #555; }
 .task-empty { margin: 8px 0 0; color: var(--text-muted); }
 
+
+/* когда оба чек-листа пройдены */
+.feedback-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 0 0 20px; padding: 16px 24px; border-radius: 24px; background: var(--pink-soft); color: var(--ink); }
+.feedback-banner div { display: grid; gap: 2px; }
+.feedback-banner span { font-size: 14px; }

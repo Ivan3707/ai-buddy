@@ -31,15 +31,21 @@
   transform: rotate(2deg);
 }
 .kanban-card.is-picked { box-shadow: 0 0 0 3px var(--ink); }
-.kanban-card.is-flash { animation: kanban-flash 0.5s ease-in-out 3; }
-@keyframes kanban-flash { 50% { box-shadow: 0 0 0 5px var(--pink); } }
 .kanban-card-ghost { border: 2px dashed #25252570; border-radius: 24px; background: #2525250f; }
 
 /* пока тянут карточку: допустимая колонка подсвечена, остальные приглушены */
-.kanban-columns.is-dragging .kanban-column:not(.is-completed) { opacity: 0.55; transition: opacity 0.15s; }
-.kanban-columns.is-dragging .kanban-column.is-completed { outline: 3px dashed var(--pink); outline-offset: -3px; }
+.kanban-columns.is-dragging .kanban-column:not(.is-review):not(.is-done) { opacity: 0.55; transition: opacity 0.15s; }
+.kanban-columns.is-dragging .kanban-column:is(.is-review, .is-done) { outline: 3px dashed var(--pink); outline-offset: -3px; }
 .kanban-column.is-over { background: var(--pink-soft); outline-style: solid !important; }
 .kanban-notice { margin: 0 0 12px; padding: 10px 16px; border-radius: 16px; background: var(--pink-soft); color: #252525; font-size: 15px; }
 
 /* на телефоне колонки «прилипают» при прокрутке; во время переноса это мешает автопрокрутке у края */
 .kanban-columns.is-dragging { scroll-snap-type: none !important; }
+
+/* кнопки на карточке: «Подробнее» и переход на следующий этап (специфичность выше legacy-стилей button) */
+.kanban .kanban-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
+.kanban .kanban-card button.kanban-link { margin: 0; padding: 0; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; font-size: 14px; text-decoration: underline; cursor: pointer; opacity: 0.8; white-space: nowrap; }
+.kanban .kanban-card button.kanban-link:hover { opacity: 1; background: none; }
+.kanban .kanban-card button.kanban-next { margin: 0; padding: 6px 14px; border: 0; border-radius: 999px; background: #252525; color: #fff; font: inherit; font-size: 14px; cursor: pointer; white-space: nowrap; }
+.kanban .kanban-card button.kanban-next:hover:not(:disabled) { background: #000; }
+.kanban .kanban-card button.kanban-next:disabled { opacity: 0.6; cursor: default; }

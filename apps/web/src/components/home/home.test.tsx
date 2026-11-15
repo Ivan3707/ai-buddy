@@ -75,11 +75,17 @@ describe('TaskTable', () => {
     expect(screen.getAllByText(/Описание задачи/)).toHaveLength(2);
   });
 
-  it('открывает задачи по клику на строку', () => {
+  it('открывает окно задачи по клику на название, а не на другие ячейки; недоступные не открываются', () => {
     const onOpen = vi.fn();
     render(<TaskTable checklist={checklist()} onOpen={onOpen} />);
+    fireEvent.click(screen.getAllByText(/Описание задачи/)[0]!);
+    fireEvent.click(screen.getByText('Третья задача'));
+    expect(onOpen).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText('Вторая задача'));
     expect(onOpen).toHaveBeenCalledTimes(1);
+    expect(onOpen.mock.calls[0]![0]).toMatchObject({ title: 'Вторая задача' });
+    fireEvent.keyDown(screen.getByText('Вторая задача'), { key: 'Enter' });
+    expect(onOpen).toHaveBeenCalledTimes(2);
   });
 
   it('сообщает, когда задач нет', () => {

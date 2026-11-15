@@ -280,6 +280,18 @@ AI_ONLY = {
 
 # ---------------------------------------------------------------- Backend-only
 BACKEND_ONLY = {
+    "TaskAttachment": {
+        "type": "object", "required": ["id", "filename", "content_type", "size"],
+        "properties": {"id": {"type": "string", "format": "uuid"}, "filename": {"type": "string"},
+                       "content_type": {"type": "string"}, "size": {"type": "integer", "description": "bytes"}}},
+    "TaskComment": {
+        "type": "object", "required": ["id", "author_id", "author_name", "author_role", "body", "created_at", "attachments"],
+        "properties": {"id": {"type": "string", "format": "uuid"}, "author_id": {"type": "string", "format": "uuid"},
+                       "author_name": {"type": "string"},
+                       "author_role": {"type": "string", "enum": ["intern", "buddy", "teamlead"]},
+                       "body": {"type": "string", "maxLength": 2000},
+                       "created_at": {"type": "string", "format": "date-time"},
+                       "attachments": {"type": "array", "items": {"$ref": "#/components/schemas/TaskAttachment"}}}},
     "StreamChatRequest": {
         "type": "object", "additionalProperties": False, "required": ["message"],
         "properties": {
@@ -746,6 +758,40 @@ backend_paths.update({
         "description": "Teamlead only: run the real hint worker tick now and report overdue tasks, hints before/after "
                        "and up to 10 affected tasks.",
         "responses": {"200": json_resp("Result", ADMIN_STUCK_CHECK), "403": ADMIN_FORBIDDEN}}},
+    "/api/checklist-items/{itemID}/comments": {
+        "get": {
+            "operationId": "listTaskComments", "security": BEARER,
+            "description": "Thread of comments under one task of one intern, oldest first. An intern sees their own thread "
+                           "(intern_id omitted); a buddy or teamlead must pass intern_id of their own intern.",
+            "parameters": [{"name": "itemID", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}},
+                           {"name": "intern_id", "in": "query", "required": False, "schema": {"type": "string", "format": "uuid"}}],
+            "responses": {"200": json_resp("Comments", {"type": "array", "items": ref("TaskComment")}),
+                          "400": json_resp("intern_id missing for staff / invalid", ERROR),
+                          "403": json_resp("Not the owner, nor their buddy / teamlead", ERROR),
+                          "404": json_resp("The task is not in that intern's checklists", ERROR)}},
+        "post": {
+            "operationId": "addTaskComment", "security": BEARER,
+            "description": "Add a comment (text and/or up to 5 files, each <= 5 MiB, <= 10 MiB in total; images, PDF, text, CSV, "
+                           "JSON, ZIP, Office documents). author_role is the caller's role. Same access rules as GET.",
+            "parameters": [{"name": "itemID", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+            "requestBody": {"required": True, "content": {"multipart/form-data": {"schema": {
+                "type": "object", "properties": {
+                    "body": {"type": "string", "maxLength": 2000},
+                    "intern_id": {"type": "string", "format": "uuid", "description": "Staff only"},
+                    "files": {"type": "array", "maxItems": 5, "items": {"type": "string", "format": "binary"}}}}}}},
+            "responses": {"201": json_resp("Created", ref("TaskComment")),
+                          "400": json_resp("Empty comment, wrong file type or too many files", ERROR),
+                          "403": json_resp("Not the owner, nor their buddy / teamlead", ERROR),
+                          "404": json_resp("The task is not in that intern's checklists", ERROR),
+                          "413": json_resp("Attachments too large", ERROR)}}},
+    "/api/attachments/{attachmentID}": {"get": {
+        "operationId": "downloadAttachment", "security": BEARER,
+        "description": "File of a comment. Images are served inline, everything else as a download; "
+                       "always nosniff and CSP sandbox. Owner intern, their buddy and teamlead only.",
+        "parameters": [{"name": "attachmentID", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+        "responses": {"200": {"description": "File bytes", "content": {"application/octet-stream": {
+            "schema": {"type": "string", "format": "binary"}}}},
+            "403": json_resp("Forbidden", ERROR), "404": json_resp("Not found", ERROR)}}},
     "/api/metrics/chat": {"get": {
         "operationId": "chatMetrics", "security": BEARER,
         "description": "Buddy only: aggregated assistant metrics for own interns.",

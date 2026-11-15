@@ -155,16 +155,15 @@ describe('кабинет стажёра', () => {
     await screen.findByRole('heading', { name: /Привет/ });
   }
 
-  it('главная: переключает выбранный чек-лист и открывает задачи по клику на строку', async () => {
+  it('главная: переключает выбранный чек-лист и открывает окно задачи по клику на название', async () => {
     await openShell();
     expect(await screen.findByText('1/3 выполнено')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: /Профессиональный чек-лист/ }));
     expect(screen.getByText('0/1 выполнено')).toBeInTheDocument();
     await userEvent.click(screen.getByText('Доступ к репозиторию'));
-    expect(await screen.findByRole('heading', { name: 'Задачи' })).toBeInTheDocument();
-    expect(await screen.findByRole('region', { name: 'Профессиональный чек-лист' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /^Общий\s*чек-лист$/ }));
-    expect(await screen.findByRole('region', { name: 'Общий чек-лист' })).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Задача: Доступ к репозиторию' })).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('навигация: календарь, задачи, главная', async () => {

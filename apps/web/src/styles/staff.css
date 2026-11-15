@@ -212,3 +212,6 @@
 .info-list { display: grid; gap: 8px; margin: 0; padding-left: 22px; line-height: 1.5; }
 .info-card a { font-weight: 700; }
 .info-card code { padding: 1px 6px; border-radius: 8px; background: #0000000f; }
+.mini-task.is-clickable { cursor: pointer; }
+.mini-task.is-clickable:hover { filter: brightness(0.97); }
+.mini-task.is-clickable:focus-visible { outline: 3px solid var(--pink); }

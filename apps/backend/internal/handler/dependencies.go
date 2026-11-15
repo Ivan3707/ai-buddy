@@ -77,4 +77,5 @@ type Dependencies struct {
 	Sessions      SessionService
 	Assistant     *service.AssistantService
 	Admin         *service.AdminService
+	TaskComments  *service.TaskCommentService
 }

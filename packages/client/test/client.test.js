@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chat, getBuddies, listCorporateTools, getFeedback, submitFeedback, updateEvent, ApiError } from '../index.js';
+import { chat, getBuddies, listCorporateTools, getFeedback, submitFeedback, updateEvent, listTaskComments, addTaskComment, fetchAttachment, ApiError } from '../index.js';
 
 test('client uses backend and exposes failures', async () => {
   const original = globalThis.fetch;
@@ -50,4 +50,33 @@ test('401 and 403 remain distinct and 401 signals session refresh', async () => 
     await assert.rejects(getBuddies('', 'token'), error => error instanceof ApiError && error.status === 403);
     assert.equal(signals, 1);
   } finally { globalThis.fetch = originalFetch; globalThis.dispatchEvent = originalDispatch; }
+});
+
+test('task comments: multipart upload without a manual Content-Type, query for staff, blob download', async () => {
+  const original = globalThis.fetch;
+  const seen = [];
+  try {
+    globalThis.fetch = async (url, init) => {
+      seen.push({ url, method: init.method, headers: init.headers, body: init.body });
+      if (url.startsWith('/api/attachments/')) return new Response('file-bytes', { headers: { 'Content-Type': 'application/pdf' } });
+      if (init.method === 'POST' && init.body.get('body') === 'big') return new Response(JSON.stringify({ error: 'Файл слишком большой' }), { status: 413 });
+      return new Response(JSON.stringify(init.method === 'POST' ? { id: 'c1', attachments: [] } : []), { status: init.method === 'POST' ? 201 : 200 });
+    };
+    assert.deepEqual(await listTaskComments('', 'token', 'item'), []);
+    await listTaskComments('', 'token', 'item', 'intern id');
+    const file = new File(['abc'], 'a.txt', { type: 'text/plain' });
+    assert.equal((await addTaskComment('', 'token', 'item', { body: 'hi', files: [file], internId: 'intern' })).id, 'c1');
+    const post = seen[2];
+    assert.ok(post.body instanceof FormData);
+    assert.equal(post.headers['Content-Type'], undefined);
+    assert.equal(post.headers.Authorization, 'Bearer token');
+    assert.equal(post.body.get('body'), 'hi');
+    assert.equal(post.body.get('intern_id'), 'intern');
+    assert.equal(post.body.getAll('files')[0].name, 'a.txt');
+    assert.equal(seen[1].url, '/api/checklist-items/item/comments?intern_id=intern%20id');
+    await assert.rejects(addTaskComment('', 'token', 'item', { body: 'big' }), error => error instanceof ApiError && error.status === 413 && /слишком/.test(error.message));
+    const blob = await fetchAttachment('', 'token', 'att');
+    assert.equal(await blob.text(), 'file-bytes');
+    assert.equal(blob.type, 'application/pdf');
+  } finally { globalThis.fetch = original; }
 });

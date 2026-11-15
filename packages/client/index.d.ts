@@ -54,3 +54,8 @@ export function listEvents(baseUrl: string, token: string): Promise<CalendarEven
 export function createEvent(baseUrl: string, token: string, input: Omit<CalendarEvent, 'id'>): Promise<CalendarEvent>;
 export function updateEvent(baseUrl: string, token: string, id: string, input: Omit<CalendarEvent, 'id'>): Promise<CalendarEvent>;
 export function deleteEvent(baseUrl: string, token: string, id: string): Promise<void>;
+export type TaskAttachment = { id: string; filename: string; content_type: string; size: number };
+export type TaskComment = { id: string; author_id: string; author_name: string; author_role: 'intern' | 'buddy' | 'teamlead'; body: string; created_at: string; attachments: TaskAttachment[] };
+export function listTaskComments(baseUrl: string, token: string, itemID: string, internID?: string): Promise<TaskComment[]>;
+export function addTaskComment(baseUrl: string, token: string, itemID: string, input: { body?: string; files?: File[]; internId?: string }): Promise<TaskComment>;
+export function fetchAttachment(baseUrl: string, token: string, attachmentID: string): Promise<Blob>;

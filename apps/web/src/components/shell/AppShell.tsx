@@ -74,7 +74,7 @@ export function AppShell({ user, token, onLogout }: Props) {
     <div className="shell">
       <Sidebar view={view} onNavigate={setView} onLogout={onLogout} />
       <main className="workspace">
-        {view === 'home' && <HomePage user={user} checklists={checklists} onOpenTasks={type => { setTasksChecklist(type); setView('tasks'); }} />}
+        {view === 'home' && <HomePage user={user} token={token} checklists={checklists} onFeedback={() => setView('feedback')} />}
         {view === 'calendar' && <CalendarPage />}
         {view === 'tasks' && <TasksPage token={token} checklists={checklists} selected={tasksChecklist} onSelect={setTasksChecklist} />}
         {view === 'admin' && (isAdmin ? <AdminPage token={token} /> : <p className="muted">Нет доступа к админ-панели.</p>)}

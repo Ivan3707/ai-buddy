@@ -67,6 +67,7 @@ func Run() error {
 		Items:         progress,
 		Submissions:   progress,
 		Assistant:     service.NewAssistantService(db, env("AI_URL", "http://127.0.0.1:8001")),
+		TaskComments:  service.NewTaskCommentService(db),
 		Admin:         service.NewAdminService(db, env("AI_URL", "http://127.0.0.1:8001"), hints),
 	}
 	deps.Admin.OpenForAll = os.Getenv("ADMIN_OPEN_FOR_ALL") == "1"
