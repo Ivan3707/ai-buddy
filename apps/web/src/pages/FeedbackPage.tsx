@@ -69,7 +69,7 @@ export function FeedbackPage({ user, token, checklists }: Props) {
       {done ? (
         <div className="feedback-done" role="status">
           <p className="feedback-note">Спасибо! Отзыв отправлен.</p>
-          {sent.map(item => <p key={item.id} className="feedback-delivery">Оценка {item.rating} из 5 · {DELIVERY[item.delivery_status]}</p>)}
+          {[...new Set(sent.map(item => `Оценка ${item.rating} из 5 · ${DELIVERY[item.delivery_status]}`))].map(line => <p key={line} className="feedback-delivery">{line}</p>)}
         </div>
       ) : (
         <form onSubmit={submit}>

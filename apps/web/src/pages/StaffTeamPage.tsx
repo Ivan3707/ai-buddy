@@ -12,7 +12,7 @@ import { formatDateTime, personName, professionLabel } from '../lib/format';
 import { columnOf, statusLabel } from '../lib/taskColumns';
 
 export type TeamTab = 'interns' | 'review';
-type Props = { user: User; token: string; initialTab?: TeamTab };
+type Props = { user: User; token: string; initialTab?: TeamTab; initialIntern?: string };
 
 const EMPTY_TASK = { checklist_type: 'professional' as ChecklistType,  title: '', description: '', expected_result: '', due_at: '', position: 1, estimated_minutes: 30, requires_review: false };
 const message = (reason: unknown) => {
@@ -32,9 +32,9 @@ const toLocalInput = (iso: string | null) => {
 type EditForm = { id: string; title: string; description: string; expected_result: string; estimated_minutes: number; due_at: string };
 
 /** Команда: стажёры, их прогресс, очередь проверок наставника и добавление задач руководителем. */
-export function StaffTeamPage({ user, token, initialTab }: Props) {
+export function StaffTeamPage({ user, token, initialTab, initialIntern }: Props) {
   const [interns, setInterns] = useState<User[]>([]);
-  const [selected, setSelected] = useState('');
+  const [selected, setSelected] = useState(initialIntern ?? '');
   const [progress, setProgress] = useState<ProgressResponse>();
   const [error, setError] = useState('');
   const [taskOpen, setTaskOpen] = useState(false);
