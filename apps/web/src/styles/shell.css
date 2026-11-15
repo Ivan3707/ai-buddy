@@ -17,7 +17,7 @@
   color: #fff;
 }
 .sidebar nav { display: grid; gap: 28px; margin: auto 0; }
-.nav-link { text-align: left; color: #fff; font-size: 19px; font-weight: 700; opacity: 0.8; }
+.nav-link { text-align: left; color: #fff; font-size: 20px; font-weight: 700; opacity: 0.8; }
 .nav-link:hover, .nav-link.is-active { opacity: 1; }
 .nav-link.is-active { text-decoration: underline; text-underline-offset: 6px; }
 .sidebar-pin { width: 28px; height: 28px; }

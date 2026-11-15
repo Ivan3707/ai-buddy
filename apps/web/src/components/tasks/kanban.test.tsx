@@ -175,6 +175,21 @@ describe('окно задачи', () => {
     return screen.findByRole('dialog');
   };
 
+  const openReviewModal = async () => {
+    const data = checklist();
+    data.stages[0]!.items = [item({ title: 'Ждёт наставника', status: 'completed', requires_review: true })];
+    render(<KanbanBoard checklist={data} token="tok" refresh={refreshed()} />);
+    await userEvent.click(within(within(column('На проверке')).getAllByRole('article')[0]!).getByRole('button', { name: /Открыть задачу/ }));
+    return screen.findByRole('dialog');
+  };
+
+  it('комментарии и файлы доступны только у задачи на проверке', async () => {
+    const dialog = await openModal();
+    expect(within(dialog).queryByLabelText('Новый комментарий')).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: /Прикрепить файл/ })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Отправить' })).toBeNull();
+  });
+
   it('показывает описание, факты и переписку', async () => {
     api.listTaskComments.mockResolvedValue([
       { id: 'c1', author_id: 'u1', author_name: 'Иванов Иван', author_role: 'intern', body: 'Вопрос по задаче', created_at: '2026-11-14T10:00:00Z', attachments: [{ id: 'a1', filename: 'log.txt', content_type: 'text/plain', size: 2048 }] },
@@ -205,7 +220,7 @@ describe('окно задачи', () => {
 
   it('отправляет комментарий с файлом и показывает его в ленте', async () => {
     api.addTaskComment.mockResolvedValue({ id: 'c9', author_id: 'u1', author_name: 'Иванов Иван', author_role: 'intern', body: 'Готово', created_at: '2026-11-14T12:00:00Z', attachments: [] });
-    const dialog = await openModal();
+    const dialog = await openReviewModal();
     const send = within(dialog).getByRole('button', { name: 'Отправить' });
     expect(send).toBeDisabled();
     await userEvent.type(within(dialog).getByLabelText('Новый комментарий'), 'Готово');
@@ -220,7 +235,7 @@ describe('окно задачи', () => {
 
   it('не принимает слишком большой файл и показывает ошибку отправки', async () => {
     api.addTaskComment.mockRejectedValue(new Error('Сервер отказал'));
-    const dialog = await openModal();
+    const dialog = await openReviewModal();
     const big = new File(['x'], 'big.zip');
     Object.defineProperty(big, 'size', { value: 6 * 1024 * 1024 });
     await userEvent.upload(within(dialog).getByLabelText('Выбрать файлы'), big);
@@ -308,5 +323,19 @@ describe('окно задачи', () => {
     expect(await within(dialog).findByText('Нет истории')).toBeInTheDocument();
     await close(); await open();
     expect(await within(dialog).findByText('Не удалось загрузить историю')).toBeInTheDocument();
+  });
+});
+
+describe('Возврат на доработку', () => {
+  const reworked = () => checklist({ stages: [{ id: 's', title: 'Этап', week_start: 1, week_end: 1, goal: '', expected_result: '', position: 1,
+    items: [item({ title: 'Вернули', status: 'active', requires_review: true, returned_for_rework: true, rework_comment: 'Добавьте ссылку на PR' }), item({ title: 'Обычная', status: 'active' })] }] });
+
+  it('карточка в «Активно» помечена «На доработку», комментарий виден в окне задачи', async () => {
+    render(<KanbanBoard checklist={reworked()} token="tok" refresh={vi.fn()} />);
+    const cards = within(column('Активно')).getAllByRole('article');
+    expect(within(cards[0]!).getByText('На доработку')).toBeInTheDocument();
+    expect(within(cards[1]!).queryByText('На доработку')).not.toBeInTheDocument();
+    await userEvent.click(within(cards[0]!).getByRole('button', { name: /Открыть задачу/ }));
+    expect(await screen.findByText('Добавьте ссылку на PR')).toBeInTheDocument();
   });
 });

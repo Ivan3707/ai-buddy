@@ -5,7 +5,7 @@ import { ProgressRing } from '../components/home/ProgressRing';
 import type { View } from '../components/shell/Sidebar';
 import { displayName, isDone, personName, professionLabel } from '../lib/format';
 
-type Props = { user: User; token: string; onNavigate: (view: View) => void };
+type Props = { user: User; token: string; onNavigate: (view: View, tab?: 'review') => void };
 type Stats = { review: number; questions: number; requests: number };
 
 /** Главная наставника и руководителя: что требует внимания и как идут стажёры. */
@@ -44,9 +44,9 @@ export function StaffHomePage({ user, token, onNavigate }: Props) {
   }, [load]);
 
   const greeting = user.first_name || displayName(user.email);
-  const cards: { label: string; value: number; to: View; hint: string }[] = [
+  const cards: { label: string; value: number; to: View; hint: string; tab?: 'review' }[] = [
     { label: 'Стажёров', value: interns.length, to: 'team', hint: 'в вашей команде' },
-    ...(user.role === 'buddy' ? [{ label: 'Ждут проверки', value: stats.review, to: 'team' as View, hint: 'задания с результатом' }] : []),
+    ...(user.role === 'buddy' ? [{ label: 'Ждут проверки', value: stats.review, to: 'team' as View, tab: 'review' as const, hint: 'задания с результатом' }] : []),
     ...(user.role === 'buddy' ? [{ label: 'Вопросов от бота', value: stats.questions, to: 'mentor' as View, hint: 'ждут вашего ответа' }] : []),
     ...(user.role === 'teamlead' ? [{ label: 'Заявок', value: stats.requests, to: 'mentor' as View, hint: 'на согласование' }] : []),
   ];
@@ -62,7 +62,7 @@ export function StaffHomePage({ user, token, onNavigate }: Props) {
 
       <div className="stat-row">
         {cards.map((card, index) => (
-          <button key={card.label} className={`stat-card${card.value > 0 && index > 0 ? ' is-attention' : ''}`} onClick={() => onNavigate(card.to)}>
+          <button key={card.label} className={`stat-card${card.value > 0 && index > 0 ? ' is-attention' : ''}`} onClick={() => onNavigate(card.to, card.tab)}>
             <span className="stat-label">{card.label}</span>
             <strong className="stat-value">{card.value}</strong>
             <span className="stat-hint">{card.hint}</span>
@@ -71,25 +71,26 @@ export function StaffHomePage({ user, token, onNavigate }: Props) {
       </div>
 
       <section className="task-table staff-table" aria-label="Стажёры">
-        <header><h2>Стажёры</h2><button className="link" onClick={() => onNavigate('team')}>Все подробности</button></header>
-        <div className="intern-columns" aria-hidden="true"><span>Стажёр</span><span>Направление</span><span>Прогресс</span><span>Следующая задача</span></div>
+        <header><h2>Стажёры</h2></header>
         {loading && interns.length === 0 && <p className="task-empty">Загружаем…</p>}
         {!loading && interns.length === 0 && <p className="task-empty">Пока нет назначенных стажёров.</p>}
+        <div className="intern-cards">
         {interns.map(intern => {
           const data = progress[intern.id];
           const next = data?.professional.stages.flatMap(stage => stage.items).find(item => !isDone(item));
           return (
-            <article key={intern.id} className="intern-row" onClick={() => onNavigate('team')}>
-              <span className="intern-name"><span className="avatar-sm" aria-hidden="true">{personName(intern).charAt(0).toUpperCase()}</span>{personName(intern)}</span>
-              <span className="intern-cell">{professionLabel(intern.profession)}</span>
+            <article key={intern.id} className="intern-card" onClick={() => onNavigate('team')}>
+              <span className="intern-name"><span className="avatar-sm" aria-hidden="true">{personName(intern).charAt(0).toUpperCase()}</span>
+                <span><b>{personName(intern)}</b><small>{professionLabel(intern.profession)}</small></span></span>
               <span className="intern-cell intern-progress">
                 <ProgressRing percent={data?.completion_percent ?? 0} label={`Прогресс: ${personName(intern)}`} size={56} />
-                <small>{data ? `${data.completed_items}/${data.total_items}` : '…'}</small>
+                <small>{data ? `${data.completed_items} из ${data.total_items} задач` : '…'}</small>
               </span>
-              <span className="intern-cell">{next ? next.title : data ? 'Все задачи выполнены' : '…'}</span>
+              <span className="intern-cell"><small>Следующая задача</small>{next ? next.title : data ? 'Все задачи выполнены' : '…'}</span>
             </article>
           );
         })}
+        </div>
       </section>
     </div>
   );

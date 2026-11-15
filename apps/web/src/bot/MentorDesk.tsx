@@ -7,7 +7,7 @@ const err = (e: unknown) => e instanceof Error ? e.message : 'Ошибка';
 const when = (iso: string) => new Date(iso).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 function Question({ q, token, reload }: { q: MentorQuestion; token: string; reload: () => void }) {
   const [draft, setDraft] = useState<MentorDraft | null>(null); const [text, setText] = useState('');
-  const [busy, setBusy] = useState(''); const [error, setError] = useState('');
+  const [manual, setManual] = useState(false); const [busy, setBusy] = useState(''); const [error, setError] = useState('');
   const makeDraft = async () => { setBusy('draft'); setError(''); try { const d = await bot.draft(token, q.id); setDraft(d); setText(d.draft); } catch (e) { setError(err(e)); } finally { setBusy(''); } };
   const send = async () => { setBusy('send'); setError(''); try { await bot.answer(token, q.id, text.trim()); reload(); } catch (e) { setError(err(e)); } finally { setBusy(''); } };
   return <article className="desk-item">
@@ -15,13 +15,16 @@ function Question({ q, token, reload }: { q: MentorQuestion; token: string; relo
     <p className="desk-question">{q.question}</p>
     {q.context && <p className="muted desk-context">Контекст от бота: {q.context}</p>}
     {q.answer && <p className="notice success">Ваш ответ: {q.answer}</p>}
-    {q.status === 'open' && !draft && <button className="btn-ghost" disabled={busy === 'draft'} onClick={() => void makeDraft()}>{busy === 'draft' ? 'Готовлю черновик…' : '✦ AI-черновик ответа'}</button>}
-    {q.status === 'open' && draft && <div className="desk-draft">
-      <p className="muted">Уверенность: <b>{({ grounded: 'есть в базе знаний', partial: 'частично', none: 'в базе нет' } as const)[draft.confidence]}</b>
-        {!!draft.sources.length && <> · источники: {draft.sources.map(s => s.title).join('; ')}</>}</p>
-      <textarea value={text} onChange={e => setText(e.target.value)}/>
+    {q.status === 'open' && !draft && !manual && <div className="desk-actions">
+      <button className="btn-ghost" disabled={busy === 'draft'} onClick={() => void makeDraft()}>{busy === 'draft' ? 'Готовлю черновик…' : '✦ AI-черновик ответа'}</button>
+      <button onClick={() => setManual(true)}>Ответить</button>
+    </div>}
+    {q.status === 'open' && (draft || manual) && <div className="desk-draft">
+      {draft && <p className="muted">Уверенность: <b>{({ grounded: 'есть в базе знаний', partial: 'частично', none: 'в базе нет' } as const)[draft.confidence]}</b>
+        {!!draft.sources.length && <> · источники: {draft.sources.map(s => s.title).join('; ')}</>}</p>}
+      <textarea aria-label="Ваш ответ" placeholder="Напишите ответ стажёру…" value={text} onChange={e => setText(e.target.value)}/>
       <button disabled={busy === 'send' || !text.trim()} onClick={() => void send()}>{busy === 'send' ? 'Отправляем…' : 'Отправить стажёру'}</button>
-      {draft.kb_suggestion && <details className="desk-kb"><summary>Предложение статьи в базу знаний: {draft.kb_suggestion.title}</summary><pre>{draft.kb_suggestion.text}</pre></details>}
+      {draft?.kb_suggestion && <details className="desk-kb"><summary>Предложение статьи в базу знаний: {draft.kb_suggestion.title}</summary><pre>{draft.kb_suggestion.text}</pre></details>}
     </div>}
     {error && <p className="notice error">{error}</p>}
   </article>;

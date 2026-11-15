@@ -7,7 +7,7 @@ import { AdminPage } from '../../pages/AdminPage';
 import { CalendarPage } from '../../pages/CalendarPage';
 import { MentorPage } from '../../pages/MentorPage';
 import { StaffHomePage } from '../../pages/StaffHomePage';
-import { StaffTeamPage } from '../../pages/StaffTeamPage';
+import { StaffTeamPage, type TeamTab } from '../../pages/StaffTeamPage';
 import { NotesDrawer } from '../shell/NotesDrawer';
 import { SideTabs } from '../shell/SideTabs';
 import { Sidebar, type NavItem, type View } from '../shell/Sidebar';
@@ -27,6 +27,7 @@ type Props ={ user: User; token: string; onLogout: () => void };
 /** Рабочее пространство наставника и руководителя: то же меню, сцена и вкладки справа, что у стажёра. */
 export function StaffShell({ user, token, onLogout }: Props) {
   const [view, setView] = useState<View>(isAdminPath() ? 'admin' : 'home');
+  const [teamTab, setTeamTab] = useState<TeamTab>('interns');
   const [profileOpen, setProfileOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
   useStageScale();
@@ -44,10 +45,10 @@ export function StaffShell({ user, token, onLogout }: Props) {
 
   return (
     <div className="shell">
-      <Sidebar view={view} items={itemsFor(user.role)} onNavigate={setView} onLogout={onLogout} />
+      <Sidebar view={view} items={itemsFor(user.role)} onNavigate={next => { setTeamTab('interns'); setView(next); }} onLogout={onLogout} />
       <main className="workspace staff">
-        {view === 'home' && <StaffHomePage user={user} token={token} onNavigate={setView} />}
-        {view === 'team' && <StaffTeamPage user={user} token={token} />}
+        {view === 'home' && <StaffHomePage user={user} token={token} onNavigate={(next, tab) => { setTeamTab(tab ?? 'interns'); setView(next); }} />}
+        {view === 'team' && <StaffTeamPage key={teamTab} user={user} token={token} initialTab={teamTab} />}
         {view === 'mentor' && <MentorPage user={user} token={token} />}
         {view === 'calendar' && <CalendarPage token={token} />}
         {view === 'admin' && (isAdmin ? <AdminPage token={token} /> : <p className="muted">Нет доступа к админ-панели.</p>)}

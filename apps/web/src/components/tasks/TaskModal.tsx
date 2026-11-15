@@ -5,7 +5,9 @@ import {
 } from '@ai-buddy/client';
 import { formatDateTime, staffRoleLabel, weekLabel } from '../../lib/format';
 import { COLUMN_TITLES, columnOf, nextStepLabel } from '../../lib/taskColumns';
+import { PaperclipIcon } from '../icons';
 import { History } from './TaskReview';
+import { InternHistory } from '../staff/InternHistory';
 
 export const MAX_FILES = 5;
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -44,7 +46,7 @@ function Attachment({ file, token }: { file: TaskAttachment; token: string }) {
   };
   return (
     <span className="tm-file">
-      <button type="button" onClick={() => void download()}>📎 {file.filename}</button>
+      <button type="button" onClick={() => void download()}><PaperclipIcon width={14} height={14} /> <span>{file.filename}</span></button>
       <small>{sizeText(file.size)}</small>
       {error && <small className="tm-error" role="alert">{error}</small>}
     </span>
@@ -68,6 +70,8 @@ export function TaskModal({ item, stage, checklistName, token, internId, onAdvan
   const picker = useRef<HTMLInputElement>(null);
   const thread = useRef<HTMLDivElement>(null);
   const column = columnOf(item);
+  /** Комментарии и файлы нужны только по задаче на проверке: в работе, завершённая и недоступная — только чтение. */
+  const canDiscuss = column === 'review';
   const canAdvance = Boolean(onAdvance) && item.status === 'active';
 
   useEffect(() => {
@@ -138,14 +142,19 @@ export function TaskModal({ item, stage, checklistName, token, internId, onAdvan
           <button type="button" className="dialog-close" aria-label="Закрыть" onClick={onClose}>×</button>
         </header>
 
+        <dl className="tm-facts">
+          {facts.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
+        </dl>
+
         <div className="tm-body">
           <div className="tm-info">
-            <dl className="tm-facts">
-              {facts.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}
-            </dl>
             <h3>Описание</h3>
             <p className="tm-text">{item.description || 'Описание не задано.'}</p>
             {item.expected_result && (<><h3>Ожидаемый результат</h3><p className="tm-text">{item.expected_result}</p></>)}
+            {item.returned_for_rework && item.status === 'active' && (
+              <div className="rework-note"><span className="rework-badge">На доработку</span>
+                <p className="tm-text">{item.rework_comment || 'Наставник вернул работу без комментария.'}</p></div>
+            )}
 
             {canAdvance && (
               <div className="tm-advance">
@@ -167,6 +176,7 @@ export function TaskModal({ item, stage, checklistName, token, internId, onAdvan
                 <small>{item.requires_review ? 'Нужен комментарий или ссылка на результат. Задачу примет наставник: пока он не проверит, она будет в колонке «На проверке».' : 'Проверка не нужна: задача сразу окажется в «Завершено».'}</small>
               </div>
             )}
+            {internId && item.requires_review && item.status !== 'unavailable' && <InternHistory internId={internId} itemId={item.id} token={token} />}
             {onAdvance && item.requires_review && item.status !== 'unavailable' && <History itemID={item.id} token={token} />}
           </div>
 
@@ -175,7 +185,7 @@ export function TaskModal({ item, stage, checklistName, token, internId, onAdvan
             <div className="tm-thread" ref={thread} aria-live="polite">
               {loadError && <p className="tm-error" role="alert">{loadError} <button type="button" className="link-button" onClick={() => void load()}>Повторить</button></p>}
               {!comments && !loadError && <p className="muted">Загружаем…</p>}
-              {comments && comments.length === 0 && <p className="muted">Пока нет сообщений. Здесь стажёр и наставник обсуждают задачу и делятся файлами.</p>}
+              {comments && comments.length === 0 && <p className="muted">{canDiscuss ? 'Пока нет сообщений. Здесь стажёр и наставник обсуждают задачу и делятся файлами.' : 'Пока нет сообщений. Комментарии и файлы появятся, когда задача уйдёт на проверку.'}</p>}
               {comments?.map(comment => (
                 <article key={comment.id} className={`tm-msg is-${comment.author_role}`}>
                   <header><b>{comment.author_name}</b><span>{staffRoleLabel(comment.author_role)}</span><time>{formatDateTime(comment.created_at)}</time></header>
@@ -184,12 +194,12 @@ export function TaskModal({ item, stage, checklistName, token, internId, onAdvan
                 </article>
               ))}
             </div>
-            <form className="tm-compose" onSubmit={event => void send(event)}>
+            {canDiscuss && <form className="tm-compose" onSubmit={event => void send(event)}>
               <textarea rows={2} aria-label="Новый комментарий" maxLength={2000} value={text} onChange={event => setText(event.target.value)} placeholder="Напишите комментарий…" />
               {files.length > 0 && (
                 <ul className="tm-picked">
                   {files.map((file, index) => (
-                    <li key={`${file.name}-${index}`}>📎 {file.name} <small>{sizeText(file.size)}</small>
+                    <li key={`${file.name}-${index}`}><PaperclipIcon width={14} height={14} /> <span>{file.name}</span> <small>{sizeText(file.size)}</small>
                       <button type="button" aria-label={`Убрать ${file.name}`} onClick={() => setFiles(list => list.filter((_, i) => i !== index))}>×</button>
                     </li>
                   ))}
@@ -198,10 +208,10 @@ export function TaskModal({ item, stage, checklistName, token, internId, onAdvan
               {sendError && <p className="tm-error" role="alert">{sendError}</p>}
               <div className="tm-compose-bar">
                 <input ref={picker} type="file" multiple hidden aria-label="Выбрать файлы" onChange={event => pick(event.target.files)} />
-                <button type="button" className="tm-ghost" onClick={() => picker.current?.click()}>📎 Прикрепить файл</button>
+                <button type="button" className="tm-attach" onClick={() => picker.current?.click()}><PaperclipIcon width={16} height={16} /> Прикрепить файл</button>
                 <button className="tm-primary" disabled={sending || (!text.trim() && files.length === 0)}>{sending ? 'Отправляем…' : 'Отправить'}</button>
               </div>
-            </form>
+            </form>}
           </div>
         </div>
       </section>

@@ -33,6 +33,8 @@ interface BuddyApi {
   ask(text: string): Promise<void>;
   refresh(): Promise<void>;
   say(text: string, options?: BuddySayOptions): Promise<void>;
+  /** Current top-left corner of the character in viewport pixels (it can be dragged anywhere). */
+  position(): { x: number; y: number; size: number };
 }
 interface Window {
   AIBuddyWidget?: {

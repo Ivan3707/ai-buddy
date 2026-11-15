@@ -57,7 +57,7 @@
   padding: 56px 122px 20px 20px;
   border-radius: 32px 32px 0 0;
 }
-.greeting h1, .greeting p { color: #000; }
+.greeting h1, .greeting p { color: #252525; }
 .greeting h1 { margin: 0 0 4px; font-size: 60px; line-height: normal; letter-spacing: 0; }
 
 /* Три блока в ряд: 599 / 289 / 445, зазор 20 */
@@ -130,7 +130,7 @@
   font-size: 16px;
   line-height: 1.2;
 }
-.task-name { gap: 19px; background: var(--pink); color: #000; }
+.task-name { gap: 19px; background: var(--pink); color: #252525; }
 .task-mark { width: 46px; height: 46px; }
 .task-row.is-locked .task-name { padding: 20px 63px 20px 20px; background: rgba(240, 156, 180, 0.4); color: #5e5c5c; font-weight: 500; }
 .task-row.is-locked .task-cell { padding: 12px 20px; background: rgba(217, 217, 217, 0.4); color: #252525; }
@@ -161,24 +161,24 @@
   padding: 19px 44px 39px 20px;
   border-radius: 0 0 0 32px;
 }
-.person-card, .fact-card { background: #fffff8; border-radius: 32px; color: #000; }
+.person-card, .fact-card { background: #fffff8; border-radius: 32px; color: #252525; }
 .person-card h3, .fact-card h3, .progress-card h3, .about-card h3 { line-height: 33px; }
 .person-card { height: 141px; gap: 20px; padding: 20px 16px 20px 20px; }
 .avatar { width: 129px; height: 129px; font-size: 52px; }
 .fact-row { grid-template-columns: 155px 271px; gap: 19px; }
 .fact-card { gap: 24px; align-content: start; box-sizing: border-box; height: 129px; padding: 20px; }
 .fact-card p { white-space: nowrap; line-height: 39px; }
-.progress-card { height: 212px; padding: 12px 20px 20px; border-radius: 32px; color: #000; }
+.progress-card { height: 212px; padding: 12px 20px 20px; border-radius: 32px; color: #252525; }
 .progress-percent { margin: 0; line-height: 44px; }
 .progress-hint, .progress-edges, .progress-line, .about-card dt, .about-card dd { line-height: normal; }
 .progress-hint { color: #808080; }
 .progress-line { margin: 4px 0 16px; align-items: center; }
 .progress-edges { color: #808080; }
-.about-card { min-height: 357px; padding: 20px 28px 20px 20px; border-radius: 32px; }
+.about-card { min-height: 367px; padding: 20px 28px 20px 20px; border-radius: 32px; }
 .about-card h3 { margin: 0 0 24px; }
 .about-card dl { gap: 12px; }
 .about-card dd { opacity: 1; }
-.about-org { color: #808080; opacity: 1; line-height: 17px; }
+.about-org { padding-top: 34px; color: #808080; opacity: 1; line-height: 17px; }
 
 /* Заметки: розовая шапка 606×137 и пустая панель (содержимое пока не нарисовано) */
 .notes-drawer { width: 606px; }
@@ -201,9 +201,9 @@
   border-radius: 32px 0 0 32px;
 }
 .feedback h1 { max-width: 1063px; margin: 0 0 8px; font-size: 64px; line-height: normal; }
-.feedback-lead { margin: 0 0 37px; font-size: 32px; color: #000; }
+.feedback-lead { margin: 0 0 37px; font-size: 32px; color: #252525; }
 .feedback form { width: 100%; max-width: 1063px; gap: 9px; }
-.feedback label { color: #000; line-height: normal; }
+.feedback label { color: #252525; line-height: normal; }
 .feedback input, .feedback textarea {
   border: 1px solid #252525;
   border-radius: 32px;
@@ -213,14 +213,14 @@
   font-weight: var(--w-light);
 }
 .feedback input { height: 44px; }
-.feedback textarea { height: 210px; min-height: 0; padding-top: 12px; border-color: #000; resize: none; }
+.feedback textarea { height: 210px; min-height: 0; padding-top: 12px; border-color: #252525; resize: none; }
 .feedback label:nth-of-type(3) { margin-top: 16px; }
 .feedback .pill {
   width: 445px;
   height: 63px;
   margin-top: 83px;
   border-radius: 32px;
-  background: #000;
+  background: #252525;
   color: #fff;
   font-family: var(--font-title); /* в макете кнопка отправки набрана Aeroport Regular */
   font-size: 32px;
@@ -242,15 +242,15 @@
   border-radius: 32px 32px 0 0; background: #fff;
 }
 .tasks-title h2 span { display: block; }
-.tasks-title h2 { margin: 0; font-family: var(--font-title); font-size: 44px; font-weight: 700; line-height: 1.1; color: #000; }
+.tasks-title h2 { margin: 0; font-family: var(--font-title); font-size: 44px; font-weight: 700; line-height: 1.1; color: #252525; }
 .tasks-switch { position: absolute; left: 619px; top: 0; display: flex; align-items: flex-start; gap: 21px; }
 .tasks-switch-btn {
   display: flex; flex-direction: column; align-items: flex-start;
   box-sizing: border-box; width: 289px; height: 93px; padding: 20px;
-  border-radius: 32px; background: #fff; color: #000;
+  border-radius: 32px; background: #fff; color: #252525;
   font-family: var(--font-title); font-size: 22px; font-weight: 700; line-height: 30px; text-align: left;
 }
-.tasks-switch-btn.is-selected { height: 107px; background: #000; color: #fff; }
+.tasks-switch-btn.is-selected { height: 107px; background: #252525; color: #fff; }
 .tasks-panel {
   position: absolute; left: 0; right: 0; top: 138px; bottom: 0;
   overflow-y: auto; padding: 20px; min-height: 0;
@@ -276,7 +276,7 @@
 .kanban-card p { margin: 0; }
 .kanban-card-stage, .kanban-card-time { font-size: 14px; color: #808080; text-transform: none; }
 .kanban-card.is-unavailable { background: rgba(217, 217, 217, 0.4); }
-.kanban-card.is-active { background: var(--pink); color: #000; }
+.kanban-card.is-active { background: var(--pink); color: #252525; }
 .kanban-card.is-active .kanban-card-stage, .kanban-card.is-active .kanban-card-time { color: #252525; }
 
 /* Состояния строки задачи (task.png). Активная: кружок белый → при наведении и нажатии чёрный.
@@ -288,11 +288,11 @@
 .task-check { display: none; }
 .task-check path { fill: #fff; }
 .task-row:not(.is-locked):hover .task-mark,
-.task-row:not(.is-locked):active .task-mark { background: #000; }
-.task-row.is-done .task-name { background: #000; color: #fff; }
+.task-row:not(.is-locked):active .task-mark { background: #252525; }
+.task-row.is-done .task-name { background: #252525; color: #fff; }
 .task-row.is-done .task-mark,
 .task-row.is-done:hover .task-mark,
 .task-row.is-done:active .task-mark { background: var(--pink); }
 .task-row.is-done .task-check { display: block; }
 .task-row.is-done:hover .task-check path,
-.task-row.is-done:active .task-check path { fill: #000; }
+.task-row.is-done:active .task-check path { fill: #252525; }

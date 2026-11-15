@@ -54,7 +54,7 @@ export function HomePage({ user, token, checklists, onFeedback, onOpenCalendar }
             />
             <MiniCalendar token={token} onPickDate={onOpenCalendar} />
           </div>
-          <TaskTable checklist={data[selected]} onOpen={item => setOpenID(item.id)} />
+          <TaskTable checklist={data[selected]} managerName={user.teamlead ? [user.teamlead.last_name, user.teamlead.first_name].filter(Boolean).join(' ') : undefined} onOpen={item => setOpenID(item.id)} />
           {opened && (
             <TaskModal
               item={opened.item}

@@ -1,15 +1,14 @@
 import type { Checklist, ChecklistItem, ChecklistStage } from '@ai-buddy/client';
 import { isDone, weekLabel } from '../../lib/format';
-import { MANAGER_NAME } from '../../lib/stubs';
 import { CheckIcon, LockIcon } from '../icons';
 
-type Props = { checklist: Checklist; onOpen: (item: ChecklistItem) => void };
+type Props = { checklist: Checklist; onOpen: (item: ChecklistItem) => void; managerName?: string };
 
 /** Порядок в списке: сверху активные, ниже на проверке, затем недоступные, в самом низу проверенные. */
 const STATUS_ORDER: Record<ChecklistItem['status'], number> = { active: 0, completed: 1, unavailable: 2, verified: 3 };
 
 /** Все задачи выбранного чек-листа одним прокручиваемым списком. */
-export function TaskTable({ checklist, onOpen }: Props) {
+export function TaskTable({ checklist, onOpen, managerName }: Props) {
   const rows = checklist.stages
     .flatMap((stage: ChecklistStage) => stage.items.map(item => ({ item, stage })))
     .map((row, index) => ({ ...row, index }))
@@ -41,7 +40,7 @@ export function TaskTable({ checklist, onOpen }: Props) {
               onClick={locked ? undefined : () => onOpen(item)}
               onKeyDown={locked ? undefined : event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen(item); } }}
             ><span className="task-mark">{mark}</span>{item.title}</span>
-            <span className="task-cell">{locked ? 'Недоступно' : MANAGER_NAME}</span>
+            <span className="task-cell">{locked ? 'Недоступно' : managerName || '—'}</span>
             <span className="task-cell">{locked ? 'Недоступно' : weekLabel(stage)}</span>
             <span className="task-cell task-comment">{locked ? 'Недоступно' : item.description}</span>
           </article>

@@ -220,6 +220,7 @@ export function KanbanBoard({ checklist, token, refresh }: Props) {
                           {draggable && <span className="kanban-handle" title="Потяните вперёд" aria-hidden="true">⠿</span>}
                         </div>
                         <h4>{item.title}</h4>
+                        {item.returned_for_rework && item.status === 'active' && <span className="rework-badge">На доработку</span>}
                         {item.description && <p>{item.description}</p>}
                         <div className="kanban-card-bottom">
                           <span className="kanban-card-time">

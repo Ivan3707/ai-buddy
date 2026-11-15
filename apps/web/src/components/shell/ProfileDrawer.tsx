@@ -1,7 +1,14 @@
 import { useEffect } from 'react';
 import type { User } from '@ai-buddy/client';
-import { internshipDuration, type OverallProgress } from '../../lib/format';
-import { PROFILE_STUB } from '../../lib/stubs';
+import { personName, plural, professionLabel, type OverallProgress } from '../../lib/format';
+
+const refName = (ref: User['buddy']) => (ref ? [ref.last_name, ref.first_name].filter(Boolean).join(' ') || '—' : '—');
+const tenureText = (months: number) => {
+  if (months < 1) return 'до месяца';
+  const years = Math.floor(months / 12);
+  const rest = months % 12;
+  return [years > 0 ? `${years} ${plural(years, ['год', 'года', 'лет'])}` : '', rest > 0 ? `${rest} ${plural(rest, ['месяц', 'месяца', 'месяцев'])}` : ''].filter(Boolean).join(' ');
+};
 
 type Props = {
   user: User;
@@ -21,7 +28,8 @@ export function ProfileDrawer({ user, progress, open, onClose }: Props) {
   }, [open, onClose]);
 
   if (!open) return null;
-  const profile = PROFILE_STUB;
+  const fullName = personName(user).split(' ');
+  const orgLine = [user.department, user.team].filter(Boolean);
   return (
     <div className="drawer-backdrop" onClick={onClose}>
       <aside className="drawer" role="dialog" aria-label="Профиль" onClick={event => event.stopPropagation()}>
@@ -33,14 +41,18 @@ export function ProfileDrawer({ user, progress, open, onClose }: Props) {
         <div className="drawer-body">
           <section className="person-card" aria-label="Стажёр">
             <span className="avatar" aria-hidden="true">
-              {profile.photoUrl ? <img src={profile.photoUrl} alt="" /> : profile.fullName[1]?.charAt(0)}
+              {(user.first_name ?? fullName[0] ?? '').charAt(0)}
             </span>
-            <h3>{profile.fullName.map(part => <span key={part}>{part}</span>)}</h3>
+            <h3>{fullName.map(part => <span key={part}>{part}</span>)}</h3>
           </section>
 
           <div className="fact-row">
-            <section className="fact-card"><h3>Возраст:</h3><p>{profile.age} лет</p></section>
-            <section className="fact-card"><h3>Стаж:</h3><p>{internshipDuration(user.created_at)}</p></section>
+            {user.age_years != null && (
+              <section className="fact-card"><h3>Возраст:</h3><p>{user.age_years} {plural(user.age_years, ['год', 'года', 'лет'])}</p></section>
+            )}
+            {user.tenure_months != null && (
+              <section className="fact-card"><h3>Стаж:</h3><p>{tenureText(user.tenure_months)}</p></section>
+            )}
           </div>
 
           <section className="progress-card" aria-label="Прогресс стажировки">
@@ -64,11 +76,11 @@ export function ProfileDrawer({ user, progress, open, onClose }: Props) {
           <section className="about-card" aria-label="О себе">
             <h3>О себе</h3>
             <dl>
-              <div><dt>Направление стажировки:</dt><dd>{user.profession === 'backend' ? 'Бэкенд-разработчик' : user.profession ?? '—'}</dd></div>
-              <div><dt>Руководитель:</dt><dd>{profile.manager}</dd></div>
-              <div><dt>Наставник:</dt><dd>{profile.mentor}</dd></div>
+              <div><dt>Направление стажировки:</dt><dd>{professionLabel(user.profession)}</dd></div>
+              <div><dt>Руководитель:</dt><dd>{refName(user.teamlead)}</dd></div>
+              <div><dt>Наставник:</dt><dd>{refName(user.buddy)}</dd></div>
             </dl>
-            <p className="about-org">{profile.department}<br />{profile.unit}</p>
+            {orgLine.length > 0 && <p className="about-org">{orgLine[0]}{orgLine[1] && <><br />{orgLine[1]}</>}</p>}
           </section>
         </div>
       </aside>
