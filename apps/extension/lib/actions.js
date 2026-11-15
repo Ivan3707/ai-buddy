@@ -78,7 +78,8 @@ export function describeResult(result) {
   if (request && typeof request.number === 'string') {
     const status = REQUEST_STATUSES[request.status] || request.status || 'создана';
     const approver = request.approver ? ` Согласующий: ${String(request.approver).replace(/\.$/, '')}.` : '';
-    return {tone: 'success', text: `Заявка ${request.number} создана, статус: ${status}.${approver}`};
+    const link = typeof request.id === 'string' && request.id ? {requestId: request.id} : {};
+    return {tone: 'success', text: `Заявка ${request.number} создана, статус: ${status}.${approver}`, ...link};
   }
   if (result?.mentor_question) {
     return {tone: 'success', text: 'Вопрос передан наставнику. Ответ появится в разделе вопросов.'};

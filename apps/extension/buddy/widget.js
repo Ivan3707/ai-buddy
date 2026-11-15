@@ -26,7 +26,18 @@
     // on a phone the big mode takes the whole screen
     full: () => (innerWidth < 600 ? {w: innerWidth - 16, h: innerHeight - 16} : {w: Math.min(980, innerWidth - 32), h: Math.min(740, innerHeight - 48)}),
   };
-  const KEYS = {pos: 'buddyPos', mode: 'buddyChatMode', sizes: 'buddyChatSizes', greeting: 'buddyGreeting'};
+  // Where the bubble goes: next to the character (left or right of it, whichever half of the window he is in), its top at
+  // the character's top, moved up when it would run below the window; always inside the window with an 8px margin.
+  function bubbleLayout({pos, size, view, bubble, margin = 8}) {
+    const w = Math.min(bubble.w, view.w - 2 * margin), h = Math.min(bubble.h, view.h - 2 * margin);
+    const right = pos.x + size / 2 > view.w / 2;
+    const x = right ? pos.x - w - 6 : pos.x + size + 6;
+    const y = pos.y - 4;
+    const fit = (v, len, limit) => Math.round(Math.max(margin, Math.min(v, limit - len - margin)));
+    return {x: fit(x, w, view.w), y: fit(y, h, view.h), w, h};
+  }
+  const KEYS = {pos: 'buddyPos', mode: 'buddyChatMode', sizes: 'buddyChatSizes', greeting: 'buddyGreeting', selCount: 'buddySelCount', selTried: 'buddySelTried'};
+  const SELECTION_HINT_EVERY = 15; // the hint shows on every 15th selection, and never after the user has tried it once
 
   function mount(env) {
     const opt = {login: true, logout: false, pageContext: true, hide: true, requests: true, ...(env.features || {})};
@@ -63,7 +74,10 @@
           <button type="button" role="tab" data-tab="notes">Заметки</button>
           <button type="button" role="tab" data-tab="cal">Календарь</button>
         </nav>
-        <div class="log" role="log" aria-live="polite"></div>
+        <div class="logwrap">
+          <div class="log" role="log" aria-live="polite"></div>
+          <button class="to-bottom" type="button" title="К последнему сообщению" aria-label="Вниз, к последнему сообщению" hidden>↓</button>
+        </div>
         <div class="reader" hidden>
           <div class="reader-bar"><button class="back" type="button">← К чату</button>
             <a class="open-full primary-link" target="_blank" rel="noreferrer">Открыть документ полностью ↗</a></div>
@@ -154,7 +168,7 @@
     }, true);
 
     const $ = selector => root.querySelector(selector);
-    const char = $('.char'), body = $('.body'), bubble = $('.bubble'), chat = $('.chat'), log = $('.log');
+    const char = $('.char'), body = $('.body'), bubble = $('.bubble'), chat = $('.chat'), log = $('.log'), logwrap = $('.logwrap'), toBottom = $('.to-bottom');
     const input = $('.composer textarea'), sendButton = $('.send'), loginForm = $('.login');
     const chip = $('.chip'), reader = $('.reader'), readerBody = $('.reader-body');
     const grip = $('.grip'), modeButton = $('.mode'), openFull = $('.open-full');
@@ -213,16 +227,24 @@
         chat.style.transform = `translate(${Math.round((innerWidth - w) / 2)}px, ${Math.round((innerHeight - h) / 2)}px)`;
         grip.dataset.corner = 'br';
       } else {
+        const roomBelow = innerHeight - (pos.y + SIZE + 8) - 8, roomAbove = pos.y - 8 - 8;
+        let opensBelow = below;
+        // opens on the side with room, and never over the character: the window is shortened to the free space
+        if ((opensBelow ? roomBelow : roomAbove) < Math.min(h, 300) && (opensBelow ? roomAbove : roomBelow) > (opensBelow ? roomBelow : roomAbove)) opensBelow = !opensBelow;
+        const hh = Math.max(180, Math.min(h, opensBelow ? roomBelow : roomAbove));
+        chat.style.height = `${hh}px`;
+        anchor = {right, below: opensBelow};
         const cx = right ? pos.x + SIZE - w : pos.x;
-        const cy = below ? pos.y + SIZE + 8 : pos.y - h - 8;
-        chat.style.transform = `translate(${Math.min(Math.max(cx, 8), innerWidth - w - 8)}px, ${Math.min(Math.max(cy, 8), innerHeight - h - 8)}px)`;
+        const cy = opensBelow ? pos.y + SIZE + 8 : pos.y - hh - 8;
+        chat.style.transform = `translate(${Math.min(Math.max(cx, 8), innerWidth - w - 8)}px, ${Math.min(Math.max(cy, 8), innerHeight - hh - 8)}px)`;
         // the resize grip sits in the corner away from the character
-        grip.dataset.corner = `${below ? 'b' : 't'}${right ? 'l' : 'r'}`;
+        grip.dataset.corner = `${opensBelow ? 'b' : 't'}${right ? 'l' : 'r'}`;
       }
-      const bw = Math.min(300, innerWidth - 16);
-      bubble.style.maxWidth = `${bw}px`;
-      const bx = right ? pos.x - bw - 6 : pos.x + SIZE + 6;
-      bubble.style.transform = `translate(${Math.min(Math.max(bx, 8), innerWidth - bw - 8)}px, ${Math.max(Math.min(pos.y - 4, innerHeight - 160), 8)}px)`;
+      // the bubble: beside the character, clamped to the window; long text scrolls inside it
+      bubble.style.maxWidth = `${Math.min(300, innerWidth - 16)}px`;
+      bubble.style.maxHeight = `${Math.max(60, innerHeight - 16)}px`;
+      const at = bubbleLayout({pos, size: SIZE, view: {w: innerWidth, h: innerHeight}, bubble: {w: bubble.hidden ? 300 : bubble.offsetWidth, h: bubble.hidden ? 0 : bubble.offsetHeight}});
+      bubble.style.transform = `translate(${at.x}px, ${at.y}px)`;
       bubble.classList.toggle('from-right', right);
     }
     function setMode(next, persist = true) {
@@ -381,7 +403,7 @@
       }
       loginForm.hidden = signedIn !== false || !opt.login;
       $('.expired').hidden = signedIn !== false || opt.login;
-      log.hidden = out || tab !== 'chat' || readerOpen;
+      logwrap.hidden = out || tab !== 'chat' || readerOpen;
       reader.hidden = out || tab !== 'chat' || !readerOpen;
       $('.composer-wrap').hidden = out || tab !== 'chat' || readerOpen;
       notesPanel.hidden = out || tab !== 'notes';
@@ -397,7 +419,7 @@
       if (next === 'reqs') void loadRequests();
       if (next === 'ask') void loadQuestions();
       if (next === 'cal') void loadEvents();
-      if (next === 'chat') { scroll(); input.focus(); }
+      if (next === 'chat') { scroll(true); input.focus(); }
     }
     for (const b of tabsBar.querySelectorAll('button')) b.onclick = () => showTab(b.dataset.tab);
 
@@ -435,7 +457,16 @@
       return html + (list ? '</ul>' : '');
     }
     function el(tag, cls, text) { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; }
-    const scroll = () => { log.scrollTop = log.scrollHeight; };
+    // Like a real chat: while the answer streams the view follows it only if the reader is at the bottom. Scrolled up to
+    // reread, he is left alone and the "↓" button takes him back down. A new question of his own always goes to the bottom.
+    let stick = true;
+    const nearBottom = () => log.scrollHeight - log.scrollTop - log.clientHeight < 48;
+    const scroll = (force = false) => {
+      if (force || stick) { log.scrollTop = log.scrollHeight; stick = true; }
+      toBottom.hidden = nearBottom();
+    };
+    log.addEventListener('scroll', () => { stick = nearBottom(); toBottom.hidden = stick; }, {passive: true});
+    toBottom.onclick = () => scroll(true);
 
     function assistantBubble(extra = '') {
       const node = el('div', `msg bot ${extra}`);
@@ -494,6 +525,14 @@
     const HOUR = () => { const d = new Date(); d.setMinutes(0, 0, 0); d.setHours(d.getHours() + 1); return d; };
     const local = d => { const p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
     const SYSTEMS = ['jira', 'confluence', 'gitlab', 'grafana', 'redash', 'kubernetes'];
+    // A request created in the chat opens its page on the corporate portal (another service) by a click.
+    function portalLink(id) {
+      const url = typeof id === 'string' && id ? env.portalUrl?.('assistant', id) : '';
+      if (!url) return null;
+      const a = el('a', 'portal-link', 'Открыть заявку на портале ↗');
+      a.href = url; a.target = '_blank'; a.rel = 'noreferrer'; a.title = 'Открыть заявку на корпоративном портале';
+      return a;
+    }
     const FORMS = {
       leave_request: {
         title: 'Заявка на отгул или отпуск',
@@ -582,6 +621,8 @@
         if (!text) { send.disabled = false; status.textContent = result?.error || 'Не получилось. Попробуйте ещё раз.'; return; }
         const ok = el('p', 'result', text); ok.dataset.tone = 'success';
         box.replaceChildren(el('b', '', def.title), ok);
+        const link = portalLink(result.request?.id);
+        if (link) box.append(link);
         setMood('happy', 2000);
       });
       box.append(form);
@@ -610,6 +651,8 @@
         const outcome = await env.call({op, actionId: c.id});
         result.textContent = outcome?.text || 'Не удалось связаться с сервером.';
         result.dataset.tone = outcome?.tone || 'error';
+        const link = portalLink(outcome?.requestId);
+        if (link) result.after(link);
         if (outcome?.retryable) { ok.disabled = no.disabled = false; return; }
         row.remove();
         setMood(outcome?.tone === 'success' ? 'happy' : outcome?.tone === 'error' ? 'sad' : 'idle', 2500);
@@ -927,14 +970,28 @@
       if (force) return true;
       return Boolean(selection) || POINTS_AT_PAGE.test(text) || WORK_TOOL.test(`${document.title} ${location.hostname}`);
     }
+    // Readable text of the page (innerText, not HTML: no markup noise, a fraction of the size), only when the question
+    // is about the page. Never on a page with a password field (sign-in, payment); the AI service masks personal data.
+    const PAGE_TEXT_MAX = 5500;
+    function pageText() {
+      try {
+        if (document.querySelector('input[type=password]')) return '';
+        const clean = node => String(node?.innerText || '').replace(/[ \t\u00a0]+/g, ' ').replace(/\s*\n\s*/g, '\n').trim();
+        const main = clean(document.querySelector('article, main, [role=main]'));
+        const raw = main.length >= 300 ? main : clean(document.body);
+        return raw.length > PAGE_TEXT_MAX ? `${raw.slice(0, PAGE_TEXT_MAX)}…` : raw;
+      } catch { return ''; }
+    }
     function pageContext(text, force = false) {
       if (!wantsPage(text, force)) return null;
       const url = /^https?:/.test(location.protocol) ? `${location.origin}${location.pathname}` : '';
       if (!url) return null;
+      const pageBody = pageText();
       return {
         url: url.slice(0, 2000),
         ...(document.title ? {title: document.title.slice(0, 300)} : {}),
         ...(selection ? {selection: selection.slice(0, 2000)} : {}),
+        ...(pageBody ? {text: pageBody} : {}),
       };
     }
     function ask(text, {forcePage = false} = {}) {
@@ -944,8 +1001,9 @@
       if (tab !== 'chat') showTab('chat');
       const page = pageContext(text, forcePage);
       const userNode = el('div', 'msg user', text);
+      if (page?.selection) void store.set(KEYS.selTried, true);
       if (page) userNode.append(el('span', 'ctx', page.selection ? '📄 страница + выделенный текст' : '📄 с учётом страницы'));
-      log.append(userNode);
+      log.append(userNode); scroll(true);
       setSelection('');
       setBusy(true);
       const render = assistantBubble();
@@ -991,7 +1049,7 @@
         const link = el('a', 'install-link', 'Установить расширение');
         link.href = env.installHint.url; link.target = '_blank'; link.rel = 'noopener';
         node.append(link);
-        log.append(node); scroll();
+        log.append(node); scroll(true);
       };
     }
     $('.out').onclick = async () => { // signs out of the account everywhere (the site follows, see lib/sso.js)
@@ -1019,14 +1077,16 @@
     if (opt.pageContext) {
       const onMouseUp = event => {
         if (event.composedPath().includes(host)) return;
-        setTimeout(() => {
+        setTimeout(async () => {
           const text = String(getSelection() || '').trim().replace(/\s+/g, ' ');
           if (text.length < 12) return;
           setSelection(text.slice(0, 2000));
-          if (chat.hidden) {
-            void say('Спросить меня про выделенный текст?', {button: 'Это актуально?', mood: 'curious', ms: 8000,
-              onClick: async () => { await openChat(); ask('Это ещё актуально?'); }});
-          }
+          if (!chat.hidden || await store.get(KEYS.selTried)) return;
+          const count = (Number(await store.get(KEYS.selCount)) || 0) + 1;
+          void store.set(KEYS.selCount, count);
+          if (count % SELECTION_HINT_EVERY !== 0) return;
+          void say('Спросить меня про выделенный текст?', {button: 'Это актуально?', mood: 'curious', ms: 8000,
+            onClick: async () => { await openChat(); ask('Это ещё актуально?'); }});
         }, 0);
       };
       document.addEventListener('mouseup', onMouseUp);
@@ -1113,7 +1173,7 @@
     :host{all:initial;--ink:#252525;--black:#252525;--cream:#fffbfb;--green:#a7cb77;--pink:#f09cb4;--pink-soft:#f6c4d2;--blue:#9ec4f8;--grey:#d9d9d9;--grey-soft:#ececec;--muted:#6b6b6b;--danger:#b3261e}
     *{box-sizing:border-box;font-family:'Manrope Variable','Manrope','Montserrat','Segoe UI',system-ui,sans-serif}
     [hidden]{display:none!important}
-    .char{position:fixed;left:0;top:0;width:${SIZE}px;height:${SIZE}px;touch-action:none}
+    .char{position:fixed;left:0;top:0;width:${SIZE}px;height:${SIZE}px;touch-action:none;z-index:4}
     .body{all:unset;display:block;width:${SIZE}px;height:${SIZE}px;cursor:grab;filter:drop-shadow(0 4px 10px rgba(0,0,0,.3));transition:transform .15s}
     .body:hover{transform:scale(1.06)}.body:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:50%}
     .dragging .body{cursor:grabbing;transform:scale(1.1) rotate(-6deg)}
@@ -1146,7 +1206,7 @@
     @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
     /* реплика над персонажем */
-    .bubble{position:fixed;left:0;top:0;background:var(--cream);color:var(--ink);border-radius:22px;padding:14px 30px 14px 18px;font-size:14px;line-height:1.4;box-shadow:0 8px 28px rgba(0,0,0,.28);cursor:pointer;animation:appear .25s}
+    .bubble{position:fixed;left:0;top:0;background:var(--cream);color:var(--ink);border-radius:22px;padding:14px 30px 14px 18px;font-size:14px;line-height:1.4;box-shadow:0 8px 28px rgba(0,0,0,.28);cursor:pointer;animation:appear .25s;overflow-y:auto;overscroll-behavior:contain;box-sizing:border-box}
     .bubble-detail{display:block;margin-top:8px;padding:8px 12px;border-radius:14px;background:var(--pink-soft);font-size:13px}
     .bubble-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
     .bubble-go{all:unset;display:inline-flex;align-items:center;height:32px;padding:0 16px;border-radius:999px;background:var(--black);color:#fff;font-weight:700;font-size:13px;cursor:pointer}
@@ -1171,7 +1231,9 @@
     .tabs{display:flex;gap:2px;padding:10px 16px 0;background:var(--cream);border-bottom:1px solid var(--grey);overflow-x:auto}
     .tabs button{border-radius:0;background:transparent;border-bottom:3px solid transparent;padding:8px 14px;color:var(--muted);font-weight:700;white-space:nowrap}
     .tabs button.on{border-bottom-color:var(--pink);color:var(--ink)}
-    .log{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;background:var(--cream)}
+    .logwrap{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}.logwrap[hidden]{display:none}
+    .to-bottom{position:absolute;right:16px;bottom:10px;width:38px;height:38px;border-radius:50%;border:0;background:var(--ink);color:#fff;font-size:18px;line-height:38px;text-align:center;cursor:pointer;box-shadow:0 3px 10px rgba(0,0,0,.35)}.to-bottom[hidden]{display:none}.to-bottom:hover{background:var(--pink);color:var(--ink)}
+    .log{flex:1;min-height:0;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;background:var(--cream)}
     .full .log{padding:20px 28px}
     .msg{max-width:90%;padding:10px 14px;border-radius:20px;overflow-wrap:anywhere}
     .full .msg{max-width:78%}
@@ -1190,7 +1252,7 @@
     .chat-form{margin-top:8px;padding:0;background:transparent}.form-card .bar{margin-top:2px}
     .card dl{display:grid;grid-template-columns:max-content 1fr;gap:2px 10px;margin:8px 0;font-size:12px}.card dt{color:var(--muted)}.card dd{margin:0}
     .summary{font-size:13px}.row{display:flex;gap:8px}
-    .result{margin:8px 0 0;font-size:12px}.result[data-tone=success]{color:#3d6b12}.result[data-tone=error]{color:var(--danger)}.result[data-tone=muted]{color:var(--muted)}
+    .portal-link{display:inline-block;margin-top:6px;font-size:12px;font-weight:700;color:var(--ink,#252525);text-decoration:underline}.portal-link:hover{opacity:.7}.result{margin:8px 0 0;font-size:12px}.result[data-tone=success]{color:#3d6b12}.result[data-tone=error]{color:var(--danger)}.result[data-tone=muted]{color:var(--muted)}
     .fb{display:flex;gap:2px;align-items:center;margin-top:6px;font-size:11px;color:var(--muted)}.fb button{position:relative;background:transparent;padding:0 4px}.fb .on{background:#0000001a}
     .fb button:hover::after,.fb button:focus-visible::after{content:attr(data-tip);position:absolute;left:50%;bottom:calc(100% + 6px);transform:translateX(-50%);white-space:nowrap;padding:4px 10px;border-radius:999px;background:var(--ink);color:#fff;font-size:11px;font-weight:600;z-index:5;pointer-events:none}
     .err{margin-top:8px;padding:6px 12px;border-radius:14px;background:var(--pink-soft);color:var(--danger);font-size:12px}
@@ -1279,5 +1341,5 @@
     `;
   }
 
-  globalThis.AIBuddyWidget = {mount};
+  globalThis.AIBuddyWidget = {mount, bubbleLayout};
 })();

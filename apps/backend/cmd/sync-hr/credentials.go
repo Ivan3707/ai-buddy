@@ -112,7 +112,7 @@ func restrictWindowsACL(path string) error {
 	if err != nil {
 		return err
 	}
-	args := []string{path, "/inheritance:r", "/grant:r", "*" + identity.Uid + ":(R,W)", "*S-1-5-18:F", "*S-1-5-32-544:F"}
+	args := []string{path, "/inheritance:r", "/grant:r", "*" + identity.Uid + ":(R,W,D)", "*S-1-5-18:F", "*S-1-5-32-544:F"}
 	if output, err := exec.Command("icacls", args...).CombinedOutput(); err != nil {
 		return fmt.Errorf("restrict credentials ACL: %w: %s", err, strings.TrimSpace(string(output)))
 	}

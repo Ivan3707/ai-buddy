@@ -15,6 +15,7 @@ type checklistItemDTO struct {
 	ReturnedRework   bool                  `json:"returned_for_rework"`
 	ReworkComment    *string               `json:"rework_comment"`
 	Personal         bool                  `json:"personal"`
+	Started          bool                  `json:"started"`
 }
 
 type checklistStageDTO struct {

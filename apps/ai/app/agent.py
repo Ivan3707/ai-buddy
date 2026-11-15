@@ -120,6 +120,11 @@ def best_quote(chunk: str, answer: str, n: int, limit: int = 300) -> str:
     return best if len(best) <= limit else best[: limit - 1] + "…"
 
 
+def plain_dashes(text: str) -> str:
+    """Long and medium dashes give the answer away as machine-written: a plain hyphen instead (works per chunk)."""
+    return text.replace("—", "-").replace("–", "-")
+
+
 def mask_request(req: AgentChatRequest) -> tuple[AgentChatRequest, Counter[str]]:
     """Personal data never leaves the service: mask it in everything the user typed."""
     total: Counter[str] = Counter()
@@ -133,10 +138,14 @@ def mask_request(req: AgentChatRequest) -> tuple[AgentChatRequest, Counter[str]]
             turn = turn.model_copy(update={"content": content})
         history.append(turn)
     page = req.page_context
-    if page and page.selection:
-        selection, found = mask(page.selection)
-        total += found
-        page = page.model_copy(update={"selection": selection})
+    if page and (page.selection or page.text):
+        update: dict[str, str] = {}
+        for field in ("selection", "text"):
+            value = getattr(page, field)
+            if value:
+                update[field], found = mask(value)
+                total += found
+        page = page.model_copy(update=update)
     return req.model_copy(update={"message": message, "history": history, "page_context": page}), total
 
 
@@ -147,6 +156,8 @@ CANDIDATES = 20  # depth of each partial ranking before fusion
 DEICTIC = re.compile(r"\b(тут|здесь|это|этом|этой|эту|этот|эти|этого|страниц\w*|выделен\w*|написан\w*)\b")
 # Elliptical follow-ups ("а за сколько дней?", "и кто согласует?", "а если я стажёр?") have no topic of their own.
 FOLLOW_UP = re.compile(r"^\s*(а|и|но|ну|тогда|ещё|еще)\b")
+# "расскажи подробнее про сроки", "поясни" continue the previous answer too, even though they start with another word.
+ASK_MORE = re.compile(r"\b(подробн\w*|разверни\w*|поясни\w*|объясни\w*)\b")
 
 
 def retrieve(req: AgentChatRequest, retriever: Retriever, k: int, min_score: float,
@@ -173,7 +184,8 @@ def retrieve(req: AgentChatRequest, retriever: Retriever, k: int, min_score: flo
     if alone:
         rankings.insert(0, alone)
     hits = rankings[0][:k] if len(rankings) == 1 else fuse(rankings, k)
-    if use_history and previous and FOLLOW_UP.match(req.message.casefold()):
+    msg = req.message.casefold()
+    if use_history and previous and (FOLLOW_UP.match(msg) or (len(msg) < 80 and ASK_MORE.search(msg))):
         # "а за сколько дней?" continues the previous answer, so its evidence stays in view: the bare
         # follow-up drags in noise ("сроки" of access requests) and fusion alone can push out a document
         # the previous answer relied on (e.g. the second side of a contradiction).
@@ -223,8 +235,9 @@ async def run_turn(req: AgentChatRequest, retriever: Retriever, llm: LLM,
             if isinstance(ev, TextDelta):
                 if not parts:
                     metrics.TTFT.observe(time.monotonic() - t0)
-                parts.append(ev.text)
-                yield "delta", {"text": ev.text}
+                chunk = plain_dashes(ev.text)
+                parts.append(chunk)
+                yield "delta", {"text": chunk}
             elif isinstance(ev, ToolCall):
                 calls.append(ev)
             else:

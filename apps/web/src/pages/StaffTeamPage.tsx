@@ -9,7 +9,7 @@ import { Dialog } from '../components/staff/Dialog';
 import { ReviewDialog } from '../components/staff/ReviewDialog';
 import { TaskModal } from '../components/tasks/TaskModal';
 import { formatDateTime, personName, professionLabel } from '../lib/format';
-import { COLUMN_TITLES, columnOf } from '../lib/taskColumns';
+import { columnOf, statusLabel } from '../lib/taskColumns';
 
 export type TeamTab = 'interns' | 'review';
 type Props = { user: User; token: string; initialTab?: TeamTab };
@@ -192,7 +192,7 @@ export function StaffTeamPage({ user, token, initialTab }: Props) {
                         onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setOpenTask(item.id); } }}>
                         <span className="mini-title">{item.title}</span>
                         <span className="mini-meta">{item.due_at ? formatDateTime(item.due_at) : ''}</span>
-                        <span className={`status-chip is-${columnOf(item)}`}>{COLUMN_TITLES[columnOf(item)]}</span>
+                        <span className={`status-chip is-${columnOf(item)}`}>{statusLabel(item)}</span>
                       </div>
                       {isLead && (
                         <span className="task-tools">

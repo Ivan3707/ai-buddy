@@ -3,14 +3,15 @@ import userEvent from '@testing-library/user-event';
 import * as client from '@ai-buddy/client';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { checklist, checklistsResponse, item } from '../../test/fixtures';
-import { columnOf } from '../../lib/taskColumns';
+import { columnOf, isAvailable, statusLabel } from '../../lib/taskColumns';
 import { KanbanBoard } from './KanbanBoard';
+import { TaskModal } from './TaskModal';
 
 vi.mock('@ai-buddy/client', async importOriginal => {
   const actual = await importOriginal<typeof import('@ai-buddy/client')>();
   return {
-    ...actual, completeItem: vi.fn(), submitItem: vi.fn(), getSubmissionHistory: vi.fn(),
-    listTaskComments: vi.fn(), addTaskComment: vi.fn(), fetchAttachment: vi.fn(),
+    ...actual, completeItem: vi.fn(), submitItem: vi.fn(), startItem: vi.fn(), getSubmissionHistory: vi.fn(),
+    getInternSubmissionHistory: vi.fn(), listTaskComments: vi.fn(), addTaskComment: vi.fn(), fetchAttachment: vi.fn(),
   };
 });
 
@@ -38,6 +39,17 @@ describe('columnOf', () => {
     expect(columnOf({ status: 'active', requires_review: true })).toBe('active');
     expect(columnOf({ status: 'unavailable', requires_review: false })).toBe('unavailable');
   });
+
+  it('открытая, но не начатая задача стоит в «Задачи»; без поля started задача считается начатой', () => {
+    expect(columnOf({ status: 'active', requires_review: false, started: false })).toBe('unavailable');
+    expect(columnOf({ status: 'active', requires_review: false, started: true })).toBe('active');
+    expect(isAvailable({ status: 'active', started: false })).toBe(true);
+    expect(isAvailable({ status: 'active' })).toBe(false);
+    expect(isAvailable({ status: 'unavailable', started: false })).toBe(false);
+    expect(statusLabel({ status: 'unavailable', requires_review: false })).toBe('Недоступно');
+    expect(statusLabel({ status: 'active', requires_review: false, started: false })).toBe('Можно начать');
+    expect(statusLabel({ status: 'completed', requires_review: true })).toBe('На проверке');
+  });
 });
 
 describe('KanbanBoard', () => {
@@ -47,8 +59,8 @@ describe('KanbanBoard', () => {
     data.stages[0].items.push(item({ title: 'Ждёт наставника', status: 'completed', requires_review: true }));
     render(<KanbanBoard checklist={data} token="tok" refresh={vi.fn()} />);
     const titles = screen.getAllByRole('heading', { level: 3 }).map(h => h.textContent);
-    expect(titles).toEqual(['Недоступно', 'Активно', 'На проверке', 'Завершено']);
-    expect(within(column('Недоступно')).getByText('Третья задача')).toBeInTheDocument();
+    expect(titles).toEqual(['Задачи', 'Активно', 'На проверке', 'Завершено']);
+    expect(within(column('Задачи')).getByText('Третья задача')).toBeInTheDocument();
     expect(within(column('Активно')).getByText('Вторая задача')).toBeInTheDocument();
     expect(within(column('На проверке')).getByText('Ждёт наставника')).toBeInTheDocument();
     expect(within(column('Завершено')).getByText('Первая задача')).toBeInTheDocument();
@@ -119,9 +131,9 @@ describe('KanbanBoard', () => {
     expect(await screen.findByText('Не удалось завершить задачу')).toBeInTheDocument();
   });
 
-  it('назад и в «Недоступно» карточку не вернуть, отпускание мимо ничего не меняет', () => {
+  it('назад в «Задачи» карточку не вернуть, отпускание мимо ничего не меняет', () => {
     render(<KanbanBoard checklist={checklist()} token="tok" refresh={vi.fn()} />);
-    dragTo(activeCard(), column('Недоступно'));
+    dragTo(activeCard(), column('Задачи'));
     expect(screen.getByRole('status')).toHaveTextContent('только вперёд');
     dragTo(activeCard(), null);
     expect(screen.queryByRole('status')).toBeNull();
@@ -166,6 +178,97 @@ describe('KanbanBoard', () => {
     expect(screen.queryByText('⠿')).toBeNull();
     expect(screen.queryByRole('button', { name: /→/ })).toBeNull();
   });
+
+  it('при наведении в «Активно» замок не появляется: в кружке активной карточки нет значка', () => {
+    render(<KanbanBoard checklist={checklist()} token="tok" refresh={vi.fn()} />);
+    const circle = within(activeCard()).getByRole('button', { name: /Открыть задачу/ });
+    expect(circle.querySelector('svg')).toBeNull();
+    expect(document.querySelector('.kanban-hover-lock')).toBeNull();
+  });
+});
+
+describe('Колонка «Задачи»: стажёр сам берёт задачу в работу', () => {
+  /** Как после завершения задачи: следующая открыта (active, started=false), дальше заблокированные. */
+  const withAvailable = () => {
+    const data = checklist();
+    data.stages[0]!.items = [
+      item({ title: 'Сделанная', status: 'completed' }),
+      item({ title: 'Заблокированная', status: 'unavailable' }),
+      item({ title: 'Можно начать', status: 'active', started: false }),
+    ];
+    return data;
+  };
+  const todo = () => within(column('Задачи')).getAllByRole('article');
+
+  it('доступная задача стоит первой, ниже заблокированные; кнопка «В работу» только у доступной', () => {
+    render(<KanbanBoard checklist={withAvailable()} token="tok" refresh={vi.fn()} />);
+    expect(todo().map(card => within(card).getByRole('heading', { level: 4 }).textContent)).toEqual(['Можно начать', 'Заблокированная']);
+    expect(within(todo()[0]!).getByRole('button', { name: 'В работу →' })).toBeInTheDocument();
+    expect(within(todo()[1]!).queryByRole('button', { name: /→/ })).toBeNull();
+    expect(within(column('Активно')).getByText('Пусто')).toBeInTheDocument();
+  });
+
+  it('кнопка «В работу» переводит задачу в «Активно» через бэкенд', async () => {
+    const refresh = refreshed();
+    api.startItem.mockResolvedValue(undefined);
+    render(<KanbanBoard checklist={withAvailable()} token="tok" refresh={refresh} />);
+    await userEvent.click(within(todo()[0]!).getByRole('button', { name: 'В работу →' }));
+    await vi.waitFor(() => expect(api.startItem).toHaveBeenCalledWith('', 'tok', expect.any(String)));
+    expect(refresh).toHaveBeenCalled();
+    expect(api.completeItem).not.toHaveBeenCalled();
+  });
+
+  it('перетаскивание в «Активно» берёт задачу в работу; сразу в «Завершено» нельзя', async () => {
+    api.startItem.mockResolvedValue(undefined);
+    render(<KanbanBoard checklist={withAvailable()} token="tok" refresh={refreshed()} />);
+    dragTo(todo()[0]!, column('Завершено'));
+    expect(screen.getByRole('status')).toHaveTextContent('перенесите её в «Активно»');
+    expect(api.startItem).not.toHaveBeenCalled();
+    dragTo(todo()[0]!, column('Активно'));
+    await vi.waitFor(() => expect(api.startItem).toHaveBeenCalledTimes(1));
+    expect(api.completeItem).not.toHaveBeenCalled();
+  });
+
+  it('с клавиатуры стрелка вправо подсвечивает «Активно»', async () => {
+    api.startItem.mockResolvedValue(undefined);
+    render(<KanbanBoard checklist={withAvailable()} token="tok" refresh={refreshed()} />);
+    todo()[0]!.focus();
+    await userEvent.keyboard(' ');
+    await userEvent.keyboard('{ArrowRight}');
+    expect(column('Активно')).toHaveClass('is-over');
+    await userEvent.keyboard(' ');
+    await vi.waitFor(() => expect(api.startItem).toHaveBeenCalledTimes(1));
+  });
+
+  it('ошибка старта видна на доске (и запасной текст)', async () => {
+    api.startItem.mockRejectedValueOnce(new Error('Задача заблокирована')).mockRejectedValueOnce('boom');
+    render(<KanbanBoard checklist={withAvailable()} token="tok" refresh={vi.fn()} />);
+    await userEvent.click(within(todo()[0]!).getByRole('button', { name: 'В работу →' }));
+    expect(await screen.findByText('Задача заблокирована')).toBeInTheDocument();
+    await userEvent.click(within(todo()[0]!).getByRole('button', { name: 'В работу →' }));
+    expect(await screen.findByText('Не удалось взять задачу в работу')).toBeInTheDocument();
+  });
+
+  it('в окне доступной задачи — «В работу», а не следующий этап', async () => {
+    api.startItem.mockResolvedValue(undefined);
+    render(<KanbanBoard checklist={withAvailable()} token="tok" refresh={refreshed()} />);
+    await userEvent.click(within(todo()[0]!).getByRole('button', { name: /Открыть задачу/ }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Можно начать', { selector: 'dd' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Завершить →' })).toBeNull();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'В работу →' }));
+    await vi.waitFor(() => expect(api.startItem).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  });
+
+  it('ошибка старта из окна видна в окне', async () => {
+    api.startItem.mockRejectedValue(new Error('Нет связи'));
+    render(<KanbanBoard checklist={withAvailable()} token="tok" refresh={refreshed()} />);
+    await userEvent.click(within(todo()[0]!).getByRole('button', { name: /Открыть задачу/ }));
+    const dialog = await screen.findByRole('dialog');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'В работу →' }));
+    expect(await within(dialog).findByText('Нет связи')).toBeInTheDocument();
+  });
 });
 
 describe('окно задачи', () => {
@@ -183,11 +286,26 @@ describe('окно задачи', () => {
     return screen.findByRole('dialog');
   };
 
-  it('комментарии и файлы доступны только у задачи на проверке', async () => {
+  it('комментарии и файлы открыты на любом этапе: в работе, на проверке, завершённая и недоступная', async () => {
+    const statuses = ['active', 'completed', 'verified', 'unavailable'] as const;
+    for (const status of statuses) {
+      const { unmount } = render(<TaskModal item={item({ status, requires_review: true })} token="tok" onClose={vi.fn()} />);
+      const dialog = screen.getByRole('dialog');
+      expect(within(dialog).getByLabelText('Новый комментарий')).toBeInTheDocument();
+      expect(within(dialog).getByRole('button', { name: /Прикрепить файл/ })).toBeInTheDocument();
+      expect(within(dialog).getByRole('button', { name: 'Отправить' })).toBeInTheDocument();
+      unmount();
+    }
     const dialog = await openModal();
-    expect(within(dialog).queryByLabelText('Новый комментарий')).toBeNull();
-    expect(within(dialog).queryByRole('button', { name: /Прикрепить файл/ })).toBeNull();
-    expect(within(dialog).queryByRole('button', { name: 'Отправить' })).toBeNull();
+    expect(within(dialog).getByLabelText('Новый комментарий')).toBeInTheDocument();
+  });
+
+  it('наставник и руководитель тоже пишут комментарии: сообщение уходит с id стажёра', async () => {
+    api.addTaskComment.mockResolvedValue({ id: 'c9', author_id: 'b', author_name: 'Наставник', author_role: 'buddy', body: 'Ок', created_at: '2026-11-14T12:00:00Z', attachments: [] });
+    render(<TaskModal item={item({ status: 'active', requires_review: true })} token="tok" internId="intern-1" onClose={vi.fn()} />);
+    await userEvent.type(screen.getByLabelText('Новый комментарий'), 'Ок');
+    await userEvent.click(screen.getByRole('button', { name: 'Отправить' }));
+    await vi.waitFor(() => expect(api.addTaskComment).toHaveBeenCalledWith('', 'tok', expect.any(String), { body: 'Ок', files: [], internId: 'intern-1' }));
   });
 
   it('показывает описание, факты и переписку', async () => {
@@ -312,17 +430,35 @@ describe('окно задачи', () => {
     expect(within(dialog).queryByText('Нужны правки')).toBeNull();
   });
 
-  it('сообщает, когда отправок не было и когда история не загрузилась (с сообщением и без)', async () => {
-    api.getSubmissionHistory.mockResolvedValueOnce([]).mockRejectedValueOnce(new Error('Нет истории')).mockRejectedValueOnce('boom');
+  it('пока отправок нет, блока «История отправок» нет', async () => {
+    api.getSubmissionHistory.mockResolvedValue([]);
     const dialog = await openModal();
-    const open = () => userEvent.click(within(dialog).getByRole('button', { name: 'История отправок' }));
-    const close = () => userEvent.click(within(dialog).getByRole('button', { name: 'Скрыть историю' }));
-    await open();
-    expect(await within(dialog).findByText('Отправок пока нет.')).toBeInTheDocument();
-    await close(); await open();
-    expect(await within(dialog).findByText('Нет истории')).toBeInTheDocument();
-    await close(); await open();
+    await vi.waitFor(() => expect(api.getSubmissionHistory).toHaveBeenCalled());
+    expect(within(dialog).queryByRole('button', { name: 'История отправок' })).toBeNull();
+    expect(within(dialog).queryByText('Отправок пока нет.')).toBeNull();
+  });
+
+  it('если история не загрузилась, ссылка остаётся и при раскрытии повторяет запрос (с сообщением и без)', async () => {
+    api.getSubmissionHistory.mockRejectedValueOnce(new Error('Нет истории')).mockRejectedValueOnce('boom');
+    const dialog = await openModal();
+    await userEvent.click(await within(dialog).findByRole('button', { name: 'История отправок' }));
     expect(await within(dialog).findByText('Не удалось загрузить историю')).toBeInTheDocument();
+    expect(api.getSubmissionHistory).toHaveBeenCalledTimes(2);
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Скрыть историю' }));
+    await vi.waitFor(() => expect(within(dialog).getByRole('button', { name: 'История отправок' })).toBeInTheDocument());
+  });
+
+  it('наставнику блок истории показывается только при наличии отправок', async () => {
+    api.getInternSubmissionHistory.mockResolvedValueOnce([]);
+    const { unmount } = render(<TaskModal item={item({ status: 'completed', requires_review: true })} token="tok" internId="intern-1" onClose={vi.fn()} />);
+    await vi.waitFor(() => expect(api.getInternSubmissionHistory).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole('region', { name: 'История отправок' })).toBeNull();
+    unmount();
+    const entry = { id: 'h1', progress_id: 'p', attempt_number: 1, result_text: 'Отчёт', result_url: null, status: 'pending', submitted_at: '2026-11-14T10:00:00Z', reviewed_at: null, review_comment: null } as const;
+    api.getInternSubmissionHistory.mockResolvedValue([entry]);
+    render(<TaskModal item={item({ status: 'completed', requires_review: true })} token="tok" internId="intern-1" onClose={vi.fn()} />);
+    expect(await screen.findByRole('region', { name: 'История отправок' })).toBeInTheDocument();
+    expect(await screen.findByText(/Отчёт/)).toBeInTheDocument();
   });
 });
 

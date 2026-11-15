@@ -19,6 +19,9 @@ type ChecklistItemProgress struct {
 	// the item is active again. ReworkComment is that rejection comment.
 	ReturnedForRework bool
 	ReworkComment     *string
+	// Started: an active item the intern has taken into work (activated_at is set). An active item that is
+	// not started is only available: the web shows it at the top of the "Задачи" column with a start button.
+	Started bool
 }
 
 type ChecklistStageWithProgress struct {
@@ -240,6 +243,7 @@ func buildChecklistWithProgress(
 			Status:      itemProgress.Status,
 			CompletedAt: itemProgress.CompletedAt,
 		}
+		itemResult.Started = itemProgress.Status == model.StatusActive && itemProgress.ActivatedAt != nil
 		if comment, ok := returned[item.ID]; ok && itemProgress.Status == model.StatusActive {
 			itemResult.ReturnedForRework = true
 			if comment != "" {

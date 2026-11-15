@@ -12,7 +12,9 @@ export type ChecklistItem = { id: string; title: string; description: string; ex
   /** The buddy's comment of that return; null when not returned. */
   rework_comment?: string | null;
   /** Added for this intern by the teamlead (not from the shared catalog). */
-  personal?: boolean };
+  personal?: boolean;
+  /** Only for status 'active': the intern took the task into work. Active and not started = available, shown at the top of "Задачи" with a start button. Missing (older fixtures) means started. */
+  started?: boolean };
 export type ChecklistStage = { id: string; title: string; week_start: number; week_end: number; goal: string; expected_result: string; position: number; items: ChecklistItem[] };
 export type Checklist = { id: string; name: string; type: 'common' | 'professional'; profession: Profession | null; stages: ChecklistStage[]; total_items: number; completed_items: number; completion_percent: number };
 export type ChecklistsResponse = { common: Checklist; professional: Checklist };
@@ -44,6 +46,8 @@ export type Feedback = { id: string; user_id: string; checklist_id: string; rati
 export function getFeedback(baseUrl: string, token: string, checklistID: string): Promise<{feedback: Feedback | null}>;
 export function submitFeedback(baseUrl: string, token: string, checklistID: string, input: {rating: number; comment: string}): Promise<Feedback>;
 export function completeItem(baseUrl: string, token: string, itemID: string): Promise<void>;
+/** Intern takes an available task into work ("Задачи" -> "Активно"). */
+export function startItem(baseUrl: string, token: string, itemID: string): Promise<void>;
 export function submitItem(baseUrl: string, token: string, itemID: string, input: { result_text: string | null; result_url: string | null }): Promise<Submission>;
 export function getSubmissionHistory(baseUrl: string, token: string, itemID: string): Promise<SubmissionHistory[]>;
 export function getPendingSubmissions(baseUrl: string, token: string): Promise<PendingSubmission[]>;

@@ -14,7 +14,8 @@ import (
 // InitializeInternProgress is the single implementation of the onboarding
 // progress invariant: an intern gets every shared item of the common checklist
 // and of the professional checklist for their profession; the first item of
-// each checklist becomes active, the rest are unavailable. Items that already
+// each checklist becomes active but not started (activated_at NULL: the intern takes it into work by
+// hand via StartItem), the rest are unavailable. Items that already
 // have progress are kept untouched, so the call is idempotent.
 //
 // Accounts themselves are created only by HRSynchronizer (Mock HR). The helper
@@ -38,8 +39,7 @@ func InitializeInternProgress(ctx context.Context, tx repository.DBTX, userID uu
 		_, err = tx.ExecContext(ctx, `INSERT INTO user_checklist_progress(user_id,checklist_id,checklist_item_id,status,position,activated_at)
     SELECT $1,$2,i.id,CASE WHEN i.position=(SELECT MIN(position) FROM checklist_items WHERE checklist_id=$2 AND (assigned_user_id IS NULL OR assigned_user_id=$1))
       AND NOT EXISTS(SELECT 1 FROM user_checklist_progress p0 WHERE p0.user_id=$1 AND p0.checklist_id=$2) THEN 'active' ELSE 'unavailable' END,
-    i.position,CASE WHEN i.position=(SELECT MIN(position) FROM checklist_items WHERE checklist_id=$2 AND (assigned_user_id IS NULL OR assigned_user_id=$1))
-      AND NOT EXISTS(SELECT 1 FROM user_checklist_progress p0 WHERE p0.user_id=$1 AND p0.checklist_id=$2) THEN now() END
+    i.position,NULL
     FROM checklist_items i WHERE i.checklist_id=$2 AND (i.assigned_user_id IS NULL OR i.assigned_user_id=$1)
     AND NOT EXISTS(SELECT 1 FROM user_checklist_progress p WHERE p.user_id=$1 AND p.checklist_item_id=i.id)`, userID, checklist)
 		if err != nil {

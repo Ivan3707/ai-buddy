@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { createEvent, deleteEvent, listEvents, type CalendarEvent } from '@ai-buddy/client';
+import { createEvent, deleteEvent, listEvents, updateEvent, type CalendarEvent } from '@ai-buddy/client';
 import { dayKey } from '../lib/calendar';
 
 type NewEvent = Omit<CalendarEvent, 'id'>;
@@ -27,6 +27,12 @@ export function useCalendarEvents(token?: string) {
     await load();
   }, [token, load]);
 
+  const update = useCallback(async (id: string, input: NewEvent) => {
+    if (!token) throw new Error('Нужно войти, чтобы менять дела');
+    await updateEvent('', token, id, input);
+    await load();
+  }, [token, load]);
+
   const remove = useCallback(async (id: string) => {
     if (!token) return;
     await deleteEvent('', token, id);
@@ -45,5 +51,5 @@ export function useCalendarEvents(token?: string) {
 
   const eventsOf = useCallback((date: Date) => byDay.get(dayKey(date)) ?? [], [byDay]);
 
-  return { events, error, add, remove, eventsOf };
+  return { events, error, add, update, remove, eventsOf };
 }

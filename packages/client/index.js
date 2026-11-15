@@ -47,6 +47,9 @@ export function submitFeedback(baseUrl, token, checklistID, input) { return apiR
 export function completeItem(baseUrl, token, itemID) {
   return apiRequest(baseUrl, `/api/checklist-items/${encodeURIComponent(itemID)}/complete`, { token, method: 'POST' });
 }
+export function startItem(baseUrl, token, itemID) {
+  return apiRequest(baseUrl, `/api/checklist-items/${encodeURIComponent(itemID)}/start`, { token, method: 'POST' });
+}
 export function submitItem(baseUrl, token, itemID, input) {
   return apiRequest(baseUrl, `/api/checklist-items/${encodeURIComponent(itemID)}/submissions`, { token, method: 'POST', body: input });
 }

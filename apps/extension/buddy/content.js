@@ -9,27 +9,30 @@
   const SITE_ORIGIN = 'http://127.0.0.1:5173';
   const VISIBLE_KEY = 'buddyVisible'; // shared by all windows: false = hidden everywhere, anything else = shown everywhere
   const POS_KEY = 'buddyPos';
+  // The AI-buddy web app itself: there Бади cannot be hidden (no "×", the "hidden" flag is ignored); on other sites he can.
+  const WEB_APP = /^(127\.0\.0\.1|localhost):5173$/;
+  const onSite = WEB_APP.test(location.host);
 
   const {call, stream, storage} = globalThis.AIBuddyBridge; // guarded: orphaned scripts stay quiet after an update
 
   const buddy = globalThis.AIBuddyWidget.mount({
     call, stream, storage,
-    features: {login: true, logout: true, pageContext: true, hide: true, requests: true},
+    features: {login: true, logout: true, pageContext: true, hide: !onSite, requests: true},
     portalUrl: (kind, id) => `${SITE_ORIGIN}/portal/requests/${kind}/${encodeURIComponent(id)}`, // pseudo corporate site of the web app
     onHide: () => storage.set(VISIBLE_KEY, false), // the "×": hidden in every window
   });
-  storage.get(VISIBLE_KEY).then(visible => { if (visible !== false) buddy.show(); });
+  storage.get(VISIBLE_KEY).then(visible => { if (onSite || visible !== false) buddy.show(); });
   // after an extension update this script is orphaned: remove the character and stop every timer
   globalThis.AIBuddyBridge.onInvalidated(() => buddy.remove());
   // one state for all windows: shown / hidden and the position follow what any window changes
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
-    if (changes[VISIBLE_KEY]) { if (changes[VISIBLE_KEY].newValue === false) buddy.hide(); else buddy.show(); }
+    if (changes[VISIBLE_KEY]) { if (changes[VISIBLE_KEY].newValue === false && !onSite) buddy.hide(); else buddy.show(); }
     if (changes[POS_KEY]) void buddy.syncPosition();
   });
 
   chrome.runtime.onMessage.addListener(message => {
-    if (message?.op === 'sso-changed' && WEB_APP.test(location.host)) { // the extension signed in/out: the site syncs
+    if (message?.op === 'sso-changed' && onSite) { // the extension signed in/out: the site syncs
       window.postMessage({source: 'ai-buddy-extension', op: 'changed'}, location.origin);
       return;
     }
@@ -43,8 +46,7 @@
   // The site hides its own Бади when it sees the extension and sends its nudges here instead
   // ("задача идёт дольше плана", "наставник ответил"). Only the site's own window on its own origin is heard,
   // only plain text is accepted, and the text is rendered via textContent.
-  const WEB_APP = /^(127\.0\.0\.1|localhost):5173$/;
-  if (!WEB_APP.test(location.host)) return;
+  if (!onSite) return;
   document.documentElement.dataset.aiBuddyExtension = '1';
   dispatchEvent(new CustomEvent('ai-buddy:extension'));
   const str = (value, max) => (typeof value === 'string' ? value.slice(0, max) : '');

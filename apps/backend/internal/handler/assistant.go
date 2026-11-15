@@ -124,7 +124,7 @@ type streamChatRequest struct {
 
 func (h assistantHandler) chatStream(w http.ResponseWriter, r *http.Request, user *model.User) {
 	var body streamChatRequest
-	if !decodeBody(w, r, &body, 16384) {
+	if !decodeBody(w, r, &body, 49152) { // page text is up to 6000 runes (cyrillic: 2 bytes each) plus the rest
 		return
 	}
 	body.Message = strings.TrimSpace(body.Message)
@@ -133,7 +133,8 @@ func (h assistantHandler) chatStream(w http.ResponseWriter, r *http.Request, use
 		return
 	}
 	if pc := body.PageContext; pc != nil && (pc.URL == "" || utf8.RuneCountInString(pc.URL) > 2000 ||
-		utf8.RuneCountInString(pc.Title) > 300 || utf8.RuneCountInString(pc.Selection) > 2000) {
+		utf8.RuneCountInString(pc.Title) > 300 || utf8.RuneCountInString(pc.Selection) > 2000 ||
+		utf8.RuneCountInString(pc.Text) > service.MaxPageTextRunes) {
 		send(w, http.StatusBadRequest, map[string]string{"error": "invalid page_context"})
 		return
 	}

@@ -3,7 +3,7 @@ import { getAssignedInterns, getInternProgress, getPendingSubmissions, type Prog
 import { bot } from '../bot/api';
 import { ProgressRing } from '../components/home/ProgressRing';
 import type { View } from '../components/shell/Sidebar';
-import { displayName, isDone, personName, professionLabel } from '../lib/format';
+import { displayName, personName, professionLabel } from '../lib/format';
 
 type Props = { user: User; token: string; onNavigate: (view: View, tab?: 'review') => void };
 type Stats = { review: number; questions: number; requests: number };
@@ -47,7 +47,7 @@ export function StaffHomePage({ user, token, onNavigate }: Props) {
   const cards: { label: string; value: number; to: View; hint: string; tab?: 'review' }[] = [
     { label: 'Стажёров', value: interns.length, to: 'team', hint: 'в вашей команде' },
     ...(user.role === 'buddy' ? [{ label: 'Ждут проверки', value: stats.review, to: 'team' as View, tab: 'review' as const, hint: 'задания с результатом' }] : []),
-    ...(user.role === 'buddy' ? [{ label: 'Вопросов от бота', value: stats.questions, to: 'mentor' as View, hint: 'ждут вашего ответа' }] : []),
+    ...(user.role === 'buddy' ? [{ label: 'Вопросы от стажёра', value: stats.questions, to: 'mentor' as View, hint: 'ждут вашего ответа' }] : []),
     ...(user.role === 'teamlead' ? [{ label: 'Заявок', value: stats.requests, to: 'mentor' as View, hint: 'на согласование' }] : []),
   ];
 
@@ -77,7 +77,7 @@ export function StaffHomePage({ user, token, onNavigate }: Props) {
         <div className="intern-cards">
         {interns.map(intern => {
           const data = progress[intern.id];
-          const next = data?.professional.stages.flatMap(stage => stage.items).find(item => !isDone(item));
+          const active = data ? [data.common, data.professional].flatMap(list => list?.stages.flatMap(stage => stage.items) ?? []).filter(entry => entry.status === 'active') : [];
           return (
             <article key={intern.id} className="intern-card" onClick={() => onNavigate('team')}>
               <span className="intern-name"><span className="avatar-sm" aria-hidden="true">{personName(intern).charAt(0).toUpperCase()}</span>
@@ -86,7 +86,10 @@ export function StaffHomePage({ user, token, onNavigate }: Props) {
                 <ProgressRing percent={data?.completion_percent ?? 0} label={`Прогресс: ${personName(intern)}`} size={56} />
                 <small>{data ? `${data.completed_items} из ${data.total_items} задач` : '…'}</small>
               </span>
-              <span className="intern-cell"><small>Следующая задача</small>{next ? next.title : data ? 'Все задачи выполнены' : '…'}</span>
+              <span className="intern-cell intern-active"><small>Активные задачи</small>
+                {!data ? '…' : active.length === 0 ? <span className="muted">нет активных задач</span>
+                  : <ul className="active-list" aria-label={`Активные задачи: ${personName(intern)}`}>{active.map(entry => <li key={entry.id}>{entry.title}</li>)}</ul>}
+              </span>
             </article>
           );
         })}

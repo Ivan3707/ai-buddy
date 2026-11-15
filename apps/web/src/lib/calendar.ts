@@ -46,7 +46,27 @@ export function combineDateTime(date: Date, time: string): string {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hours || 0, minutes || 0).toISOString();
 }
 
-export type DaySpan = 'single' | 'start' | 'mid' | 'end' | null;
+const pad = (n: number) => String(n).padStart(2, '0');
+
+/** Локальная дата «ГГГГ-ММ-ДД» для input[type=date]. */
+export function dateInputValue(value: string | Date): string {
+  const d = typeof value === 'string' ? new Date(value) : value;
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** Локальное время «ЧЧ:ММ» для input[type=time]. */
+export function timeInputValue(value: string): string {
+  const d = new Date(value);
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/** «ГГГГ-ММ-ДД» -> локальная дата (null, если строка некорректна). */
+export function parseDateInput(value: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : null;
+}
+
+export type DaySpan ='single' | 'start' | 'mid' | 'end' | null;
 
 function startOfDay(date: Date): number {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();

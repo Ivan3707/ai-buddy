@@ -4345,6 +4345,123 @@
           }
         }
       }
+    },
+    "/api/checklist-items/{itemID}/start": {
+      "post": {
+        "operationId": "startChecklistItem",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "itemID",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "description": "Intern only: take an available task into work (the board moves it from 'Задачи' to 'Активно'). Completing or submitting a task makes the next catalog task available (status 'active', started=false), not started. Idempotent for a started task.",
+        "responses": {
+          "204": {
+            "description": "Started (or already started)"
+          },
+          "400": {
+            "description": "Invalid item ID",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not an intern",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Task is not in the intern's checklists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Task is locked or finished, or belongs to the previous profession track",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "error"
+                  ],
+                  "properties": {
+                    "error": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -4937,6 +5054,11 @@
             "type": "string",
             "maxLength": 2000,
             "description": "Text the user selected on the page"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 6000,
+            "description": "Readable text of the page (not HTML), cut to the limit; sent only when the question is about the page"
           }
         }
       },
@@ -5481,7 +5603,8 @@
           "completed_at",
           "returned_for_rework",
           "rework_comment",
-          "personal"
+          "personal",
+          "started"
         ],
         "description": "One task of the intern's checklist as this intern sees it: the teamlead's per-intern edits (title, description, expected_result, estimated_minutes, due_at) are already applied and removed tasks are not listed.",
         "properties": {
@@ -5553,6 +5676,10 @@
           "personal": {
             "type": "boolean",
             "description": "Added for this intern by the teamlead (not from the shared catalog)"
+          },
+          "started": {
+            "type": "boolean",
+            "description": "Only for status 'active': the intern took the task into work (POST /api/checklist-items/{itemID}/start). An active task that is not started is available: the web shows it at the top of the 'Задачи' column. Always false for other statuses."
           }
         }
       },

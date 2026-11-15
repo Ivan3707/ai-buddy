@@ -104,3 +104,14 @@ test('teamlead checklist edits, staff history and demo completion use the docume
     ]);
   } finally { globalThis.fetch = original; }
 });
+
+test('startItem posts to the start route of the task', async () => {
+  const original = globalThis.fetch;
+  const seen = [];
+  try {
+    globalThis.fetch = async (url, init) => { seen.push([url, init.method, init.headers.Authorization]); return new Response(null, { status: 204 }); };
+    const { startItem } = await import('../index.js');
+    await startItem('', 'token', 'item/1');
+    assert.deepEqual(seen, [['/api/checklist-items/item%2F1/start', 'POST', 'Bearer token']]);
+  } finally { globalThis.fetch = original; }
+});

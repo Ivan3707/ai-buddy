@@ -59,6 +59,12 @@ test('describeResult covers request, mentor question and plain statuses', () => 
   assert.deepEqual(describeResult(undefined), {tone: 'success', text: 'Выполнено.'});
 });
 
+test('describeResult carries the request id so the chat can link to the portal', () => {
+  const r = describeResult({request: {id: 'abc-1', number: 'ABS-000007', status: 'pending_approval'}});
+  assert.equal(r.requestId, 'abc-1');
+  assert.equal('requestId' in describeResult({request: {number: 'ACC-1'}}), false);
+});
+
 test('describeActionStatus', () => {
   assert.equal(describeActionStatus({status: 'executed'}), 'Выполнено.');
   assert.equal(describeActionStatus({status: 'cancelled'}), 'Отменено.');
