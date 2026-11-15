@@ -89,12 +89,18 @@ LLM_EXTRA_BODY={"reasoning":{"effort":"low"}}
 
 Тот же Бади работает поверх любых рабочих страниц: вики, Grafana, Jira. Он видит открытую страницу и выделенный текст.
 
+**Проще всего:** откройте <http://127.0.0.1:5173/install-extension.html> (или кнопку «⚠ Нет расширения» в чате Бади) и скачайте архив. Он собирается вместе с сайтом под его адрес, запросы идут через сайт. Распакуйте архив → Chrome 116+ → `chrome://extensions` → «Режим разработчика» → «Загрузить распакованное расширение» → папка из архива. Вход общий с сайтом.
+
+На публичном стенде задайте в `.env` `PUBLIC_WEB_ORIGIN=http://<адрес>:<порт>` до сборки: архив будет обращаться к этому адресу.
+
+Собрать вручную из исходников:
+
 ```bash
 docker compose -f compose.test.yaml run --rm extension   # собирает apps/extension/dist без Node на машине
 # или с Node 22: npm run build --workspace @ai-buddy/extension
 ```
 
-Chrome 116+ → `chrome://extensions` → «Режим разработчика» → «Загрузить распакованное» → `apps/extension/dist`. Вход общий с сайтом. Если вы изменили `BACKEND_PORT`, соберите с `BACKEND_ORIGIN=http://127.0.0.1:<порт>`. Демо-страницы для проверки: <http://127.0.0.1:5173/demo/wiki.html>, `/demo/grafana.html`, `/demo/jira.html`. На вики выделите «нужно минимум 2 одобрения» и спросите Бади «это ещё актуально?». Подробнее: [`apps/extension/README.md`](apps/extension/README.md).
+Ручная сборка по умолчанию ходит на `http://127.0.0.1:8080`; если вы изменили `BACKEND_PORT`, задайте `BACKEND_ORIGIN=http://127.0.0.1:<порт>`. Демо-страницы для проверки: <http://127.0.0.1:5173/demo/wiki.html>, `/demo/grafana.html`, `/demo/jira.html`. На вики выделите «нужно минимум 2 одобрения» и спросите Бади «это ещё актуально?». Подробнее: [`apps/extension/README.md`](apps/extension/README.md).
 
 ## Тесты и покрытие
 

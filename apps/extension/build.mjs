@@ -1,10 +1,22 @@
 import { cp, copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 
-const origin = process.env.BACKEND_ORIGIN || 'http://127.0.0.1:8080';
-const url = new URL(origin);
-if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.origin !== origin) {
-  throw new Error('BACKEND_ORIGIN must be a plain http://127.0.0.1:<port> origin');
-}
+// BACKEND_ORIGIN: where /api/* lives. The web app proxies /api to the backend, so the site origin works too.
+// SITE_ORIGIN: the AI-buddy web app (single sign-on, request portal links). Both are plain origins without a path.
+const plainOrigin = (name, fallback) => {
+  const value = process.env[name] || fallback;
+  const url = new URL(value);
+  if (!['http:', 'https:'].includes(url.protocol) || url.origin !== value) {
+    throw new Error(`${name} must be a plain http(s)://host[:port] origin, got ${value}`);
+  }
+  return url;
+};
+const url = plainOrigin('BACKEND_ORIGIN', 'http://127.0.0.1:8080');
+const origin = url.origin;
+const site = plainOrigin('SITE_ORIGIN', 'http://127.0.0.1:5173');
+// the local site answers on both 127.0.0.1 and localhost
+const siteOrigins = site.hostname === '127.0.0.1' ? [site.origin, `${site.protocol}//localhost${site.port ? `:${site.port}` : ''}`] : [site.origin];
+const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const siteHosts = siteOrigins.map(o => escape(new URL(o).host)).join('|');
 
 const source = new URL('./', import.meta.url);
 const dist = new URL('./dist/', import.meta.url);
@@ -29,6 +41,21 @@ for (const file of ['manifest.json', 'config.js']) {
   const output = new URL(file, dist);
   await writeFile(output, (await readFile(output, 'utf8')).replaceAll('http://127.0.0.1:8080', origin));
 }
+// The web app origin is baked into the SSO allow-list (background) and the on-site detection (content script).
+const rewrite = async (file, pairs) => {
+  const output = new URL(file, dist);
+  let code = await readFile(output, 'utf8');
+  for (const [from, to] of pairs) {
+    if (!code.includes(from)) throw new Error(`${file}: expected ${from}`);
+    code = code.replace(from, to);
+  }
+  await writeFile(output, code);
+};
+await rewrite('background.js', [["const WEB_ORIGINS = ['http://127.0.0.1:5173', 'http://localhost:5173'];", `const WEB_ORIGINS = ${JSON.stringify(siteOrigins).replaceAll('"', "'")};`]]);
+await rewrite('buddy/content.js', [
+  ["const SITE_ORIGIN = 'http://127.0.0.1:5173';", `const SITE_ORIGIN = '${site.origin}';`],
+  ['const WEB_APP = /^(127\\.0\\.0\\.1|localhost):5173$/;', `const WEB_APP = /^(${siteHosts})$/;`],
+]);
 // Sanity check of the output: valid manifest, referenced files and relative imports exist.
 const exists = file => stat(new URL(file, dist)).then(() => true, () => false);
 const manifest = JSON.parse(await readFile(new URL('manifest.json', dist), 'utf8'));
@@ -52,4 +79,4 @@ for (const file of new Set([...referenced, ...modules])) {
 }
 if (missing.length) throw new Error(`Build output is missing: ${missing.join(', ')}`);
 
-console.log(`AI-buddy extension built into apps/extension/dist (backend ${origin})`);
+console.log(`AI-buddy extension built into apps/extension/dist (backend ${origin}, site ${site.origin})`);
