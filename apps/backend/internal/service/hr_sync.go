@@ -31,7 +31,10 @@ type InitialCredential struct {
 // The whole run stays in one transaction under a single advisory lock; the
 // service resolves identities and assignments while HRSyncRepository performs
 // the PostgreSQL operations on the caller-owned transaction.
-type HRSynchronizer struct{ db *sql.DB }
+type HRSynchronizer struct {
+	db           *sql.DB
+	demoPassword string
+}
 
 // ErrHRCommitUncertain means PostgreSQL did not confirm whether COMMIT took
 // effect. The already published credentials must be retained.
@@ -45,6 +48,20 @@ func hrProfessionValue(profession *model.Profession) any {
 }
 
 func NewHRSynchronizer(db *sql.DB) *HRSynchronizer { return &HRSynchronizer{db: db} }
+
+// MinDemoPasswordLength guards against an accidentally empty or trivial shared demo password.
+const MinDemoPasswordLength = 8
+
+// WithDemoPassword makes every newly created account use one known password instead of a random one.
+// It exists only for demo and review stands with synthetic HR data: reviewers must be able to sign in
+// from the README. Existing accounts keep their password hashes.
+func (s *HRSynchronizer) WithDemoPassword(password string) (*HRSynchronizer, error) {
+	if len(password) < MinDemoPasswordLength {
+		return nil, fmt.Errorf("demo password must be at least %d characters", MinDemoPasswordLength)
+	}
+	s.demoPassword = password
+	return s, nil
+}
 
 func validateHRSnapshot(employees []CorporateEmployee) error {
 	ids, emails := map[string]bool{}, map[string]bool{}
@@ -190,11 +207,14 @@ func (s *HRSynchronizer) Sync(ctx context.Context, employees []CorporateEmployee
 		if _, ok := resolved[e.ID]; ok {
 			continue
 		}
-		random := make([]byte, 32)
-		if _, err = rand.Read(random); err != nil {
-			return 0, err
+		password := s.demoPassword
+		if password == "" {
+			random := make([]byte, 32)
+			if _, err = rand.Read(random); err != nil {
+				return 0, err
+			}
+			password = base64.RawURLEncoding.EncodeToString(random)
 		}
-		password := base64.RawURLEncoding.EncodeToString(random)
 		hash, hashErr := security.HashPassword(password)
 		if hashErr != nil {
 			return 0, hashErr

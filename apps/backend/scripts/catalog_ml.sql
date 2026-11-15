@@ -17,7 +17,7 @@ BEGIN
   SELECT id,name INTO target_checklist_id,existing_name
   FROM checklists WHERE type='professional' AND profession='ml';
   IF FOUND THEN
-    IF existing_name IS DISTINCT FROM 'ML Engineer — Demo v1' THEN
+    IF existing_name IS DISTINCT FROM 'ML-инженер — демо v2' THEN
       RAISE EXCEPTION 'Existing ML checklist has another name; refusing to overwrite';
     END IF;
 
@@ -29,12 +29,12 @@ BEGIN
       position,title,week_start,week_end,goal,expected_result
     ) ORDER BY position)
     INTO expected FROM (VALUES
-      (1,'Environment and data',1,2,'Prepare a safe workspace','Reproducible local setup'),
-      (2,'First model',2,4,'Train a baseline','Repeatable baseline metrics'),
-      (3,'Delivery',4,6,'Share results','Reviewed demo artifact')
+      (1,'Окружение и данные',1,2,'Подготовить безопасное рабочее окружение','Воспроизводимое локальное окружение'),
+      (2,'Первая модель',2,4,'Обучить бейзлайн','Воспроизводимые метрики бейзлайна'),
+      (3,'Доставка результата',4,6,'Поделиться результатами','Демо-артефакт прошёл ревью')
     ) AS stages(position,title,week_start,week_end,goal,expected_result);
     IF actual IS DISTINCT FROM expected THEN
-      RAISE EXCEPTION 'Existing ML checklist stages differ from Demo v1; refusing to overwrite';
+      RAISE EXCEPTION 'Existing ML checklist stages differ from демо v2; refusing to overwrite';
     END IF;
 
     SELECT COALESCE(jsonb_agg(jsonb_build_array(
@@ -50,35 +50,35 @@ BEGIN
       requires_review,estimated_minutes,NULL
     ) ORDER BY position)
     INTO expected FROM (VALUES
-      (1,1,'Configure ML workspace','Install approved tools and read access rules','Working environment',false,90),
-      (2,1,'Inspect sample data','Document fields and quality issues','Data notes',true,120),
-      (3,2,'Build baseline','Create reproducible train and validation split','Baseline notebook',true,180),
-      (4,2,'Evaluate model','Measure quality and discuss error cases','Evaluation report',true,120),
-      (5,3,'Package experiment','Record parameters and model artifact','Reproducible experiment',false,120),
-      (6,3,'Present findings','Explain metrics, limits and next steps','Buddy review',true,90)
+      (1,1,'Настроить ML-окружение','Установить разрешённые инструменты и прочитать правила доступа к данным','Рабочее окружение',false,90),
+      (2,1,'Изучить выборку данных','Описать поля и проблемы качества данных','Заметки по данным',true,120),
+      (3,2,'Собрать бейзлайн','Сделать воспроизводимое разбиение на обучение и валидацию','Ноутбук с бейзлайном',true,180),
+      (4,2,'Оценить модель','Измерить качество и разобрать ошибки модели','Отчёт об оценке',true,120),
+      (5,3,'Оформить эксперимент','Зафиксировать параметры и артефакт модели','Воспроизводимый эксперимент',false,120),
+      (6,3,'Представить результаты','Рассказать о метриках, ограничениях и следующих шагах','Ревью наставника',true,90)
     ) AS items(position,stage_position,title,description,expected_result,requires_review,estimated_minutes);
     IF actual IS DISTINCT FROM expected THEN
-      RAISE EXCEPTION 'Existing ML checklist items differ from Demo v1; refusing to overwrite';
+      RAISE EXCEPTION 'Existing ML checklist items differ from демо v2; refusing to overwrite';
     END IF;
 
     RETURN;
   END IF;
 
-  INSERT INTO checklists(name,type,profession) VALUES('ML Engineer — Demo v1','professional','ml') RETURNING id INTO target_checklist_id;
+  INSERT INTO checklists(name,type,profession) VALUES('ML-инженер — демо v2','professional','ml') RETURNING id INTO target_checklist_id;
   INSERT INTO checklist_stages(checklist_id,title,week_start,week_end,goal,expected_result,position)
-   VALUES(target_checklist_id,'Environment and data',1,2,'Prepare a safe workspace','Reproducible local setup',1) RETURNING id INTO stage_id;
+   VALUES(target_checklist_id,'Окружение и данные',1,2,'Подготовить безопасное рабочее окружение','Воспроизводимое локальное окружение',1) RETURNING id INTO stage_id;
   INSERT INTO checklist_items(checklist_id,stage_id,title,description,expected_result,requires_review,estimated_minutes,position) VALUES
-   (target_checklist_id,stage_id,'Configure ML workspace','Install approved tools and read access rules','Working environment',false,90,1),
-   (target_checklist_id,stage_id,'Inspect sample data','Document fields and quality issues','Data notes',true,120,2);
+   (target_checklist_id,stage_id,'Настроить ML-окружение','Установить разрешённые инструменты и прочитать правила доступа к данным','Рабочее окружение',false,90,1),
+   (target_checklist_id,stage_id,'Изучить выборку данных','Описать поля и проблемы качества данных','Заметки по данным',true,120,2);
   INSERT INTO checklist_stages(checklist_id,title,week_start,week_end,goal,expected_result,position)
-   VALUES(target_checklist_id,'First model',2,4,'Train a baseline','Repeatable baseline metrics',2) RETURNING id INTO stage_id;
+   VALUES(target_checklist_id,'Первая модель',2,4,'Обучить бейзлайн','Воспроизводимые метрики бейзлайна',2) RETURNING id INTO stage_id;
   INSERT INTO checklist_items(checklist_id,stage_id,title,description,expected_result,requires_review,estimated_minutes,position) VALUES
-   (target_checklist_id,stage_id,'Build baseline','Create reproducible train and validation split','Baseline notebook',true,180,3),
-   (target_checklist_id,stage_id,'Evaluate model','Measure quality and discuss error cases','Evaluation report',true,120,4);
+   (target_checklist_id,stage_id,'Собрать бейзлайн','Сделать воспроизводимое разбиение на обучение и валидацию','Ноутбук с бейзлайном',true,180,3),
+   (target_checklist_id,stage_id,'Оценить модель','Измерить качество и разобрать ошибки модели','Отчёт об оценке',true,120,4);
   INSERT INTO checklist_stages(checklist_id,title,week_start,week_end,goal,expected_result,position)
-   VALUES(target_checklist_id,'Delivery',4,6,'Share results','Reviewed demo artifact',3) RETURNING id INTO stage_id;
+   VALUES(target_checklist_id,'Доставка результата',4,6,'Поделиться результатами','Демо-артефакт прошёл ревью',3) RETURNING id INTO stage_id;
   INSERT INTO checklist_items(checklist_id,stage_id,title,description,expected_result,requires_review,estimated_minutes,position) VALUES
-   (target_checklist_id,stage_id,'Package experiment','Record parameters and model artifact','Reproducible experiment',false,120,5),
-   (target_checklist_id,stage_id,'Present findings','Explain metrics, limits and next steps','Buddy review',true,90,6);
+   (target_checklist_id,stage_id,'Оформить эксперимент','Зафиксировать параметры и артефакт модели','Воспроизводимый эксперимент',false,120,5),
+   (target_checklist_id,stage_id,'Представить результаты','Рассказать о метриках, ограничениях и следующих шагах','Ревью наставника',true,90,6);
 END $$;
 COMMIT;

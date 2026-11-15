@@ -40,6 +40,26 @@ services:
       interval: 5s
       timeout: 3s
       retries: 20
+  # One-shot database initialization: migrations, checklist catalog, Mock HR accounts, demo seed.
+  # Runs on every `docker compose up`, exits 0 and does nothing harmful on an already prepared database.
+  init:
+    build:
+      context: .
+      dockerfile: apps/backend/Dockerfile
+      target: init
+    restart: "no"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER:-app}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be configured}
+      DB_NAME: ${DB_NAME:-app}
+      DB_SSLMODE: disable
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+      DEMO_SEED: ${DEMO_SEED:-1}
+    depends_on:
+      postgres:
+        condition: service_healthy
   backend:
     build:
       context: .
@@ -62,6 +82,8 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      init:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/ready"]
       interval: 5s

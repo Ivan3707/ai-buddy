@@ -1,0 +1,1 @@
+CREATE DATABASE ai_buddy_verify_catalog;
