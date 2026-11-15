@@ -61,6 +61,18 @@ services:
       - web-node-modules:/repo/apps/web/node_modules
     entrypoint: ["sh", "/repo/scripts/test-node.sh"]
 
+  # Not a test: builds the Chrome extension into apps/extension/dist without Node on the host.
+  #   docker compose -f compose.test.yaml run --rm extension
+  # BACKEND_ORIGIN must match BACKEND_PORT from .env (default http://127.0.0.1:8080).
+  extension:
+    image: node:22-bookworm-slim
+    working_dir: /repo
+    volumes:
+      - .:/repo
+    environment:
+      BACKEND_ORIGIN: ${BACKEND_ORIGIN:-http://127.0.0.1:8080}
+    entrypoint: ["node", "apps/extension/build.mjs"]
+
 volumes:
   go-cache:
   pip-cache:
