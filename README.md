@@ -68,7 +68,7 @@ LLM_EXTRA_BODY={"reasoning":{"effort":"low"}}
 | OpenAI | `https://api.openai.com/v1` | `gpt-6.1-terra`, `LLM_EXTRA_BODY={"reasoning_effort":"low"}` |
 | Локально через Ollama | `http://host.docker.internal:11434/v1` | любая модель с tool calling; GPU не обязателен, но без него медленно |
 
-Выбор модели обоснован сравнением пяти моделей на 68 + 30 размеченных кейсах: [`apps/ai/eval/README.md`](apps/ai/eval/README.md), раздел «Сравнение моделей». Остальные параметры (резервная модель, лимиты, кэш, RAG) описаны с комментариями в [`.env.example`](.env.example).
+Выбор модели обоснован сравнением пяти моделей на 68 + 30 размеченных кейсах: [`apps/ai/eval/README.md`](apps/ai/eval/README.md), раздел «Сравнение моделей». Остальные параметры (резервная модель, лимиты, кэш, RAG) — в разделе [«Настройки»](#настройки).
 
 ## Порядок проверки (≈10 минут)
 
@@ -183,6 +183,28 @@ Chrome MV3 ─────────┘        │                       └�
 | `data/` | синтетические данные: Mock HR (`corporate_employees.json`), база знаний `kb/`, подсказки |
 | `contracts/` | OpenAPI-контракты |
 | `ops/load` | нагрузочные тесты k6, Grafana |
+
+## Настройки
+
+В [`.env.example`](.env.example) только обязательный минимум. Остальные переменные необязательны: значения по умолчанию заданы в `compose.yaml`, переопределяются строкой в `.env`.
+
+| Переменная | По умолчанию | Назначение |
+|---|---|---|
+| `WEB_PORT`, `BACKEND_PORT`, `POSTGRES_PORT` | 5173, 8080, 5433 | порты на хосте |
+| `DB_USER`, `DB_NAME` | app, app | пользователь и база PostgreSQL |
+| `DEMO_SEED` | 1 | заполнить свежую базу демо-прогрессом, заявками и вопросами |
+| `ADMIN_OPEN_FOR_ALL` | 0 | только для демо: открыть /admin всем ролям |
+| `PUBLIC_WEB_ORIGIN` | `http://127.0.0.1:${WEB_PORT}` | адрес сайта, под который собирается скачиваемое расширение |
+| `LLM_TEMPERATURE`, `LLM_TIMEOUT_SECONDS`, `LLM_FIRST_BYTE_TIMEOUT_SECONDS`, `LLM_MAX_OUTPUT_TOKENS` | пусто, 60, 15, 1024 | параметры запроса к модели |
+| `LLM_FALLBACK_BASE_URL`, `LLM_FALLBACK_API_KEY`, `LLM_FALLBACK_MODEL`, `LLM_FALLBACK_EXTRA_BODY` | пусто | резервная модель, если основная не ответила (например, локальная Ollama) |
+| `RAG_MODE`, `RAG_TOP_K`, `RAG_MIN_SCORE` | hybrid, 4, 0.2 | поиск: BM25 + эмбеддинги, число фрагментов, порог для ответа без эскалации |
+| `RATE_LIMIT_PER_MINUTE`, `LLM_DAILY_TOKEN_BUDGET` | 20, 0 | лимит запросов на пользователя и суточный бюджет токенов (0 — выкл.) |
+| `ANSWER_CACHE_TTL_SECONDS` | 3600 | кэш частых вопросов по базе знаний (не личных и не действий) |
+| `KB_SOURCE`, `CONFLUENCE_URL`, `CONFLUENCE_TOKEN`, `CONFLUENCE_SPACE`, `KB_RELOAD_SECONDS` | markdown | источник базы знаний: `data/kb` или пространство Confluence |
+| `KB_WIKI_URL` | `http://127.0.0.1:5173/wiki` | куда ведут ссылки на источники в чате |
+| `KB_STALE_DAYS`, `KB_TODAY`, `KB_LINT_MAX_LLM_CALLS` | 365, пусто, 15 | проверка базы знаний на устаревшие документы и противоречия |
+
+`.env.load.example` относится только к нагрузочному стенду (`compose.load.yaml` и `ops/load`: отдельные PostgreSQL, backend, Prometheus и Grafana, k6-сценарии); для обычного запуска он не нужен.
 
 ## Если что-то пошло не так
 
