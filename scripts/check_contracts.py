@@ -8,7 +8,7 @@ from jsonschema import Draft202012Validator
 from openapi_spec_validator import validate_spec
 
 root = Path(__file__).resolve().parents[1]
-specs = {s:json.loads((root / f"contracts/{s}.openapi.json").read_text()) for s in ("backend", "ai")}
+specs = {s:json.loads((root / f"contracts/{s}.openapi.json").read_text(encoding="utf-8")) for s in ("backend", "ai")}
 for spec in specs.values():
     validate_spec(spec)
 
