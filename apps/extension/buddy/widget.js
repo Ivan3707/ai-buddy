@@ -495,7 +495,7 @@
           sync();
           view.sources.forEach((s, i) => {
             const li = el('li');
-            const a = el('a', '', `[${i + 1}] ${s.title}`);
+            const a = el('a', '', `[${s.refs?.length ? s.refs.join(', ') : i + 1}] ${s.title}`); // same numbers as in the answer text
             a.href = s.url; a.target = '_blank'; a.rel = 'noreferrer';
             a.title = 'Открыть документ в окне Бади';
             a.onclick = event => {

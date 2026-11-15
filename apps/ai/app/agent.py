@@ -96,8 +96,11 @@ def cited_sources(text: str, hits: list[Hit]) -> list[Source]:
     sources: list[Source] = []
     for n in seen:
         doc = hits[n - 1].doc
-        if all(s.id != doc.id for s in sources):  # several chunks of one document -> one source
-            sources.append(Source(id=doc.id, title=doc.title, url=doc.url, snippet=best_quote(doc.text, text, n)))
+        same = next((s for s in sources if s.id == doc.id), None)
+        if same:  # several chunks of one document -> one source that lists every number
+            same.refs = sorted({*(same.refs or []), n})
+        else:
+            sources.append(Source(id=doc.id, title=doc.title, url=doc.url, snippet=best_quote(doc.text, text, n), refs=[n]))
     return sources
 
 

@@ -27,6 +27,7 @@ class Source(BaseModel):
     title: str
     url: str
     snippet: str | None = None
+    refs: list[int] | None = None  # citation numbers [n] in the answer text that point to this document
 
 
 class ChatResponse(BaseModel):

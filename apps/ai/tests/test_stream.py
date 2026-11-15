@@ -142,6 +142,8 @@ def test_cited_sources_ignores_out_of_range_and_duplicates():
     other = Doc("b", "B", "u", "text")
     hits = [Hit(doc, 3.0), Hit(Doc("a", "A2", "u", "chunk 2"), 2.0), Hit(other, 1.0)]
     assert [s.id for s in cited_sources("x [1, обновлено 01.09.2026] y [2, 3]", hits)] == ["a", "b"]
+    # the list shows the same numbers as the text: chunks 1 and 2 are one document, 3 is another
+    assert [s.refs for s in cited_sources("x [3] y [1] z [2]", hits)] == [[3], [1, 2]]
 
 
 def test_summaries_and_proposal_validation():

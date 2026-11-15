@@ -766,6 +766,16 @@
           "snippet": {
             "type": "string",
             "description": "Short quote used for the answer"
+          },
+          "refs": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "type": "integer"
+            },
+            "description": "Citation numbers [n] in the answer text that point to this document"
           }
         }
       },

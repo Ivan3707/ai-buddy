@@ -125,16 +125,19 @@ test('a streamed answer: status, markdown text, sources, feedback; the mood foll
   assert.equal(w.$('.char').dataset.mood, 'talking');
 
   s.view({text: 'Готово\n- a\n- b', finished: true, mood: 'idle', messageId: 'm1',
-    sources: [{id: 'kb-1', title: 'VPN', url: 'https://wiki.example.com/vpn', snippet: 'Установите клиент'}]});
+    sources: [{id: 'kb-1', title: 'VPN', url: 'https://wiki.example.com/vpn', snippet: 'Установите клиент'},
+      {id: 'kb-2', title: 'Сеть', url: 'https://wiki.example.com/net', refs: [2, 4]}]});
   assert.equal(bot.querySelector('.status').hidden, true);
   assert.equal(bot.querySelectorAll('.text li').length, 2);
   const toggle = bot.querySelector('.src-toggle');
-  assert.equal(toggle.textContent, 'Источники · 1 ▾');
+  assert.equal(toggle.textContent, 'Источники · 2 ▾');
   assert.equal(bot.querySelector('.sources').hidden, true);
   toggle.click();
-  assert.equal(toggle.textContent, 'Источники · 1 ▴');
+  assert.equal(toggle.textContent, 'Источники · 2 ▴');
   assert.equal(toggle.getAttribute('aria-expanded'), 'true');
   assert.equal(bot.querySelector('.sources a').textContent, '[1] VPN');
+  // the list repeats the numbers used in the answer text, not its own order
+  assert.equal(bot.querySelectorAll('.sources a')[1].textContent, '[2, 4] Сеть');
   assert.equal(bot.querySelector('.snip').textContent, '«Установите клиент»');
   assert.equal(bot.querySelectorAll('.fb button').length, 2);
   assert.equal(w.$('.char').dataset.mood, 'happy');
