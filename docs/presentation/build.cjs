@@ -1,5 +1,5 @@
 // Собирает PDF презентации из docs/presentation/slides/index.html через Chromium (Playwright).
-//   node docs/presentation/build.cjs            -> AI-buddy.pdf и AI-buddy-review.pdf
+//   node docs/presentation/build.cjs            -> AI-buddy.pdf
 //   node docs/presentation/build.cjs --png out  -> ещё и PNG каждого слайда в папку out (для проверки вёрстки)
 // Нужен установленный @playwright/test (есть в devDependencies корня) и браузер: npx playwright install chromium.
 const path = require('path');
@@ -13,7 +13,7 @@ const pngDir = process.argv.includes('--png') ? process.argv[process.argv.indexO
 (async () => {
   const browser = await chromium.launch();
   const tab = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-  for (const [file, review] of [['AI-buddy.pdf', false], ['AI-buddy-review.pdf', true]]) {
+  for (const [file, review] of [['AI-buddy.pdf', false]]) {
     await tab.goto(page, { waitUntil: 'networkidle' });
     await tab.evaluate(on => document.body.classList.toggle('review', on), review);
     await tab.evaluate(() => document.fonts.ready);
