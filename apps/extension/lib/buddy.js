@@ -69,7 +69,7 @@ export function toView(state) {
     form: state.form,
     sources: state.sources
       .filter(source => /^https?:\/\//.test(source.url)) // no javascript:/data: links in the page
-      .map(source => ({id: source.id, title: source.title, url: source.url, snippet: source.snippet || ''})),
+      .map(source => ({id: source.id, title: source.title, url: source.url, snippet: source.snippet || '', ...(source.refs ? {refs: source.refs} : {})})),
     card: action ? {
       id: action.id,
       title: actionTitle(action.type),
@@ -100,6 +100,7 @@ export function siteMatchPattern(raw) {
 
 export function displayName(user) {
   if (typeof user?.display_name === 'string' && user.display_name.trim()) return user.display_name.trim();
+  if (typeof user?.first_name === 'string' && user.first_name.trim()) return user.first_name.trim();
   const local = typeof user?.email === 'string' ? user.email.split('@')[0] : '';
-  return /^[a-zа-яё]+$/i.test(local) && !/^(intern|user|test|demo)$/i.test(local) ? local : '';
+  return /^[a-zа-яё]+$/i.test(local) && !/^(intern|user|test|demo|buddy|teamlead|admin)$/i.test(local) ? local : '';
 }

@@ -67,6 +67,7 @@ export function normalizeSources(value) {
       title: source.title,
       url: source.url,
       ...(isString(source.snippet) && source.snippet ? {snippet: source.snippet} : {}),
+      ...(Array.isArray(source.refs) && source.refs.every(Number.isInteger) && source.refs.length ? {refs: source.refs} : {}),
     }));
 }
 

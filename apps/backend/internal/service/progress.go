@@ -289,8 +289,8 @@ func (s *ProgressService) ReviewSubmission(
 		if err != nil {
 			return fmt.Errorf("get submission: %w", err)
 		}
-		var ownerID, checklistID uuid.UUID
-		if err := tx.QueryRowContext(ctx, `SELECT user_id, checklist_id FROM user_checklist_progress WHERE id=$1`, unlockedSubmission.ProgressID).Scan(&ownerID, &checklistID); err != nil {
+		ownerID, checklistID, err := progressRepo.OwnerAndChecklist(ctx, unlockedSubmission.ProgressID)
+		if err != nil {
 			return fmt.Errorf("get submission owner: %w", err)
 		}
 		if err := lockProgressOwner(ctx, tx, ownerID); err != nil {
@@ -643,27 +643,18 @@ func hasNonEmptyValue(value *string) bool {
 // Lock the owner before progress rows so HR profession changes and personal
 // task insertion cannot race with a progress transition.
 func lockProgressOwner(ctx context.Context, tx *sql.Tx, userID uuid.UUID) error {
-	var id uuid.UUID
-	if err := tx.QueryRowContext(ctx, `SELECT id FROM users WHERE id=$1 FOR SHARE`, userID).Scan(&id); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return repository.ErrNotFound
-		}
+	if err := repository.NewProgressRepository(tx).LockOwner(ctx, userID); err != nil {
 		return fmt.Errorf("lock progress owner: %w", err)
 	}
 	return nil
 }
 
 func ensureCurrentTrack(ctx context.Context, tx *sql.Tx, userID, checklistID uuid.UUID) error {
-	var checklistType string
-	var checklistProfession, userProfession sql.NullString
-	err := tx.QueryRowContext(ctx, `SELECT c.type, c.profession, u.profession
-		FROM checklists c JOIN users u ON u.id=$1 WHERE c.id=$2`, userID, checklistID).
-		Scan(&checklistType, &checklistProfession, &userProfession)
+	matches, err := repository.NewProgressRepository(tx).TrackMatchesProfession(ctx, userID, checklistID)
 	if err != nil {
 		return fmt.Errorf("check current profession track: %w", err)
 	}
-	if checklistType == string(model.ChecklistTypeProfessional) &&
-		(!checklistProfession.Valid || !userProfession.Valid || checklistProfession.String != userProfession.String) {
+	if !matches {
 		return ErrOutdatedProfessionTrack
 	}
 	return nil

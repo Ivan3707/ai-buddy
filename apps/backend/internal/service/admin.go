@@ -42,97 +42,24 @@ func NewAdminService(db *sql.DB, aiURL string, ticker HintTicker) *AdminService 
 // IsOpenForAll reports the demo flag for the handler, which only sees the service through an interface.
 func (s *AdminService) IsOpenForAll() bool { return s.OpenForAll }
 
-type AdminAccount struct {
-	ID             string     `json:"id"`
-	Email          string     `json:"email"`
-	FirstName      string     `json:"first_name"`
-	LastName       string     `json:"last_name"`
-	Role           string     `json:"role"`
-	Profession     string     `json:"profession"`
-	Team           string     `json:"team"`
-	Department     string     `json:"department"`
-	BuddyName      string     `json:"buddy_name"`
-	TeamleadName   string     `json:"teamlead_name"`
-	CreatedAt      time.Time  `json:"created_at"`
-	LastLoginAt    *time.Time `json:"last_login_at"`
-	ActiveSessions int        `json:"active_sessions"`
-}
-
-type AnswerFeedbackItem struct {
-	MessageID string    `json:"message_id"`
-	Comment   string    `json:"comment"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-type AnswerFeedback struct {
-	Up    int                  `json:"up"`
-	Down  int                  `json:"down"`
-	Items []AnswerFeedbackItem `json:"items"`
-}
+type AdminAccount = model.AdminAccount
+type AnswerFeedbackItem = model.AnswerFeedbackItem
+type AnswerFeedback = model.AnswerFeedback
 
 // AnswerFeedback counts thumbs under bot answers and lists the comments left under thumbs-down. It is a product-quality
 // signal for the admin panel; the mentor desk does not show it.
 func (s *AdminService) AnswerFeedback(ctx context.Context) (AnswerFeedback, error) {
-	out := AnswerFeedback{Items: []AnswerFeedbackItem{}}
-	if err := s.db.QueryRowContext(ctx, `SELECT count(*) FILTER (WHERE feedback = 'up'), count(*) FILTER (WHERE feedback = 'down') FROM chat_messages`).Scan(&out.Up, &out.Down); err != nil {
-		return out, err
-	}
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT id::text, feedback_comment, created_at FROM chat_messages
-		WHERE feedback = 'down' AND COALESCE(feedback_comment, '') <> '' ORDER BY created_at DESC LIMIT 50`)
-	if err != nil {
-		return out, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var it AnswerFeedbackItem
-		if err := rows.Scan(&it.MessageID, &it.Comment, &it.CreatedAt); err != nil {
-			return out, err
-		}
-		out.Items = append(out.Items, it)
-	}
-	return out, rows.Err()
+	return repository.NewAdminRepository(s.db).AnswerFeedback(ctx)
 }
 
 // RestartOnboarding makes the intern's next login a "first" one again (last_login_at = NULL), so the welcome tour starts.
 // Returns sql.ErrNoRows when there is no such intern. Staff accounts have no tour.
 func (s *AdminService) RestartOnboarding(ctx context.Context, userID string) error {
-	res, err := s.db.ExecContext(ctx, `UPDATE users SET last_login_at = NULL WHERE id = $1::uuid AND role = 'intern'`, userID)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return sql.ErrNoRows
-	}
-	return nil
+	return repository.NewAdminRepository(s.db).RestartOnboarding(ctx, userID)
 }
 
 func (s *AdminService) Accounts(ctx context.Context) ([]AdminAccount, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT u.id::text, u.email, COALESCE(u.first_name,''), COALESCE(u.last_name,''), u.role, COALESCE(u.profession,''),
-		       COALESCE(u.team,''), COALESCE(u.department,''),
-		       COALESCE(NULLIF(trim(COALESCE(b.first_name,'') || ' ' || COALESCE(b.last_name,'')),''), b.email, ''),
-		       COALESCE(NULLIF(trim(COALESCE(t.first_name,'') || ' ' || COALESCE(t.last_name,'')),''), t.email, ''),
-		       u.created_at, u.last_login_at,
-		       (SELECT count(*) FROM auth_sessions a WHERE a.user_id = u.id AND a.revoked_at IS NULL AND a.expires_at > now())
-		FROM users u
-		LEFT JOIN users b ON b.id = u.buddy_id
-		LEFT JOIN users t ON t.id = u.teamlead_id
-		ORDER BY CASE u.role WHEN 'teamlead' THEN 0 WHEN 'buddy' THEN 1 ELSE 2 END, u.created_at, u.email`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	out := make([]AdminAccount, 0)
-	for rows.Next() {
-		var a AdminAccount
-		if err := rows.Scan(&a.ID, &a.Email, &a.FirstName, &a.LastName, &a.Role, &a.Profession, &a.Team, &a.Department,
-			&a.BuddyName, &a.TeamleadName, &a.CreatedAt, &a.LastLoginAt, &a.ActiveSessions); err != nil {
-			return nil, err
-		}
-		out = append(out, a)
-	}
-	return out, rows.Err()
+	return repository.NewAdminRepository(s.db).Accounts(ctx)
 }
 
 func (s *AdminService) aiCall(ctx context.Context, method, path string) (json.RawMessage, error) {
@@ -160,20 +87,8 @@ func (s *AdminService) KBLint(ctx context.Context) (json.RawMessage, error) {
 
 // KBGaps clusters the questions the bot had to escalate (all of them): topics the knowledge base does not cover.
 func (s *AdminService) KBGaps(ctx context.Context) (json.RawMessage, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id::text, question FROM mentor_questions ORDER BY created_at DESC LIMIT 200`)
+	items, err := repository.NewAdminRepository(s.db).GapQuestions(ctx)
 	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []map[string]string{}
-	for rows.Next() {
-		var id, text string
-		if err := rows.Scan(&id, &text); err != nil {
-			return nil, err
-		}
-		items = append(items, map[string]string{"id": id, "text": text})
-	}
-	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 	payload, _ := json.Marshal(map[string]any{"questions": items})
@@ -220,36 +135,10 @@ type AdminSystem struct {
 	Hints    map[string]int `json:"hints"`
 }
 
-type AdminCounters struct {
-	UsersByRole     map[string]int `json:"users_by_role"`
-	OpenQuestions   int            `json:"open_questions"`
-	PendingRequests int            `json:"pending_requests"`
-	MessagesToday   int            `json:"messages_today"`
-	ActiveSessions  int            `json:"active_sessions"`
-}
+type AdminCounters = model.AdminCounters
 
 func (s *AdminService) hintCounts(ctx context.Context) (map[string]int, error) {
-	out := map[string]int{"pending": 0, "processing": 0, "ready": 0, "unread": 0}
-	rows, err := s.db.QueryContext(ctx, `SELECT status, count(*) FROM task_hints GROUP BY status`)
-	if err != nil {
-		return out, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var st string
-		var n int
-		if err := rows.Scan(&st, &n); err != nil {
-			return out, err
-		}
-		out[st] = n
-	}
-	if err := rows.Err(); err != nil {
-		return out, err
-	}
-	var unread int
-	err = s.db.QueryRowContext(ctx, `SELECT count(*) FROM task_hints WHERE status='ready' AND read_at IS NULL`).Scan(&unread)
-	out["unread"] = unread
-	return out, err
+	return repository.NewAdminRepository(s.db).HintCounts(ctx)
 }
 
 func (s *AdminService) System(ctx context.Context) AdminSystem {
@@ -264,8 +153,7 @@ func (s *AdminService) System(ctx context.Context) AdminSystem {
 		sys.Checks = append(sys.Checks, c)
 	}
 	timed("database", "База данных", func() (string, error) {
-		var one int
-		if err := s.db.QueryRowContext(ctx, `SELECT 1`).Scan(&one); err != nil {
+		if err := repository.NewAdminRepository(s.db).Ping(ctx); err != nil {
 			return "PostgreSQL не отвечает", err
 		}
 		return "PostgreSQL отвечает", nil
@@ -302,23 +190,7 @@ func (s *AdminService) System(ctx context.Context) AdminSystem {
 			", непрочитано: " + itoa(counts["unread"]), nil
 	})
 
-	sys.Counters.UsersByRole = map[string]int{"intern": 0, "buddy": 0, "teamlead": 0}
-	if rows, err := s.db.QueryContext(ctx, `SELECT role, count(*) FROM users GROUP BY role`); err == nil {
-		for rows.Next() {
-			var role string
-			var n int
-			if rows.Scan(&role, &n) == nil {
-				sys.Counters.UsersByRole[role] = n
-			}
-		}
-		rows.Close()
-	}
-	_ = s.db.QueryRowContext(ctx, `SELECT
-		(SELECT count(*) FROM mentor_questions WHERE status='open'),
-		(SELECT count(*) FROM service_requests WHERE status='pending_approval'),
-		(SELECT count(*) FROM chat_messages WHERE created_at >= date_trunc('day', now())),
-		(SELECT count(*) FROM auth_sessions WHERE revoked_at IS NULL AND expires_at > now())`).
-		Scan(&sys.Counters.OpenQuestions, &sys.Counters.PendingRequests, &sys.Counters.MessagesToday, &sys.Counters.ActiveSessions)
+	sys.Counters, _ = repository.NewAdminRepository(s.db).Counters(ctx)
 	return sys
 }
 
@@ -384,25 +256,16 @@ func notificationCatalog() []NotificationInfo {
 	}
 }
 
-func (s *AdminService) count(ctx context.Context, query string) int {
-	var n int
-	_ = s.db.QueryRowContext(ctx, query).Scan(&n)
-	return n
-}
-
-const overdueWhere = `p.status='active' AND p.hidden_at IS NULL AND p.activated_at IS NOT NULL
-	AND COALESCE(p.estimated_minutes_override, i.estimated_minutes) IS NOT NULL
-	AND p.activated_at + COALESCE(p.estimated_minutes_override, i.estimated_minutes) * interval '1 minute' < now()`
-
 func (s *AdminService) overdueCount(ctx context.Context) int {
-	return s.count(ctx, `SELECT count(*) FROM user_checklist_progress p JOIN checklist_items i ON i.id=p.checklist_item_id WHERE `+overdueWhere)
+	counts, _ := repository.NewAdminRepository(s.db).NotificationCounts(ctx)
+	return counts.Overdue
 }
 
 func (s *AdminService) Notifications(ctx context.Context) []NotificationInfo {
 	items := notificationCatalog()
 	hints, _ := s.hintCounts(ctx)
-	open := s.count(ctx, `SELECT count(*) FROM mentor_questions WHERE status='open'`)
-	pending := s.count(ctx, `SELECT count(*) FROM service_requests WHERE status='pending_approval'`)
+	counts, _ := repository.NewAdminRepository(s.db).NotificationCounts(ctx)
+	open, pending := counts.OpenQuestions, counts.PendingRequests
 	for i := range items {
 		switch items[i].ID {
 		case "stuck_task":
@@ -411,10 +274,10 @@ func (s *AdminService) Notifications(ctx context.Context) []NotificationInfo {
 				{"Непрочитанных подсказок", hints["unread"]}}
 		case "request_status":
 			items[i].Live = []LiveNumber{{"Заявок на согласовании", pending},
-				{"Открытых тикетов доступа", s.count(ctx, `SELECT count(*) FROM corporate_access_requests WHERE status='open'`)}}
+				{"Открытых тикетов доступа", counts.OpenAccess}}
 		case "mentor_answered":
 			items[i].Live = []LiveNumber{{"Открытых вопросов стажёров", open},
-				{"Вопросов с ответом", s.count(ctx, `SELECT count(*) FROM mentor_questions WHERE status='answered'`)}}
+				{"Вопросов с ответом", counts.AnsweredQuestions}}
 		case "staff_counts":
 			items[i].Live = []LiveNumber{{"Вопросов стажёров", open}, {"Заявок на согласование", pending}}
 		}
@@ -425,12 +288,7 @@ func (s *AdminService) Notifications(ctx context.Context) []NotificationInfo {
 	return items
 }
 
-type StuckTask struct {
-	Task      string `json:"task"`
-	UserEmail string `json:"user_email"`
-	Hint      string `json:"hint_status"` // none | pending | processing | ready
-	HintText  string `json:"hint_text"`
-}
+type StuckTask = model.StuckTask
 
 type StuckCheck struct {
 	OverdueTasks  int         `json:"overdue_tasks"`
@@ -468,25 +326,15 @@ func (s *AdminService) CheckStuckTask(ctx context.Context) (StuckCheck, error) {
 	}
 	res.PendingAfter, res.ReadyAfter = after["pending"]+after["processing"], after["ready"]
 	res.OverdueTasks = s.overdueCount(ctx)
-	rows, err := s.db.QueryContext(ctx, `SELECT COALESCE(p.title_override, i.title), u.email, COALESCE(h.status,'none'), COALESCE(h.text,'')
-		FROM user_checklist_progress p
-		JOIN checklist_items i ON i.id=p.checklist_item_id
-		JOIN users u ON u.id=p.user_id
-		LEFT JOIN task_hints h ON h.progress_id=p.id
-		WHERE `+overdueWhere+` ORDER BY p.activated_at LIMIT 10`)
+	rows, err := repository.NewAdminRepository(s.db).StuckTasks(ctx)
 	if err != nil {
 		return res, err
 	}
-	defer rows.Close()
-	for rows.Next() {
-		var t StuckTask
-		if err := rows.Scan(&t.Task, &t.UserEmail, &t.Hint, &t.HintText); err != nil {
-			return res, err
-		}
+	for _, t := range rows {
 		t.HintText = truncateRunes(t.HintText, 200)
 		res.Tasks = append(res.Tasks, t)
 	}
-	return res, rows.Err()
+	return res, nil
 }
 
 // DemoCompletion is the result of CompleteChecklists.

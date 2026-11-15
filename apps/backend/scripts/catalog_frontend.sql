@@ -17,49 +17,49 @@ BEGIN
   SELECT id,name INTO target_checklist_id,existing_name
   FROM checklists WHERE type='professional' AND profession='frontend';
   IF FOUND THEN
-    IF existing_name IS DISTINCT FROM 'Frontend Developer — Demo v1' THEN
+    IF existing_name IS DISTINCT FROM 'Frontend-разработчик — демо v2' THEN
       RAISE EXCEPTION 'Existing Frontend checklist has another name; refusing to overwrite';
     END IF;
     SELECT COALESCE(jsonb_agg(jsonb_build_array(position,title,week_start,week_end,goal,expected_result) ORDER BY position),'[]'::jsonb)
       INTO actual FROM checklist_stages WHERE checklist_id=target_checklist_id;
     SELECT jsonb_agg(jsonb_build_array(position,title,week_start,week_end,goal,expected_result) ORDER BY position)
       INTO expected FROM (VALUES
-        (1,'Product and workspace',1,2,'Understand the product and prepare a safe workspace','Local web application runs'),
-        (2,'First interface',2,4,'Deliver an accessible feature','Reviewed UI change'),
-        (3,'Quality and delivery',4,6,'Ship confidently','Tested production-ready change')
+        (1,'Продукт и рабочее окружение',1,2,'Понять продукт и подготовить рабочее окружение','Веб-приложение запускается локально'),
+        (2,'Первый интерфейс',2,4,'Сделать доступную фичу','Изменение UI прошло ревью'),
+        (3,'Качество и доставка',4,6,'Уверенно выкатывать изменения','Протестированное изменение, готовое к релизу')
       ) AS stages(position,title,week_start,week_end,goal,expected_result);
-    IF actual IS DISTINCT FROM expected THEN RAISE EXCEPTION 'Existing Frontend stages differ from Demo v1'; END IF;
+    IF actual IS DISTINCT FROM expected THEN RAISE EXCEPTION 'Existing Frontend stages differ from демо v2'; END IF;
 
     SELECT COALESCE(jsonb_agg(jsonb_build_array(i.position,s.position,i.title,i.description,i.expected_result,i.requires_review,i.estimated_minutes,i.assigned_user_id) ORDER BY i.position),'[]'::jsonb)
       INTO actual FROM checklist_items i JOIN checklist_stages s ON s.id=i.stage_id WHERE i.checklist_id=target_checklist_id;
     SELECT jsonb_agg(jsonb_build_array(position,stage_position,title,description,expected_result,requires_review,estimated_minutes,NULL) ORDER BY position)
       INTO expected FROM (VALUES
-        (1,1,'Run the web workspace','Install approved dependencies and start the existing application','Working local frontend',false,90),
-        (2,1,'Review design system','Document colors, typography and reusable components','Short UI inventory',true,90),
-        (3,2,'Build a responsive screen','Implement the assigned screen with loading and error states','Responsive implementation',true,180),
-        (4,2,'Check accessibility','Verify keyboard navigation, labels and contrast','Accessibility notes',true,120),
-        (5,3,'Add automated checks','Cover the main interaction with component or browser tests','Passing test scenario',false,150),
-        (6,3,'Present the change','Explain trade-offs, metrics and remaining risks','Buddy-approved demo',true,90)
+        (1,1,'Запустить веб-проект команды','Установить разрешённые зависимости и запустить существующее приложение локально','Фронтенд работает локально',false,90),
+        (2,1,'Изучить дизайн-систему','Описать цвета, типографику и переиспользуемые компоненты','Короткий конспект по UI-компонентам',true,90),
+        (3,2,'Сверстать адаптивный экран','Реализовать выданный экран с состояниями загрузки и ошибки','Адаптивная реализация экрана',true,180),
+        (4,2,'Проверить доступность','Проверить навигацию с клавиатуры, подписи и контраст','Заметки по доступности',true,120),
+        (5,3,'Добавить автотесты','Покрыть основной сценарий компонентными или браузерными тестами','Зелёный тестовый сценарий',false,150),
+        (6,3,'Представить изменение','Рассказать о компромиссах, метриках и оставшихся рисках','Демо одобрено наставником',true,90)
       ) AS items(position,stage_position,title,description,expected_result,requires_review,estimated_minutes);
-    IF actual IS DISTINCT FROM expected THEN RAISE EXCEPTION 'Existing Frontend items differ from Demo v1'; END IF;
+    IF actual IS DISTINCT FROM expected THEN RAISE EXCEPTION 'Existing Frontend items differ from демо v2'; END IF;
     RETURN;
   END IF;
 
-  INSERT INTO checklists(name,type,profession) VALUES('Frontend Developer — Demo v1','professional','frontend') RETURNING id INTO target_checklist_id;
+  INSERT INTO checklists(name,type,profession) VALUES('Frontend-разработчик — демо v2','professional','frontend') RETURNING id INTO target_checklist_id;
   INSERT INTO checklist_stages(checklist_id,title,week_start,week_end,goal,expected_result,position)
-    VALUES(target_checklist_id,'Product and workspace',1,2,'Understand the product and prepare a safe workspace','Local web application runs',1) RETURNING id INTO stage_id;
+    VALUES(target_checklist_id,'Продукт и рабочее окружение',1,2,'Понять продукт и подготовить рабочее окружение','Веб-приложение запускается локально',1) RETURNING id INTO stage_id;
   INSERT INTO checklist_items(checklist_id,stage_id,title,description,expected_result,requires_review,estimated_minutes,position) VALUES
-    (target_checklist_id,stage_id,'Run the web workspace','Install approved dependencies and start the existing application','Working local frontend',false,90,1),
-    (target_checklist_id,stage_id,'Review design system','Document colors, typography and reusable components','Short UI inventory',true,90,2);
+    (target_checklist_id,stage_id,'Запустить веб-проект команды','Установить разрешённые зависимости и запустить существующее приложение локально','Фронтенд работает локально',false,90,1),
+    (target_checklist_id,stage_id,'Изучить дизайн-систему','Описать цвета, типографику и переиспользуемые компоненты','Короткий конспект по UI-компонентам',true,90,2);
   INSERT INTO checklist_stages(checklist_id,title,week_start,week_end,goal,expected_result,position)
-    VALUES(target_checklist_id,'First interface',2,4,'Deliver an accessible feature','Reviewed UI change',2) RETURNING id INTO stage_id;
+    VALUES(target_checklist_id,'Первый интерфейс',2,4,'Сделать доступную фичу','Изменение UI прошло ревью',2) RETURNING id INTO stage_id;
   INSERT INTO checklist_items(checklist_id,stage_id,title,description,expected_result,requires_review,estimated_minutes,position) VALUES
-    (target_checklist_id,stage_id,'Build a responsive screen','Implement the assigned screen with loading and error states','Responsive implementation',true,180,3),
-    (target_checklist_id,stage_id,'Check accessibility','Verify keyboard navigation, labels and contrast','Accessibility notes',true,120,4);
+    (target_checklist_id,stage_id,'Сверстать адаптивный экран','Реализовать выданный экран с состояниями загрузки и ошибки','Адаптивная реализация экрана',true,180,3),
+    (target_checklist_id,stage_id,'Проверить доступность','Проверить навигацию с клавиатуры, подписи и контраст','Заметки по доступности',true,120,4);
   INSERT INTO checklist_stages(checklist_id,title,week_start,week_end,goal,expected_result,position)
-    VALUES(target_checklist_id,'Quality and delivery',4,6,'Ship confidently','Tested production-ready change',3) RETURNING id INTO stage_id;
+    VALUES(target_checklist_id,'Качество и доставка',4,6,'Уверенно выкатывать изменения','Протестированное изменение, готовое к релизу',3) RETURNING id INTO stage_id;
   INSERT INTO checklist_items(checklist_id,stage_id,title,description,expected_result,requires_review,estimated_minutes,position) VALUES
-    (target_checklist_id,stage_id,'Add automated checks','Cover the main interaction with component or browser tests','Passing test scenario',false,150,5),
-    (target_checklist_id,stage_id,'Present the change','Explain trade-offs, metrics and remaining risks','Buddy-approved demo',true,90,6);
+    (target_checklist_id,stage_id,'Добавить автотесты','Покрыть основной сценарий компонентными или браузерными тестами','Зелёный тестовый сценарий',false,150,5),
+    (target_checklist_id,stage_id,'Представить изменение','Рассказать о компромиссах, метриках и оставшихся рисках','Демо одобрено наставником',true,90,6);
 END $$;
 COMMIT;

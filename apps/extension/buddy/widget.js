@@ -495,7 +495,7 @@
           sync();
           view.sources.forEach((s, i) => {
             const li = el('li');
-            const a = el('a', '', `[${i + 1}] ${s.title}`);
+            const a = el('a', '', `[${s.refs?.length ? s.refs.join(', ') : i + 1}] ${s.title}`); // same numbers as in the answer text
             a.href = s.url; a.target = '_blank'; a.rel = 'noreferrer';
             a.title = 'Открыть документ в окне Бади';
             a.onclick = event => {
@@ -1044,7 +1044,7 @@
         node.append(el('b', '', 'Расширение Бади не установлено'));
         node.append(el('p', '', 'Сейчас я работаю только на этом сайте. С расширением Chrome я появляюсь на любой странице (вики, Grafana, Jira), вижу выделенный текст и подсказываю по ней.'));
         const steps = el('ol', 'install-steps');
-        for (const t of ['Нажми «Установить расширение» ниже.', 'Подтверди установку в Chrome (в демо вместо этого откроется страница-заглушка).', 'Закрепи значок AI-buddy на панели и обнови эту страницу: Бади станет общим для всех сайтов.']) steps.append(el('li', '', t));
+        for (const t of ['Нажми «Установить расширение» ниже и скачай архив.', 'Распакуй его, открой chrome://extensions, включи «Режим разработчика» и нажми «Загрузить распакованное расширение».', 'Закрепи значок AI-buddy на панели и обнови эту страницу: Бади станет общим для всех сайтов.']) steps.append(el('li', '', t));
         node.append(steps);
         const link = el('a', 'install-link', 'Установить расширение');
         link.href = env.installHint.url; link.target = '_blank'; link.rel = 'noopener';

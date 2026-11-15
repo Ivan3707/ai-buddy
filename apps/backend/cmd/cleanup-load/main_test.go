@@ -44,7 +44,8 @@ func TestCleanupLoadGuardsAndTransactionalOwnership(t *testing.T) {
 	t.Setenv("DB_PORT", u.Port())
 	t.Setenv("DB_USER", u.User.Username())
 	t.Setenv("DB_NAME", name)
-	t.Setenv("DB_PASSWORD", "")
+	password, _ := u.User.Password()
+	t.Setenv("DB_PASSWORD", password)
 	t.Setenv("DB_SSLMODE", "disable")
 	previousFlags, previousArgs := flag.CommandLine, os.Args
 	t.Cleanup(func() { flag.CommandLine, os.Args = previousFlags, previousArgs })

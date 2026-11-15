@@ -6,7 +6,7 @@
   "scripts": {
     "build": "node build.mjs",
     "test": "node --test test/*.test.js",
-    "coverage": "node -e \"require('fs').mkdirSync('coverage',{recursive:true})\" && node --test --experimental-test-coverage --test-coverage-include=lib/** --test-coverage-lines=80 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info test/*.test.js"
+    "coverage": "node -e \"require('fs').mkdirSync('coverage',{recursive:true})\" && node --test --experimental-test-coverage --test-coverage-include=lib/** --test-coverage-include=buddy/** --test-coverage-include=background.js --test-coverage-exclude=test/** --test-coverage-exclude=dist/** --test-coverage-exclude=build.mjs --test-coverage-exclude=config.js --test-coverage-lines=80 --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info test/*.test.js"
   },
   "dependencies": {
     "@ai-buddy/client": "0.1.0"

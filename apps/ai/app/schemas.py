@@ -27,6 +27,7 @@ class Source(BaseModel):
     title: str
     url: str
     snippet: str | None = None
+    refs: list[int] | None = None  # citation numbers [n] in the answer text that point to this document
 
 
 class ChatResponse(BaseModel):
@@ -103,6 +104,39 @@ class Stage(BaseModel):
     total: int
 
 
+class ChecklistProgress(BaseModel):
+    checklist: Literal["common", "professional"]
+    done: int
+    total: int
+
+
+class TeamIntern(BaseModel):
+    """One intern of a mentor or team lead, as the backend sees them (RBAC: only their own interns)."""
+    name: str
+    profession: Literal["backend", "frontend", "ml"] | None = None
+    team: str | None = None
+    buddy: str | None = None
+    current_stage: str | None = None
+    checklists: list[ChecklistProgress] = Field(default_factory=list, max_length=2)
+    current_tasks: list[str] = Field(default_factory=list, max_length=3)
+    on_review: int = 0
+    returned: int = 0
+    last_login: str | None = None
+
+
+class OpenQuestion(BaseModel):
+    intern: str
+    question: str = Field(max_length=400)
+    since: str
+
+
+class PendingApproval(BaseModel):
+    intern: str
+    number: str
+    type: Literal["leave_request", "access_request"]
+    status: str
+
+
 class UserContext(BaseModel):
     user_id: str
     display_name: str | None = None
@@ -115,6 +149,9 @@ class UserContext(BaseModel):
     tasks: list[TaskContext] = Field(max_length=30)
     open_requests: list[ServiceRequest] = Field(max_length=20)
     allowed_actions: list[ActionType]
+    my_interns: list[TeamIntern] | None = Field(default=None, max_length=30)
+    open_mentor_questions: list[OpenQuestion] | None = Field(default=None, max_length=20)
+    pending_approvals: list[PendingApproval] | None = Field(default=None, max_length=20)
 
 
 class ChatTurn(BaseModel):

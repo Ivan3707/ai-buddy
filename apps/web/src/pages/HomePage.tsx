@@ -28,7 +28,7 @@ export function HomePage({ user, token, checklists, onFeedback, onOpenCalendar }
   return (
     <div className="home">
       <header className="greeting">
-        <h1>Привет, {displayName(user.email)}!</h1>
+        <h1>Привет, {user.first_name || displayName(user.email)}!</h1>
         <p>Пространство для организации своего времени</p>
       </header>
       {loading && !data && <p className="state-message">Загружаем задачи…</p>}

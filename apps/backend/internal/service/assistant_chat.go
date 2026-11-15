@@ -4,9 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -25,29 +23,17 @@ func (s *AssistantService) StartTurn(ctx context.Context, userID uuid.UUID, conv
 	if err != nil {
 		return uuid.Nil, nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT role, content FROM (
-			SELECT role, content, created_at FROM chat_messages WHERE conversation_id = $1
-			ORDER BY created_at DESC LIMIT $2
-		) last ORDER BY created_at`, id, historyTurns)
+	historyRows, err := repository.NewAssistantRepository(s.db).History(ctx, id, historyTurns)
 	if err != nil {
-		return uuid.Nil, nil, fmt.Errorf("load history: %w", err)
+		return uuid.Nil, nil, err
 	}
-	defer rows.Close()
 	history := []ChatTurn{}
-	for rows.Next() {
-		var t ChatTurn
-		if err := rows.Scan(&t.Role, &t.Content); err != nil {
-			return uuid.Nil, nil, err
-		}
+	for _, t := range historyRows {
 		if strings.TrimSpace(t.Content) != "" {
 			history = append(history, ChatTurn{Role: t.Role, Content: truncate(t.Content, 8000)})
 		}
 	}
-	if err := rows.Err(); err != nil {
-		return uuid.Nil, nil, err
-	}
-	if _, err := s.db.ExecContext(ctx, `INSERT INTO chat_messages (conversation_id, role, content, created_at) VALUES ($1, 'user', $2, clock_timestamp())`, id, message); err != nil {
+	if err := repository.NewAssistantRepository(s.db).AddUserMessage(ctx, id, message); err != nil {
 		return uuid.Nil, nil, fmt.Errorf("store message: %w", err)
 	}
 	return id, history, nil
@@ -55,28 +41,11 @@ func (s *AssistantService) StartTurn(ctx context.Context, userID uuid.UUID, conv
 
 // conversation returns the given conversation if it belongs to the user, or the user's latest/new one when nil.
 func (s *AssistantService) conversation(ctx context.Context, userID uuid.UUID, requested *uuid.UUID) (uuid.UUID, error) {
-	var id uuid.UUID
-	if requested != nil {
-		err := s.db.QueryRowContext(ctx, `SELECT id FROM chat_conversations WHERE id = $1 AND user_id = $2`, *requested, userID).Scan(&id)
-		if errors.Is(err, sql.ErrNoRows) {
-			return uuid.Nil, repository.ErrNotFound
-		}
-		return id, err
-	}
-	err := s.db.QueryRowContext(ctx, `INSERT INTO chat_conversations (user_id) VALUES ($1) RETURNING id`, userID).Scan(&id)
-	return id, err
+	return repository.NewAssistantRepository(s.db).Conversation(ctx, userID, requested)
 }
 
 func (s *AssistantService) latestConversation(ctx context.Context, userID uuid.UUID) (*uuid.UUID, error) {
-	var id uuid.UUID
-	err := s.db.QueryRowContext(ctx, `SELECT id FROM chat_conversations WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1`, userID).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &id, nil
+	return repository.NewAssistantRepository(s.db).LatestConversation(ctx, userID)
 }
 
 // BriefConversation puts the proactive brief into the user's latest conversation (or a new one), so the chat
@@ -190,14 +159,11 @@ func (s *AssistantService) Relay(ctx context.Context, userID, conversationID uui
 	saveCtx, cancelSave := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelSave()
 	if text.Len() > 0 || actionID != nil {
-		if _, err := s.db.ExecContext(saveCtx, `
-			INSERT INTO chat_messages (id, conversation_id, role, content, sources, action_id, finish_reason)
-			VALUES ($1, $2, 'assistant', $3, $4, $5, $6)`,
-			messageID, conversationID, truncate(text.String(), 16000), nullJSON(sources), actionID, finish); err != nil {
+		if err := repository.NewAssistantRepository(s.db).AddAssistantMessage(saveCtx, messageID, conversationID, truncate(text.String(), 16000), sources, actionID, finish); err != nil {
 			log.Printf("assistant: store reply failed: %v", err)
 		}
 	}
-	_, _ = s.db.ExecContext(saveCtx, `UPDATE chat_conversations SET updated_at = now() WHERE id = $1`, conversationID)
+	_ = repository.NewAssistantRepository(s.db).TouchConversation(saveCtx, conversationID)
 	log.Printf("assistant: path=%s conversation=%s status=%s latency_ms=%d action=%t",
 		path, conversationID, status, time.Since(started).Milliseconds(), actionID != nil)
 	return nil
@@ -233,13 +199,7 @@ func (s *AssistantService) storeProposal(ctx context.Context, userID uuid.UUID, 
 	if _, err := validateParams(p.Type, p.Params); err != nil {
 		return PendingAction{}, err
 	}
-	var a PendingAction
-	err := s.db.QueryRowContext(ctx, `
-		INSERT INTO assistant_actions (user_id, type, params, summary) VALUES ($1, $2, $3, $4)
-		RETURNING id, type, params, summary, status, error, created_at`,
-		userID, p.Type, []byte(p.Params), truncate(p.Summary, 500)).
-		Scan(&a.ID, &a.Type, &a.Params, &a.Summary, &a.Status, &a.Error, &a.CreatedAt)
-	return a, err
+	return repository.NewAssistantRepository(s.db).StoreProposal(ctx, userID, p.Type, p.Params, truncate(p.Summary, 500))
 }
 
 // ---------------------------------------------------------------- history and feedback
@@ -254,37 +214,8 @@ func (s *AssistantService) Messages(ctx context.Context, userID uuid.UUID, conve
 	} else if _, err := s.conversation(ctx, userID, conversationID); err != nil {
 		return nil, nil, err
 	}
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT m.id, m.role, m.content, m.sources, m.finish_reason, m.feedback, m.created_at,
-		       a.id, a.type, a.params, a.summary, a.status, a.error, a.created_at
-		FROM chat_messages m LEFT JOIN assistant_actions a ON a.id = m.action_id
-		WHERE m.conversation_id = $1 ORDER BY m.created_at`, *conversationID)
-	if err != nil {
-		return nil, nil, fmt.Errorf("list messages: %w", err)
-	}
-	defer rows.Close()
-	out := []ChatMessage{}
-	for rows.Next() {
-		var m ChatMessage
-		var sources []byte
-		var aID *uuid.UUID
-		var aType, aSummary, aStatus *string
-		var aParams []byte
-		var aErr *string
-		var aCreated *time.Time
-		if err := rows.Scan(&m.ID, &m.Role, &m.Content, &sources, &m.FinishReason, &m.Feedback, &m.CreatedAt,
-			&aID, &aType, &aParams, &aSummary, &aStatus, &aErr, &aCreated); err != nil {
-			return nil, nil, err
-		}
-		if len(sources) > 0 {
-			m.Sources = sources
-		}
-		if aID != nil {
-			m.Action = &PendingAction{ID: *aID, Type: *aType, Params: aParams, Summary: *aSummary, Status: *aStatus, Error: aErr, CreatedAt: *aCreated}
-		}
-		out = append(out, m)
-	}
-	return conversationID, out, rows.Err()
+	out, err := repository.NewAssistantRepository(s.db).Messages(ctx, *conversationID)
+	return conversationID, out, err
 }
 
 func (s *AssistantService) Feedback(ctx context.Context, userID, messageID uuid.UUID, rating, comment string) error {
@@ -298,17 +229,5 @@ func (s *AssistantService) Feedback(ctx context.Context, userID, messageID uuid.
 	if rating != "down" {
 		comment = ""
 	}
-	res, err := s.db.ExecContext(ctx, `
-		UPDATE chat_messages m SET
-		  feedback_comment = CASE WHEN $4 <> '' THEN $4 WHEN m.feedback IS DISTINCT FROM $3 THEN NULL ELSE m.feedback_comment END,
-		  feedback = $3
-		FROM chat_conversations c
-		WHERE m.id = $1 AND c.id = m.conversation_id AND c.user_id = $2 AND m.role = 'assistant'`, messageID, userID, rating, comment)
-	if err != nil {
-		return err
-	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return repository.ErrNotFound
-	}
-	return nil
+	return repository.NewAssistantRepository(s.db).SetFeedback(ctx, userID, messageID, rating, comment)
 }

@@ -48,7 +48,7 @@ BACKEND_ORIGIN=http://127.0.0.1:18080 npm run build --workspace @ai-buddy/extens
 $env:BACKEND_ORIGIN = 'http://127.0.0.1:18080'; npm run build --workspace @ai-buddy/extension
 ```
 
-Разрешён только origin вида `http://127.0.0.1:<port>`. В конце сборки проверяется, что `manifest.json` — валидный JSON и все файлы, на которые ссылаются манифест, HTML и импорты модулей, лежат в `dist`.
+`BACKEND_ORIGIN` и `SITE_ORIGIN` (адрес сайта AI-buddy для общего входа, по умолчанию `http://127.0.0.1:5173`) принимают только origin без пути: `http(s)://host[:port]`. Сайт проксирует `/api` на backend, поэтому для стенда оба можно задать адресом сайта. Так собирается архив `/downloads/ai-buddy-extension.zip` в образе сайта (`apps/web/Dockerfile`, аргумент `EXTENSION_ORIGIN` из `PUBLIC_WEB_ORIGIN`). В конце сборки проверяется, что `manifest.json` — валидный JSON и все файлы, на которые ссылаются манифест, HTML и импорты модулей, лежат в `dist`.
 
 ## Установка и запуск
 

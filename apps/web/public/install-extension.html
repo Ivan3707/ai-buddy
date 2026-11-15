@@ -1,33 +1,31 @@
 <!doctype html>
-<!-- Заглушка «установки» расширения Бади для демо. Реального магазина нет: ссылка в чате ведёт сюда. -->
+<!-- Установка расширения Бади. Архив собирается вместе с образом сайта (apps/web/Dockerfile) под адрес этого сайта. -->
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
-<title>Установка расширения Бади (демо)</title><style>
+<title>Установка расширения Бади</title><style>
 :root{--bg:#f4f5f7;--card:#fff;--ink:#1d2330;--muted:#68708a;--line:#e1e4ea;--accent:#0a7a4b}
 @media (prefers-color-scheme:dark){:root{--bg:#121417;--card:#1b1e23;--ink:#e6e8ee;--muted:#9aa2b5;--line:#2a2f37;--accent:#4cd18f}}
 *{box-sizing:border-box}body{margin:0;font:16px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
 main{max-width:640px;margin:0 auto;padding:32px 16px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px}
-h1{font-size:24px;margin:0 0 4px}.muted{color:var(--muted);font-size:14px}.tag{display:inline-block;font-size:12px;font-weight:700;padding:2px 10px;border-radius:999px;background:#ffb020;color:#1a1a1a;margin-bottom:10px}
-button{font:inherit;font-weight:700;padding:10px 22px;border:0;border-radius:999px;background:var(--accent);color:#fff;cursor:pointer}
-#result{margin-top:14px;padding:10px 14px;border-radius:10px;background:var(--bg);display:none}code{background:var(--bg);padding:1px 6px;border-radius:6px}
-a{color:var(--accent)}</style></head><body><main><div class="card">
-<span class="tag">демо-заглушка</span>
+h1{font-size:24px;margin:0 0 4px}h2{font-size:17px;margin:22px 0 6px}.muted{color:var(--muted);font-size:14px}
+.btn{display:inline-block;font-weight:700;padding:10px 22px;border-radius:999px;background:var(--accent);color:#fff;text-decoration:none}
+code{background:var(--bg);padding:1px 6px;border-radius:6px}a{color:var(--accent)}li{margin:4px 0}</style></head><body><main><div class="card">
 <h1>Расширение «Бади» для Chrome</h1>
-<p class="muted">Установка из магазина пока не настроена: эта страница имитирует её для демо.</p>
+<p class="muted">Демо-версия для прототипа AI-buddy. Chrome 116+ (или Edge, Яндекс Браузер на Chromium).</p>
 <p>С расширением Бади живёт на любой странице: подсказывает по открытой вики или Grafana, разбирает выделенный текст, сообщает о статусе заявок. Вход общий с сайтом.</p>
-<p><button id="go" type="button">Установить расширение</button></p>
-<p id="result" role="status"></p>
-<h2 style="font-size:17px">Как поставить сейчас (вручную)</h2>
+<p><a class="btn" id="download" href="/downloads/ai-buddy-extension.zip" download>Скачать расширение (.zip)</a></p>
+<p class="muted" id="origin"></p>
+<h2>Как установить (1 минута)</h2>
 <ol>
-<li>Возьмите папку <code>apps/extension/dist</code> из сборки проекта (<code>npm run build --workspace @ai-buddy/extension</code>).</li>
-<li>Откройте <code>chrome://extensions</code> и включите «Режим разработчика».</li>
-<li>Нажмите «Загрузить распакованное расширение» и выберите папку <code>dist</code>.</li>
-<li>Закрепите значок AI-buddy и обновите сайт: знак «⚠ Нет расширения» в чате Бади исчезнет.</li>
+<li>Распакуйте скачанный архив в отдельную папку, например <code>ai-buddy-extension</code>.</li>
+<li>Откройте <code>chrome://extensions</code> и включите «Режим разработчика» (переключатель справа вверху).</li>
+<li>Нажмите «Загрузить распакованное расширение» и выберите эту папку (в ней лежит <code>manifest.json</code>).</li>
+<li>Закрепите значок AI-buddy и обновите эту вкладку: знак «⚠ Нет расширения» в чате Бади исчезнет, вход подхватится с сайта.</li>
 </ol>
+<h2>Где попробовать</h2>
+<p>Демо-страницы «корпоративных сервисов»: <a href="/demo/wiki.html">вики</a>, <a href="/demo/grafana.html">Grafana</a>, <a href="/demo/jira.html">Jira</a>. На вики выделите «нужно минимум 2 одобрения» и спросите Бади «это ещё актуально?».</p>
+<p class="muted">Магазина расширений у прототипа нет, поэтому установка ручная. Архив собран под адрес этого сайта: запросы идут на тот же сервер, что и сайт.</p>
 <p><a href="/">← Вернуться на сайт</a></p>
 </div></main>
 <script>
-document.getElementById('go').onclick = function () {
-  var r = document.getElementById('result'); r.style.display = 'block';
-  r.textContent = 'Заглушка: магазин не подключён, расширение не установлено. Используйте ручную установку ниже.';
-};
+document.getElementById('origin').textContent = 'Сервер расширения: ' + location.origin;
 </script></body></html>

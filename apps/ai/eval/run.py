@@ -163,8 +163,9 @@ def judge(o: Outcome) -> tuple[bool, str]:
     elif b == "clarify":
         if p:
             return False, f"proposed {p['type']} instead of asking"
+        # Since 15.11 missing fields are collected by a form in the chat (show_form): that is the product's way to ask.
         asks = ("?", "напиши", "уточни", "укажи", "подскажи", "скажи")
-        if not any(a in o.text.casefold() for a in asks):
+        if o.finish != "form_shown" and not any(a in o.text.casefold() for a in asks):
             return False, "no clarifying question"
     elif b == "contradiction":
         if not expected <= set(o.sources):

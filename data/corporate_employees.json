@@ -1,8 +1,103 @@
 [
-  {"id":"corp-intern-backend-001","email":"backend.intern@demo.example","role":"intern","profession":"backend","department":"Technology","team":"Backend","manager_id":"corp-lead-001","buddy_id":"corp-buddy-001","allowed_tools":["issue-tracker","repository"]},
-  {"id":"corp-intern-frontend-001","email":"frontend.intern@demo.example","role":"intern","profession":"frontend","department":"Technology","team":"Frontend","manager_id":"corp-lead-001","buddy_id":"corp-buddy-001","allowed_tools":["issue-tracker","design-system"]},
-  {"id":"corp-intern-ml-001","email":"ml.intern@demo.example","role":"intern","profession":"ml","department":"Technology","team":"Machine Learning","manager_id":"corp-lead-001","buddy_id":"corp-buddy-001","allowed_tools":["ml-platform","issue-tracker"]},
-  {"id":"corp-buddy-001","email":"buddy@demo.example","role":"buddy","department":"Technology","team":"Onboarding","allowed_tools":[]},
-  {"id":"corp-lead-001","email":"teamlead@demo.example","role":"teamlead","department":"Technology","team":"Engineering","allowed_tools":[]},
-  {"id":"corp-intern-ml-002","email":"ml.other@demo.example","role":"intern","profession":"ml","department":"Technology","team":"Machine Learning","manager_id":"corp-lead-001","buddy_id":"corp-buddy-001","allowed_tools":["issue-tracker"]}
+  {
+    "id": "corp-intern-backend-001",
+    "email": "backend.intern@demo.example",
+    "role": "intern",
+    "profession": "backend",
+    "department": "Technology",
+    "team": "Backend",
+    "manager_id": "corp-lead-001",
+    "buddy_id": "corp-buddy-001",
+    "allowed_tools": [
+      "issue-tracker",
+      "repository"
+    ],
+    "first_name": "Иван",
+    "last_name": "Петров",
+    "telegram_username": "demo_ivan_petrov",
+    "birth_date": "2004-03-12",
+    "employed_since": "2026-11-02"
+  },
+  {
+    "id": "corp-intern-frontend-001",
+    "email": "frontend.intern@demo.example",
+    "role": "intern",
+    "profession": "frontend",
+    "department": "Technology",
+    "team": "Frontend",
+    "manager_id": "corp-lead-001",
+    "buddy_id": "corp-buddy-001",
+    "allowed_tools": [
+      "issue-tracker",
+      "design-system"
+    ],
+    "first_name": "Мария",
+    "last_name": "Смирнова",
+    "telegram_username": "demo_maria_smirnova",
+    "birth_date": "2003-07-21",
+    "employed_since": "2026-11-02"
+  },
+  {
+    "id": "corp-intern-ml-001",
+    "email": "ml.intern@demo.example",
+    "role": "intern",
+    "profession": "ml",
+    "department": "Technology",
+    "team": "Machine Learning",
+    "manager_id": "corp-lead-001",
+    "buddy_id": "corp-buddy-001",
+    "allowed_tools": [
+      "ml-platform",
+      "issue-tracker"
+    ],
+    "first_name": "Алексей",
+    "last_name": "Кузнецов",
+    "telegram_username": "demo_alexey_kuznetsov",
+    "birth_date": "2003-11-05",
+    "employed_since": "2026-11-02"
+  },
+  {
+    "id": "corp-buddy-001",
+    "email": "buddy@demo.example",
+    "role": "buddy",
+    "department": "Technology",
+    "team": "Onboarding",
+    "allowed_tools": [],
+    "first_name": "Ольга",
+    "last_name": "Соколова",
+    "telegram_username": "demo_olga_sokolova",
+    "birth_date": "1995-05-17",
+    "employed_since": "2021-09-01"
+  },
+  {
+    "id": "corp-lead-001",
+    "email": "teamlead@demo.example",
+    "role": "teamlead",
+    "department": "Technology",
+    "team": "Engineering",
+    "allowed_tools": [],
+    "first_name": "Сергей",
+    "last_name": "Морозов",
+    "telegram_username": "demo_sergey_morozov",
+    "birth_date": "1989-02-08",
+    "employed_since": "2018-03-12"
+  },
+  {
+    "id": "corp-intern-ml-002",
+    "email": "ml.other@demo.example",
+    "role": "intern",
+    "profession": "ml",
+    "department": "Technology",
+    "team": "Machine Learning",
+    "manager_id": "corp-lead-001",
+    "buddy_id": "corp-buddy-001",
+    "allowed_tools": [
+      "issue-tracker"
+    ],
+    "first_name": "Дарья",
+    "last_name": "Волкова",
+    "telegram_username": "demo_daria_volkova",
+    "birth_date": "2004-01-30",
+    "employed_since": "2026-11-09"
+  }
 ]
