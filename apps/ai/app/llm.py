@@ -18,6 +18,7 @@ import httpx
 log = logging.getLogger("ai.llm")
 
 from .config import Settings
+from . import mock_answers
 from .metrics import FALLBACK
 from .retrieval import Hit
 from .schemas import AgentChatRequest
@@ -147,7 +148,13 @@ class MockLLM:
         wants_action = any(w in msg for w in ACTION_WORDS) and not msg.lstrip().startswith("как")
         today = turn.request.user_context.today or date.today()
 
-        if wants_action and "propose_leave_request" in tools and ("отгул" in msg or "отпуск" in msg):
+        ready = mock_answers.answer(turn.request)
+        # our page hints ("что тут смотреть?", "это ещё актуально?") carry the topic in the page, so any match counts
+        floor = 0.0 if turn.request.page_context else MOCK_MIN_SCORE
+        if ready:
+            for line in ready.splitlines(keepends=True):
+                yield TextDelta(line)
+        elif wants_action and "propose_leave_request" in tools and ("отгул" in msg or "отпуск" in msg):
             day = (today + timedelta(days=7)).isoformat()
             kind = "vacation" if "отпуск" in msg else "day_off"
             yield ToolCall("propose_leave_request", json.dumps({"kind": kind, "date_from": day, "date_to": day}))
@@ -156,7 +163,7 @@ class MockLLM:
             yield ToolCall("propose_access_request", json.dumps({
                 "system": system, "resource": "demo", "access_level": "read",
                 "justification": "Нужно для задач онбординга (демо)"}, ensure_ascii=False))
-        elif confident := [h for h in turn.hits[:2] if h.lexical >= MOCK_MIN_SCORE]:
+        elif confident := [h for h in turn.hits[:2] if h.lexical > floor or h.lexical >= MOCK_MIN_SCORE]:
             parts = [f"**{h.doc.title}**: {h.doc.text} [{n}]" for n, h in enumerate(confident, 1)]
             text = "Вот что нашёл в базе знаний (демо-режим без LLM):\n\n" + "\n\n".join(parts)
             for word in text.split(" "):
