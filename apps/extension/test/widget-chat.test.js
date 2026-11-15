@@ -855,3 +855,30 @@ test('the storage failing at start still shows the small window', async () => {
   assert.equal(w.$('.mode').textContent, '⤢');
   assert.ok(w.$('.chat').style.width);
 });
+
+test('mentor question card: «Редактировать» cancels the proposal and opens the question in a form', async () => {
+  const w = await mount({handlers: {cancel: {tone: 'muted', text: 'Отменено.'}, 'question-create': {question: {id: 'q1'}}}});
+  await w.open();
+  await w.send('можно ли привести собаку?');
+  w.lastStream().view({finished: true, mood: 'waiting',
+    card: pendingCard('a3', {title: 'Вопрос наставнику', type: 'mentor_question', edit: {question: 'Можно ли собаку?'}})});
+  assert.deepEqual([...w.$$('.card .row button')].map(b => b.textContent), ['Подтвердить', 'Редактировать', 'Отменить']);
+  w.$$('.card .row button')[1].click();
+  await flush();
+  assert.deepEqual(w.calls.find(c => c.op === 'cancel'), {op: 'cancel', actionId: 'a3'});
+  const form = w.$('.form-card form');
+  assert.equal(form.querySelector('textarea').value, 'Можно ли собаку?');
+  form.querySelector('textarea').value = 'Можно ли приходить в офис с собакой?';
+  submit(form);
+  await flush();
+  assert.deepEqual(w.calls.at(-1), {op: 'question-create', question: 'Можно ли приходить в офис с собакой?'});
+  assert.equal(w.$('.form-card .result').textContent, 'Вопрос передан наставнику.');
+});
+
+test('cards of other actions have no «Редактировать»', async () => {
+  const w = await mount({});
+  await w.open();
+  await w.send('оформи отгул');
+  w.lastStream().view({finished: true, mood: 'waiting', card: pendingCard('a4')});
+  assert.deepEqual([...w.$$('.card .row button')].map(b => b.textContent), ['Подтвердить', 'Отменить']);
+});

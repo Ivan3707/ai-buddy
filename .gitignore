@@ -33,3 +33,12 @@ AGENTS.md
 CLAUDE.md
 /load-results/
 /load-results-*/
+
+# team-only presentation materials: video script, speaker notes, demo phrases, review copy of the slides
+docs/demo-scenarios.md
+docs/presentation/video-script.md
+docs/presentation/speaker-notes.md
+docs/presentation/slides-notes.md
+docs/presentation/demo-scenarios.md
+docs/presentation/AI-buddy-review.pdf
+docs/presentation/original-*.pdf

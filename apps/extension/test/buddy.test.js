@@ -77,6 +77,8 @@ test('view model: display strings only, unsafe sources dropped, feedback id only
   }})));
   assert.equal(done.card.pending, false);
   assert.equal(done.card.result, 'Выполнено.');
+  assert.deepEqual(done.card.edit, {question: 'Q'});
+  assert.equal(view.card.edit, undefined); // only a question to the mentor is editable
 });
 
 test('drag position is clamped to the viewport', () => {

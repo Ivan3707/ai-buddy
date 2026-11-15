@@ -5,7 +5,7 @@
 AI-Buddy помогает стажёру пройти адаптацию. Он показывает план, этапы и следующий шаг, отвечает на рабочие вопросы по базе знаний со ссылками на источники и сам оформляет заявки через имитации корпоративных сервисов. Результат каждой заявки (номер и статус) сохраняется и показывается в интерфейсе. Наставнику помощник снимает рутину, руководителю показывает прогресс команды.
 
 - **Видео «от запроса до результата»:** _ссылка добавляется при сдаче_ (дублируется на первом слайде презентации).
-- **Презентация:** [`docs/presentation/AI-buddy.pdf`](docs/presentation/AI-buddy.pdf). Версия с исходными слайдами и пометками «изменено / заменено»: [`AI-buddy-review.pdf`](docs/presentation/AI-buddy-review.pdf); исходник — `docs/presentation/slides/index.html`, сборка `node docs/presentation/build.cjs`.
+- **Презентация:** [`docs/presentation/AI-buddy.pdf`](docs/presentation/AI-buddy.pdf); исходник — `docs/presentation/slides/index.html`, сборка `node docs/presentation/build.cjs`.
 - **Развёрнутый стенд:** <http://94.41.19.241:8088> (там же скачивается расширение Chrome: `/install-extension.html`).
 - **Для AI-агентов** (Claude Code, Codex, Cursor): [`README_FOR_AI.md`](README_FOR_AI.md).
 
@@ -119,9 +119,9 @@ Go-тесты используют отдельный временный Postgre
 | Часть | Набор | Покрытие строк | HTML / LCOV |
 |---|---|---|---|
 | Go backend | unit, интеграция с PostgreSQL, E2E HTTP | **82,4%** (statements, `-coverpkg=./...`) | `coverage/go/index.html` |
-| Python AI | 125 тестов pytest | **99,8%** | `coverage/ai/index.html`, `coverage.xml` |
+| Python AI | 135 тестов pytest | **99,4%** | `coverage/ai/index.html`, `coverage.xml` |
 | Web (React) | 137 тестов Vitest + Testing Library | **85,3%** | `coverage/web/index.html`, `lcov.info` |
-| Chrome-расширение | 142 теста node:test + jsdom | **99,9%** | `coverage/extension/lcov.info` |
+| Chrome-расширение | 144 теста node:test + jsdom | **99,8%** | `coverage/extension/lcov.info` |
 | API-клиент | node:test | **90,6%** | `coverage/client.lcov.info` |
 
 Как мерили и что не входит в знаменатель: [`docs/testing/coverage-report.md`](docs/testing/coverage-report.md). Качество ответов модели проверяется отдельно, через eval: [`apps/ai/eval/`](apps/ai/eval/README.md).
@@ -169,7 +169,7 @@ Chrome MV3 ─────────┘        │                       └�
 | [`contracts/`](contracts/) | OpenAPI backend и AI, проверка `python scripts/check_contracts.py` |
 | [`docs/architecture.md`](docs/architecture.md), [`docs/deployment-avito.md`](docs/deployment-avito.md) | архитектура и внедрение |
 | [`docs/manual-testing.md`](docs/manual-testing.md) | ручная проверка всех сценариев |
-| [`docs/presentation/`](docs/presentation/) | презентация, сценарий видео, ответы на вопросы жюри |
+| [`docs/presentation/`](docs/presentation/) | презентация (PDF и исходник слайдов) |
 
 ## Структура репозитория
 

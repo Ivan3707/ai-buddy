@@ -73,11 +73,11 @@
   position: absolute;
   left: calc(40 * var(--u));
   top: calc(274 * var(--u));
-  width: calc(168 * var(--u));
+  width: auto;
   height: calc(82 * var(--u));
   margin: 0;
   font-family: 'Aeroport', var(--font);
-  font-size: calc(60 * var(--u));
+  font-size: calc(60 * var(--u)); /* «Вход» из макета: 60 px при ширине 1920, около 40 px на ноутбуке */
   line-height: calc(82 * var(--u));
   letter-spacing: 0;
   font-weight: 700;
@@ -96,8 +96,8 @@
   align-items: flex-start;
   gap: calc(4 * var(--u));
   font-family: 'Montserrat Variable', 'Montserrat', var(--font);
-  font-size: calc(36 * var(--u));
-  line-height: calc(44 * var(--u));
+  font-size: max(13px, calc(18 * var(--u))); /* подписи полей вдвое меньше макетных 36 */
+  line-height: max(18px, calc(26 * var(--u)));
   font-weight: 300;
 }
 .auth-field:nth-of-type(1) { top: 0; }

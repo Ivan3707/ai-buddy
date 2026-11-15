@@ -94,15 +94,15 @@ function AccountsTab({ token }: { token: string }) {
               <div className="admin-cell" data-label="Наставник">{a.buddy_name || '—'}</div>
               <div className="admin-cell" data-label="Руководитель">{a.teamlead_name || '—'}</div>
               <div className="admin-cell" data-label="Создан">{date(a.created_at)}</div>
-              <div className="admin-cell" data-label="Последний вход">
-                {date(a.last_login_at)}
+              <div className="admin-cell" data-label="Последний вход">{date(a.last_login_at)}</div>
+              <div className="admin-cell" data-label="Сессии"><span className={`chip${a.active_sessions ? ' completed' : ''}`}>{a.active_sessions}</span></div>
+              <div className="admin-cell admin-action">
                 {a.role === 'intern' && (
                   <button className="pill pill-light pill-sm" disabled={busyId === a.id} onClick={() => void restartOnboarding(a)}>
                     {busyId === a.id ? 'Запускаем…' : 'Запустить онбординг'}
                   </button>
                 )}
               </div>
-              <div className="admin-cell" data-label="Сессии"><span className={`chip${a.active_sessions ? ' completed' : ''}`}>{a.active_sessions}</span></div>
             </li>
           );
         })}
