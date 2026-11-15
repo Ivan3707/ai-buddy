@@ -71,7 +71,8 @@ func TestRunClosesStartupWhenHTTPPortUnavailable(t *testing.T) {
 	t.Setenv("DB_PORT", u.Port())
 	t.Setenv("DB_USER", u.User.Username())
 	t.Setenv("DB_NAME", name)
-	t.Setenv("DB_PASSWORD", "")
+	password, _ := u.User.Password()
+	t.Setenv("DB_PASSWORD", password)
 	t.Setenv("DB_SSLMODE", "disable")
 	t.Setenv("JWT_SECRET", "test-secret-that-is-at-least-32-bytes-long")
 	if err := Run(); err == nil || !strings.Contains(err.Error(), "HTTP server") {
