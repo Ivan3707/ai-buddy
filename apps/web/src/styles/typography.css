@@ -161,7 +161,7 @@
 .cal-title, .cal-month, .cal-today h2, .note-modal-head h2, .tm-head h2,
 .onb-welcome-head h2, .onb-welcome-body h3, .onb-bubble h3, .portal-logo, .portal-card h1,
 .drawer-header h2, .person-card h3, .fact-card h3, .progress-card h3, .about-card h3,
-.assistant-body label, .staff-card h2, .auth-title, .rating-field, .sidebar .brand, .nav-link {
+.assistant-body label, .staff-card h2, .rating-field, .sidebar .brand, .nav-link {
   font-size: 20px;
 }
 .feedback .pill { font-size: 20px; }

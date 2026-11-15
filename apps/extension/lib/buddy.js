@@ -72,6 +72,9 @@ export function toView(state) {
       .map(source => ({id: source.id, title: source.title, url: source.url, snippet: source.snippet || '', ...(source.refs ? {refs: source.refs} : {})})),
     card: action ? {
       id: action.id,
+      type: action.type,
+      // a question to the mentor can be edited before sending (the chat swaps the card for a form)
+      ...(action.type === 'mentor_question' ? {edit: {question: String(action.params?.question || '')}} : {}),
       title: actionTitle(action.type),
       summary: action.summary,
       rows: describeParams(action.type, action.params),

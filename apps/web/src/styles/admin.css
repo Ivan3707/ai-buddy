@@ -19,7 +19,7 @@
 .admin-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .admin-row {
   display: grid;
-  grid-template-columns: 1.6fr 0.9fr 0.8fr 1.1fr 1.1fr 1.1fr 1fr 1fr 0.5fr;
+  grid-template-columns: minmax(150px, 1.6fr) minmax(104px, 0.9fr) 0.7fr 1.1fr 1fr 1fr 0.9fr 0.9fr 0.4fr 180px;
   gap: 10px;
   align-items: center;
   padding: 10px 16px;
@@ -28,6 +28,10 @@
   font-size: 13px;
 }
 .admin-cell { min-width: 0; overflow-wrap: anywhere; }
+/* «Запустить онбординг»: своя колонка, кнопка в одну строку */
+.admin-action { display: flex; justify-content: flex-end; }
+.admin-row .chip { white-space: nowrap; }
+.admin-action .pill { white-space: nowrap; padding: 0 16px; }
 .admin-main { display: grid; gap: 2px; font-size: 14px; }
 .admin-main small { overflow-wrap: anywhere; }
 
@@ -70,6 +74,8 @@
   .admin-actions { justify-content: flex-start; }
   .admin-row { grid-template-columns: 1fr 1fr; padding: 14px; }
   .admin-main { grid-column: 1 / -1; }
+  .admin-action { grid-column: 1 / -1; justify-content: flex-start; }
+  .admin-action:empty { display: none; }
   .admin-cell[data-label]::before { content: attr(data-label); display: block; font-size: 11px; color: var(--text-muted); }
   .admin-facts, .admin-facts-wide { grid-template-columns: 1fr; }
   .admin-samples li { flex-direction: column; align-items: stretch; }

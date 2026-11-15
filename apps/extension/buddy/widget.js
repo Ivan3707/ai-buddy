@@ -640,12 +640,23 @@
       if (!c.pending) { result.textContent = c.result; box.append(result); return box; }
       const row = el('div', 'row');
       const ok = row.appendChild(el('button', 'primary', 'Подтвердить'));
+      const edit = c.edit ? row.appendChild(el('button', '', 'Редактировать')) : null;
       const no = row.appendChild(el('button', '', 'Отменить'));
       ok.type = no.type = 'button';
       box.append(row, result);
+      if (edit) {
+        edit.type = 'button';
+        // the proposal is cancelled and the same question opens in a form; the form sends it after the user's edits
+        edit.onclick = async () => {
+          ok.disabled = no.disabled = edit.disabled = true;
+          await env.call({op: 'cancel', actionId: c.id});
+          box.replaceWith(formCard({type: 'mentor_question', prefill: c.edit}));
+          setMood('idle');
+        };
+      }
       setMood('waiting');
       const run = async op => {
-        ok.disabled = no.disabled = true;
+        ok.disabled = no.disabled = true; if (edit) edit.disabled = true;
         result.textContent = op === 'confirm' ? 'Отправляю заявку…' : 'Отменяю…';
         result.dataset.tone = 'muted';
         const outcome = await env.call({op, actionId: c.id});
@@ -653,7 +664,7 @@
         result.dataset.tone = outcome?.tone || 'error';
         const link = portalLink(outcome?.requestId);
         if (link) result.after(link);
-        if (outcome?.retryable) { ok.disabled = no.disabled = false; return; }
+        if (outcome?.retryable) { ok.disabled = no.disabled = false; if (edit) edit.disabled = false; return; }
         row.remove();
         setMood(outcome?.tone === 'success' ? 'happy' : outcome?.tone === 'error' ? 'sad' : 'idle', 2500);
       };

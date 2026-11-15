@@ -80,7 +80,7 @@
 /* ───────── Состояния блока задачи (taskblock.png, «Активно блок», «Все блоки наведение») ─────────
  * По умолчанию: белая карточка 279×234, радиус 32, отступы 20/23/20/20, зазор 10.
  * Наведение (все блоки): кружок справа светлеет, значков не появляется.
- * Нажатие (только «Активно»): карточка розовая, кружок тёмный.
+ * Нажатие и перетаскивание: карточка остаётся белой.
  * «Завершено»: белая карточка, как в остальных колонках, с розовым кружком и белой галочкой. */
 .kanban-card { box-sizing: border-box; min-height: 234px; gap: 10px; padding: 20px 23px 20px 20px; border-radius: 32px; }
 .kanban-card h4 { color: #252525; }
@@ -96,14 +96,9 @@
 /* «Задачи»: доступная к старту карточка белая (как в «Активно»), заблокированные ниже — серые с замком */
 .kanban-card.is-unavailable.is-available { background: #fff; }
 
-.kanban-card.is-active:active, .kanban-card.is-active.is-dragging { background: var(--pink); }
-.kanban-card.is-active:active .kanban-card-stage, .kanban-card.is-active:active .kanban-card-time,
-.kanban-card.is-active.is-dragging .kanban-card-stage, .kanban-card.is-active.is-dragging .kanban-card-time { color: rgba(255, 255, 255, 0.7); }
-.kanban-card.is-active:active p, .kanban-card.is-active.is-dragging p { color: rgba(255, 255, 255, 0.9); }
-.kanban-card.is-active:active h4, .kanban-card.is-active.is-dragging h4 { color: #252525; }
-.kanban-card.is-active:active button.kanban-card-state, .kanban-card.is-active.is-dragging button.kanban-card-state,
-.kanban-card.is-active:active button.kanban-card-state:hover:not(:disabled) { background: #252525; opacity: 1; }
-.kanban-card.is-active:active .kanban-card-state svg path, .kanban-card.is-active.is-dragging .kanban-card-state svg path { fill: #fff; }
+/* Нажатие и перетаскивание: карточка остаётся белой. Карточки в колонке не сжимаются: когда их больше,
+ * чем помещается по высоте, колонка прокручивается (иначе в Safari текст карточек наезжал друг на друга). */
+.kanban-slot, .kanban-card > * { flex-shrink: 0; }
 
 /* кнопки на карточке: «Подробнее» и переход на следующий этап (специфичность выше legacy-стилей button) */
 .kanban .kanban-card-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px; }
