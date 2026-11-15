@@ -30,7 +30,7 @@ All data is synthetic. Knowledge base documents are demo instructions, never rea
 | `apps/backend/cmd/seed-demo` | demo scenario through real services (progress, reviews, requests, questions, notes, events); runs once |
 | `apps/backend/docker-init.sh` | Compose service `init`: migrations → catalog → HR sync → demo seed |
 | `apps/ai/app` | FastAPI: `agent.py` (turn loop, SSE), `prompts.py`, `retrieval.py` (BM25 + e5-small hybrid), `forms.py`, `mentor.py` (AI drafts), `hint.py`, `brief.py`, `kb_lint.py`, `gaps.py`, `pii.py`, `llm.py` (OpenAI-compatible + mock + fallback) |
-| `apps/ai/eval` | labelled eval set (`dataset.jsonl` 67, `holdout.jsonl` 30), runner, reports |
+| `apps/ai/eval` | labelled eval set (`dataset.jsonl` 68, `holdout.jsonl` 30), runner, reports |
 | `apps/web/src` | React 19 + TS: `pages/`, `components/`, `bot/` (site integration of the widget), `lib/` |
 | `apps/extension` | MV3: `buddy/widget.js` (shared chat widget, imported by the web via alias `@buddy`), `lib/gateway.js` (backend calls), `background.js` (SSO, streaming port) |
 | `packages/client` | shared JS API client |

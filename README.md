@@ -67,7 +67,7 @@ LLM_EXTRA_BODY={"reasoning":{"effort":"low"}}
 | OpenAI | `https://api.openai.com/v1` | `gpt-6.1-terra`, `LLM_EXTRA_BODY={"reasoning_effort":"low"}` |
 | Локально через Ollama | `http://host.docker.internal:11434/v1` | любая модель с tool calling; GPU не обязателен, но без него медленно |
 
-Выбор модели обоснован прогоном eval на 67 + 30 размеченных кейсах: [`apps/ai/eval/README.md`](apps/ai/eval/README.md), раздел «Сравнение моделей». Остальные параметры (резервная модель, лимиты, кэш, RAG) описаны с комментариями в [`.env.example`](.env.example).
+Выбор модели обоснован сравнением пяти моделей на 68 + 30 размеченных кейсах: [`apps/ai/eval/README.md`](apps/ai/eval/README.md), раздел «Сравнение моделей». Остальные параметры (резервная модель, лимиты, кэш, RAG) описаны с комментариями в [`.env.example`](.env.example).
 
 ## Порядок проверки (≈10 минут)
 
