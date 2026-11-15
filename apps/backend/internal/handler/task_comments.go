@@ -71,7 +71,7 @@ func optionalUUID(raw string) (*uuid.UUID, bool) {
 }
 
 // RegisterTaskCommentRoutes: comments (with attachments) of an intern and their mentor under one task.
-func RegisterTaskCommentRoutes(mux *http.ServeMux, auth func(http.Handler) http.Handler, s *service.TaskCommentService) {
+func RegisterTaskCommentRoutes(mux *http.ServeMux, auth func(http.Handler) http.Handler, s TaskComments) {
 	route := func(pattern string, fn func(http.ResponseWriter, *http.Request, *model.User)) {
 		mux.Handle(pattern, auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			user, ok := middleware.CurrentUser(r.Context())

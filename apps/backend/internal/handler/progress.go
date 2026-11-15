@@ -8,6 +8,7 @@ import (
 	"github.com/nvkmaksim/ai-buddy/backend/internal/middleware"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/model"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/repository"
+	"github.com/nvkmaksim/ai-buddy/backend/internal/service"
 )
 
 type progressSummary struct {
@@ -39,7 +40,7 @@ func (d Dependencies) progressHandler(staff bool) http.HandlerFunc {
 				send(w, 500, map[string]string{"error": "internal server error"})
 				return
 			}
-			if target.Role != model.RoleIntern || (actor.Role == model.RoleBuddy && (target.BuddyID == nil || *target.BuddyID != actor.ID)) || (actor.Role == model.RoleTeamlead && (target.TeamleadID == nil || *target.TeamleadID != actor.ID)) {
+			if !service.StaffCanSeeIntern(actor, target) {
 				send(w, 404, map[string]string{"error": "intern not found"})
 				return
 			}
@@ -49,22 +50,15 @@ func (d Dependencies) progressHandler(staff bool) http.HandlerFunc {
 			writeServiceError(w, err)
 			return
 		}
+		// Buddy and teamlead see the same data: both checklists and the overall counts.
 		total := lists.Common.TotalItems + lists.Professional.TotalItems
 		done := lists.Common.CompletedItems + lists.Professional.CompletedItems
-		if staff && actor.Role == model.RoleTeamlead {
-			total = lists.Professional.TotalItems
-			done = lists.Professional.CompletedItems
-		}
 		pct := float64(0)
 		if total > 0 {
 			pct = float64(done) * 100 / float64(total)
 		}
 		common := toChecklistDTO(lists.Common)
-		out := progressSummary{UserID: targetID.String(), TotalItems: total, CompletedItems: done, CompletionPercent: pct, Common: &common, Professional: toChecklistDTO(lists.Professional)}
-		if staff && actor.Role == model.RoleTeamlead {
-			out.Common = nil
-		}
-		send(w, 200, out)
+		send(w, 200, progressSummary{UserID: targetID.String(), TotalItems: total, CompletedItems: done, CompletionPercent: pct, Common: &common, Professional: toChecklistDTO(lists.Professional)})
 	}
 }
 

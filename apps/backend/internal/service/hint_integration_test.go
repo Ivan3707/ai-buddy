@@ -35,7 +35,7 @@ func TestHintEnqueueAndClaimOnlyOnceIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _, _ = db.ExecContext(context.Background(), `DELETE FROM users WHERE id=$1`, buddy.ID) })
-	intern, err := NewUserService(db).CreateIntern(ctx, "hint-"+uuid.NewString()+"@example.com", "hash", model.ProfessionBackend, buddy.ID)
+	intern, err := createTestIntern(ctx, db, "hint-"+uuid.NewString()+"@example.com", "hash", model.ProfessionBackend, buddy.ID)
 	if err != nil {
 		t.Fatal(err)
 	}

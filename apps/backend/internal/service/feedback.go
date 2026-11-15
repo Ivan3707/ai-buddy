@@ -111,7 +111,7 @@ func (s *FeedbackService) Create(ctx context.Context, userID, checklistID uuid.U
 	err = tx.QueryRowContext(ctx, `SELECT c.type,COUNT(i.id),COUNT(p.id),COUNT(p.id) FILTER (WHERE (i.requires_review AND p.status='verified') OR (NOT i.requires_review AND p.status IN ('completed','verified')))
  FROM checklists c JOIN checklist_items i ON i.checklist_id=c.id
  LEFT JOIN user_checklist_progress p ON p.checklist_item_id=i.id AND p.user_id=$2
-		WHERE c.id=$1 AND (i.assigned_user_id IS NULL OR i.assigned_user_id=$2) GROUP BY c.type`, checklistID, userID).Scan(&typ, &total, &owned, &done)
+		WHERE c.id=$1 AND (i.assigned_user_id IS NULL OR i.assigned_user_id=$2) AND p.hidden_at IS NULL GROUP BY c.type`, checklistID, userID).Scan(&typ, &total, &owned, &done)
 	if errors.Is(err, sql.ErrNoRows) || owned == 0 {
 		return nil, ErrFeedbackNotFound
 	}

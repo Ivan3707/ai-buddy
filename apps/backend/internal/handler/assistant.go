@@ -21,7 +21,7 @@ import (
 // RegisterAssistantRoutes adds the AI assistant API (contracts/backend.openapi.json): streaming chat and brief,
 // history, feedback, confirmed actions, mock corporate requests and the buddy side (escalated questions,
 // AI draft, knowledge gaps, KB lint, metrics).
-func RegisterAssistantRoutes(mux *http.ServeMux, auth func(http.Handler) http.Handler, s *service.AssistantService) {
+func RegisterAssistantRoutes(mux *http.ServeMux, auth func(http.Handler) http.Handler, s Assistant) {
 	h := assistantHandler{s: s}
 	route := func(pattern string, fn func(http.ResponseWriter, *http.Request, *model.User)) {
 		mux.Handle(pattern, auth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -55,7 +55,7 @@ func RegisterAssistantRoutes(mux *http.ServeMux, auth func(http.Handler) http.Ha
 	route("GET /api/metrics/chat", h.metrics)
 }
 
-type assistantHandler struct{ s *service.AssistantService }
+type assistantHandler struct{ s Assistant }
 
 func assistantError(w http.ResponseWriter, err error) {
 	switch {

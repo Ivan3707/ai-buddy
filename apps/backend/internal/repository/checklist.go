@@ -159,11 +159,17 @@ func (r *ChecklistRepository) GetItems(
 	return r.queryItems(ctx, query, checklistID)
 }
 
+// GetItemsForUser returns the intern's own view of a checklist: shared items plus the intern's personal
+// items, without the items the teamlead removed (hidden_at) and with the teamlead's overrides applied
+// (migration 00007). Every progress transition reads items through this method, so a removed item is
+// also skipped when the next task is opened.
 func (r *ChecklistRepository) GetItemsForUser(ctx context.Context, checklistID, userID uuid.UUID) ([]model.ChecklistItem, error) {
-	query := `SELECT i.id,i.checklist_id,i.stage_id,i.title,i.description,i.expected_result,
-	 i.requires_review,i.estimated_minutes,i.due_at,i.assigned_user_id,COALESCE(p.position,i.position),i.created_at
+	query := `SELECT i.id,i.checklist_id,i.stage_id,COALESCE(p.title_override,i.title),
+	 COALESCE(p.description_override,i.description),COALESCE(p.expected_result_override,i.expected_result),
+	 i.requires_review,COALESCE(p.estimated_minutes_override,i.estimated_minutes),COALESCE(p.due_at_override,i.due_at),
+	 i.assigned_user_id,COALESCE(p.position,i.position),i.created_at
 	 FROM checklist_items i LEFT JOIN user_checklist_progress p ON p.checklist_item_id=i.id AND p.user_id=$2
-	 WHERE i.checklist_id=$1 AND (i.assigned_user_id IS NULL OR i.assigned_user_id=$2)
+	 WHERE i.checklist_id=$1 AND (i.assigned_user_id IS NULL OR i.assigned_user_id=$2) AND p.hidden_at IS NULL
 	 ORDER BY COALESCE(p.position,i.position),i.id`
 	return r.queryItems(ctx, query, checklistID, userID)
 }

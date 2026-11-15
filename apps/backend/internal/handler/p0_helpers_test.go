@@ -39,8 +39,8 @@ func openP0TestDB(t *testing.T) (*sql.DB, context.Context) {
 	if name != "ai_buddy_test" && !strings.HasPrefix(name, "ai_buddy_verify_") {
 		t.Fatalf("unsafe test database %q", name)
 	}
-	if err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version_id),0) FROM goose_db_version WHERE is_applied`).Scan(&version); err != nil || version != 5 {
-		t.Fatalf("expected Goose v5: version=%d err=%v", version, err)
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(MAX(version_id),0) FROM goose_db_version WHERE is_applied`).Scan(&version); err != nil || version != 7 {
+		t.Fatalf("expected Goose v6: version=%d err=%v", version, err)
 	}
 	return db, ctx
 }

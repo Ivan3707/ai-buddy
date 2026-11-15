@@ -398,9 +398,22 @@ func TestAssistantFlowWithPostgres(t *testing.T) {
 		t.Fatalf("draft without user context")
 	}
 	expect(buddy, http.MethodGet, "/api/buddy/questions/"+uuid.NewString()+"/draft", nil, http.StatusNotFound)
+	// a question older than the 200 newest ones is still found by id (the list limit is for the list only)
+	if _, err := db.ExecContext(ctx, `INSERT INTO mentor_questions (intern_id, buddy_id, question, created_at)
+		SELECT $1, $2, 'filler ' || g, now() + g * interval '1 second' FROM generate_series(1, 210) g`, intern.ID, buddy.ID); err != nil {
+		t.Fatal(err)
+	}
+	expect(buddy, http.MethodGet, "/api/buddy/questions/"+qid+"/draft", nil, http.StatusOK)
 	expect(buddy, http.MethodPost, "/api/buddy/questions/"+qid+"/answer", map[string]string{"answer": " "}, http.StatusBadRequest)
 	expect(buddy, http.MethodPost, "/api/buddy/questions/"+qid+"/answer", map[string]string{"answer": "Датасет в S3"}, http.StatusOK)
 	expect(buddy, http.MethodPost, "/api/buddy/questions/"+qid+"/answer", map[string]string{"answer": "ещё"}, http.StatusConflict)
+	var delivered int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM chat_messages WHERE finish_reason = 'mentor_answer' AND content LIKE '%Датасет в S3%'`).Scan(&delivered); err != nil || delivered != 1 {
+		t.Fatalf("mentor answer must reach the chat exactly once: %d, %v", delivered, err)
+	}
+	if _, err := db.ExecContext(ctx, `DELETE FROM mentor_questions WHERE question LIKE 'filler %'`); err != nil {
+		t.Fatal(err)
+	}
 	// the teamlead does not see interns' questions: they are the mentor's
 	expect(lead, http.MethodGet, "/api/buddy/questions", nil, http.StatusForbidden)
 	expect(lead, http.MethodPost, "/api/buddy/questions/"+qid+"/answer", map[string]string{"answer": "ещё"}, http.StatusForbidden)

@@ -252,7 +252,7 @@ func (r *SubmissionRepository) ListPendingByBuddyID(
 		JOIN user_checklist_progress AS p ON p.id = s.progress_id
 		JOIN users AS u ON u.id = p.user_id
 		JOIN checklist_items AS ci ON ci.id = p.checklist_item_id
-		WHERE s.status = 'pending' AND u.buddy_id = $1
+		WHERE s.status = 'pending' AND u.buddy_id = $1 AND p.hidden_at IS NULL
 		ORDER BY s.submitted_at ASC, s.id ASC
 	`
 
@@ -377,6 +377,44 @@ func (r *SubmissionRepository) Review(
 	}
 
 	return affected == 1, nil
+}
+
+// ListReturnedForRework returns the intern's items whose latest submission was rejected by the buddy and
+// not resubmitted yet (the item is active again), with the rejection comment. Removed items are skipped.
+func (r *SubmissionRepository) ListReturnedForRework(
+	ctx context.Context,
+	userID uuid.UUID,
+) (map[uuid.UUID]string, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT p.checklist_item_id, COALESCE(last.review_comment, '')
+		FROM user_checklist_progress AS p
+		JOIN LATERAL (
+			SELECT s.status, s.review_comment
+			FROM checklist_item_submissions AS s
+			WHERE s.progress_id = p.id
+			ORDER BY s.attempt_number DESC
+			LIMIT 1
+		) AS last ON true
+		WHERE p.user_id = $1 AND p.status = 'active' AND p.hidden_at IS NULL
+		  AND last.status = 'rejected'
+	`, userID)
+	if err != nil {
+		return nil, fmt.Errorf("list returned for rework: %w", err)
+	}
+	defer rows.Close()
+	result := make(map[uuid.UUID]string)
+	for rows.Next() {
+		var itemID uuid.UUID
+		var comment string
+		if err := rows.Scan(&itemID, &comment); err != nil {
+			return nil, fmt.Errorf("scan returned for rework: %w", err)
+		}
+		result[itemID] = comment
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate returned for rework: %w", err)
+	}
+	return result, nil
 }
 
 type submissionScanner interface {

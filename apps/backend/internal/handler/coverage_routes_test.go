@@ -139,14 +139,13 @@ type personalCreateStub struct {
 	calls         int
 	due           *time.Time
 	actor, intern uuid.UUID
+	checklistType model.ChecklistType
 }
 
-func (s *personalCreateStub) Create(_ context.Context, actor, intern uuid.UUID, _ int, _, _, _ string, _ int, _ bool, due ...*time.Time) (uuid.UUID, error) {
+func (s *personalCreateStub) CreateInChecklist(_ context.Context, actor, intern uuid.UUID, checklistType model.ChecklistType, _ int, _, _, _ string, _ int, _ bool, due *time.Time) (uuid.UUID, error) {
 	s.calls++
-	s.actor, s.intern = actor, intern
-	if len(due) > 0 {
-		s.due = due[0]
-	}
+	s.actor, s.intern, s.checklistType = actor, intern, checklistType
+	s.due = due
 	return uuid.New(), s.err
 }
 
@@ -177,8 +176,18 @@ func TestCreatePersonalTaskHTTPValidationAndServiceErrors(t *testing.T) {
 	}
 	stub.err = nil
 	w := coverageRequest(t, router, token, http.MethodPost, path, strings.TrimSuffix(valid, "}")+`,"due_at":"2027-01-02T03:04:05Z"}`, 201)
-	if stub.actor != actor.ID || stub.intern != id || stub.due == nil || stub.due.UTC().Format(time.RFC3339) != "2027-01-02T03:04:05Z" {
-		t.Fatalf("identity/due mismatch: %+v", stub)
+	if stub.actor != actor.ID || stub.intern != id || stub.due == nil || stub.due.UTC().Format(time.RFC3339) != "2027-01-02T03:04:05Z" ||
+		stub.checklistType != model.ChecklistTypeProfessional {
+		t.Fatalf("identity/due/default checklist mismatch: %+v", stub)
+	}
+	coverageRequest(t, router, token, http.MethodPost, path, strings.TrimSuffix(valid, "}")+`,"checklist_type":"common"}`, 201)
+	if stub.checklistType != model.ChecklistTypeCommon {
+		t.Fatalf("common checklist not passed: %s", stub.checklistType)
+	}
+	calls := stub.calls
+	coverageRequest(t, router, token, http.MethodPost, path, strings.TrimSuffix(valid, "}")+`,"checklist_type":"other"}`, 400)
+	if stub.calls != calls {
+		t.Fatal("invalid checklist_type reached the service")
 	}
 	var result struct {
 		ID uuid.UUID `json:"id"`

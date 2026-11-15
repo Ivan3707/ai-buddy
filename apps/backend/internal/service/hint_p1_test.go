@@ -20,7 +20,7 @@ func TestHintWorkerRetryAndAttemptLimit(t *testing.T) {
 		wantTry   int
 	}{
 		{"external service recovers", 2, "Recovered hint", 2},
-		{"fallback after third failure", 0, fallbackHint, 3},
+		{"fallback after the last allowed failure", 0, fallbackHint, repository.HintMaxAttempts},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db, ctx := openChecklistTestDB(t)

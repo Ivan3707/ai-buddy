@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -50,27 +52,32 @@ func Run() error {
 	hints := service.NewHintService(repository.NewHintRepository(db), env("AI_URL", "http://127.0.0.1:8001"))
 
 	progress := service.NewProgressService(db)
+	personalTasks := service.NewPersonalTaskService(db)
 	userService := service.NewUserService(db)
+	admin := service.NewAdminService(db, env("AI_URL", "http://127.0.0.1:8001"), hints)
+	admin.OpenForAll = os.Getenv("ADMIN_OPEN_FOR_ALL") == "1"
 	deps := handler.Dependencies{
-		Feedback:      service.NewFeedbackService(db, service.MockAnalytics{DB: db, Unavailable: os.Getenv("ANALYTICS_MOCK_UNAVAILABLE") == "1"}),
-		Auth:          auth,
-		Sessions:      auth,
-		SessionCheck:  sessionRepo,
-		PersonalTasks: service.NewPersonalTaskService(db),
-		Hints:         hints,
-		Personal:      service.NewPersonalService(repository.NewPersonalRepository(db)),
-		Corporate:     service.NewCorporateService(db, directory),
-		Users:         users,
-		JWT:           jwtService,
-		Team:          userService,
-		Checklists:    service.NewChecklistService(db),
-		Items:         progress,
-		Submissions:   progress,
-		Assistant:     service.NewAssistantService(db, env("AI_URL", "http://127.0.0.1:8001")),
-		TaskComments:  service.NewTaskCommentService(db),
-		Admin:         service.NewAdminService(db, env("AI_URL", "http://127.0.0.1:8001"), hints),
+		Ready:            func(ctx context.Context) error { return checkReady(ctx, db) },
+		Feedback:         service.NewFeedbackService(db, service.MockAnalytics{DB: db, Unavailable: os.Getenv("ANALYTICS_MOCK_UNAVAILABLE") == "1"}),
+		Auth:             auth,
+		Sessions:         auth,
+		SessionCheck:     sessionRepo,
+		PersonalTasks:    personalTasks,
+		ChecklistEditor:  personalTasks,
+		StaffSubmissions: progress,
+		Hints:            hints,
+		Personal:         service.NewPersonalService(repository.NewPersonalRepository(db)),
+		Corporate:        service.NewCorporateService(db, directory),
+		Users:            users,
+		JWT:              jwtService,
+		Team:             userService,
+		Checklists:       service.NewChecklistService(db),
+		Items:            progress,
+		Submissions:      progress,
+		Assistant:        service.NewAssistantService(db, env("AI_URL", "http://127.0.0.1:8001")),
+		TaskComments:     service.NewTaskCommentService(db),
+		Admin:            admin,
 	}
-	deps.Admin.OpenForAll = os.Getenv("ADMIN_OPEN_FOR_ALL") == "1"
 	deps.Corporate.Unavailable = os.Getenv("CORPORATE_MOCK_UNAVAILABLE") == "1"
 	defer db.Close()
 	workerCtx, cancelWorker := context.WithCancel(context.Background())
@@ -95,5 +102,19 @@ func Run() error {
 		return fmt.Errorf("HTTP server: %w", err)
 	}
 
+	return nil
+}
+
+// checkReady: без миграций и загруженного каталога пользовательские API бесполезны, поэтому сервис не должен считаться готовым.
+func checkReady(ctx context.Context, db *sql.DB) error {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+	var items int
+	if err := db.QueryRowContext(ctx, `SELECT count(*) FROM checklist_items`).Scan(&items); err != nil {
+		return errors.New("database is not migrated")
+	}
+	if items == 0 {
+		return errors.New("checklist catalog is not loaded")
+	}
 	return nil
 }

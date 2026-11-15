@@ -40,10 +40,9 @@ func TestPersonalTaskInsertAroundActiveAndCompleted(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _, _ = db.ExecContext(context.Background(), `DELETE FROM users WHERE id=$1`, teamlead.ID) })
-	svc := NewUserService(db)
 	interns := make([]*model.User, 2)
 	for i := range interns {
-		interns[i], err = svc.CreateIntern(ctx, "intern-"+uuid.NewString()+"@example.com", "hash", model.ProfessionBackend, buddy.ID)
+		interns[i], err = createTestIntern(ctx, db, "intern-"+uuid.NewString()+"@example.com", "hash", model.ProfessionBackend, buddy.ID)
 		if err != nil {
 			t.Fatal(err)
 		}

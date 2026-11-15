@@ -26,8 +26,9 @@ func NewHintRepository(db *sql.DB) *HintRepository { return &HintRepository{db} 
 func (r *HintRepository) EnqueueDue(ctx context.Context) error {
 	_, err := r.db.ExecContext(ctx, `INSERT INTO task_hints(progress_id)
  SELECT p.id FROM user_checklist_progress p JOIN checklist_items i ON i.id=p.checklist_item_id
- WHERE p.status='active' AND p.activated_at IS NOT NULL AND i.estimated_minutes IS NOT NULL
- AND p.activated_at + i.estimated_minutes * interval '1 minute' < now()
+ WHERE p.status='active' AND p.hidden_at IS NULL AND p.activated_at IS NOT NULL
+ AND COALESCE(p.estimated_minutes_override,i.estimated_minutes) IS NOT NULL
+ AND p.activated_at + COALESCE(p.estimated_minutes_override,i.estimated_minutes) * interval '1 minute' < now()
  ON CONFLICT(progress_id) DO NOTHING`)
 	return err
 }
@@ -39,13 +40,14 @@ func (r *HintRepository) Claim(ctx context.Context) (*DueHint, error) {
 	defer tx.Rollback()
 	row := tx.QueryRowContext(ctx, `WITH due AS (
  SELECT h.id FROM task_hints h JOIN user_checklist_progress p ON p.id=h.progress_id
- WHERE p.status='active' AND ((h.status='pending' AND h.next_attempt_at<=now()) OR
+ WHERE p.status='active' AND p.hidden_at IS NULL AND ((h.status='pending' AND h.next_attempt_at<=now()) OR
  (h.status='processing' AND h.next_attempt_at<now()-interval '2 minutes'))
  ORDER BY h.next_attempt_at FOR UPDATE OF h SKIP LOCKED LIMIT 1)
  UPDATE task_hints h SET status='processing',next_attempt_at=now() FROM due,
  user_checklist_progress p,checklist_items i
  WHERE h.id=due.id AND p.id=h.progress_id AND i.id=p.checklist_item_id
- RETURNING h.id,i.title,i.description,COALESCE(i.expected_result,''),i.estimated_minutes`)
+ RETURNING h.id,COALESCE(p.title_override,i.title),COALESCE(p.description_override,i.description),
+ COALESCE(p.expected_result_override,i.expected_result,''),COALESCE(p.estimated_minutes_override,i.estimated_minutes)`)
 	var hint DueHint
 	err = row.Scan(&hint.ID, &hint.Title, &hint.Description, &hint.Expected, &hint.Minutes)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -64,12 +66,20 @@ func (r *HintRepository) Resolve(ctx context.Context, id uuid.UUID, text string,
 		_, err := r.db.ExecContext(ctx, `UPDATE task_hints SET text=$1,status='ready',attempts=attempts+1 WHERE id=$2 AND status='processing'`, text, id)
 		return err
 	}
+	// Expressions on the right-hand side see the old row, so attempts+1 is the
+	// number of the attempt that just failed. The last allowed failure stores
+	// the fallback text instead of scheduling one more call (P2-06).
 	_, err := r.db.ExecContext(ctx, `UPDATE task_hints SET attempts=attempts+1,
- status=CASE WHEN attempts>=2 THEN 'ready' ELSE 'pending' END,
- text=CASE WHEN attempts>=2 THEN $1 ELSE text END,
- next_attempt_at=now()+interval '1 minute' WHERE id=$2 AND status='processing'`, text, id)
+ status=CASE WHEN attempts+1>=$3 THEN 'ready' ELSE 'pending' END,
+ text=CASE WHEN attempts+1>=$3 THEN $1 ELSE text END,
+ next_attempt_at=now()+interval '1 minute' WHERE id=$2 AND status='processing'`, text, id, HintMaxAttempts)
 	return err
 }
+
+// HintMaxAttempts is the number of AI calls per hint before the fallback text
+// is used (documented as "до 2 попыток, затем запасной текст").
+const HintMaxAttempts = 2
+
 func (r *HintRepository) List(ctx context.Context, userID uuid.UUID) ([]Hint, error) {
 	rows, err := r.db.QueryContext(ctx, `SELECT h.id,p.checklist_item_id,h.text,h.read_at,h.created_at FROM task_hints h
  JOIN user_checklist_progress p ON p.id=h.progress_id WHERE p.user_id=$1 AND h.status='ready' ORDER BY h.created_at,h.id`, userID)

@@ -35,7 +35,7 @@ func TestSyncHRCLIIdempotentCredentials(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	var version int
-	if err := db.QueryRowContext(context.Background(), `SELECT COALESCE(MAX(version_id),0) FROM goose_db_version WHERE is_applied`).Scan(&version); err != nil || version != 5 {
+	if err := db.QueryRowContext(context.Background(), `SELECT COALESCE(MAX(version_id),0) FROM goose_db_version WHERE is_applied`).Scan(&version); err != nil || version != 7 {
 		t.Fatalf("test schema version=%d err=%v", version, err)
 	}
 	t.Setenv("DB_HOST", u.Hostname())

@@ -26,7 +26,7 @@ func requireIsolatedTestDatabase(t *testing.T, db *sql.DB, ctx context.Context) 
 	`).Scan(&version); err != nil {
 		t.Fatalf("read Goose version: %v", err)
 	}
-	if version != 5 {
-		t.Fatalf("test database must use Goose version 5, got %d", version)
+	if version != 7 {
+		t.Fatalf("test database must use Goose version 7, got %d", version)
 	}
 }

@@ -86,15 +86,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	creator := service.NewUserService(db)
-	birth := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
-	employed := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 	created := 0
 	for i := 1; i <= userCount; i++ {
 		email := fmt.Sprintf("load.intern.%03d@example.invalid", i)
 		user, err := users.GetByEmail(ctx, email)
 		if errors.Is(err, repository.ErrNotFound) {
-			user, err = creator.CreateInternWithAssignments(ctx, email, hash, model.ProfessionBackend, buddy.ID, lead.ID, birth, employed, "Load", fmt.Sprintf("Intern%03d", i), "", "Synthetic", "Load")
+			user, err = createLoadIntern(ctx, db, email, hash, buddy.ID, lead.ID, i)
 			if err == nil {
 				created++
 			}
@@ -147,6 +144,36 @@ func ensureStaff(ctx context.Context, users *repository.UserRepository, email st
 	}
 	if user.Role != role {
 		return nil, fmt.Errorf("unexpected role for %s", email)
+	}
+	return user, nil
+}
+
+// createLoadIntern inserts a synthetic load-test intern. Product accounts are
+// created only by HR sync; this tool runs only against ai_buddy_load and
+// reuses the shared progress initializer to keep the same invariants.
+func createLoadIntern(ctx context.Context, db *sql.DB, email, hash string, buddyID, leadID uuid.UUID, n int) (*model.User, error) {
+	profession := model.ProfessionBackend
+	birth := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+	employed := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	firstName, lastName, telegram, department, team := "Load", fmt.Sprintf("Intern%03d", n), "", "Synthetic", "Load"
+	user := &model.User{
+		Email: email, PasswordHash: hash, Role: model.RoleIntern, Profession: &profession,
+		BuddyID: &buddyID, TeamleadID: &leadID, BirthDate: &birth, EmployedSince: &employed,
+		FirstName: &firstName, LastName: &lastName, TelegramUsername: &telegram, Department: &department, Team: &team,
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	if err := repository.NewUserRepository(tx).Create(ctx, user); err != nil {
+		return nil, err
+	}
+	if err := service.InitializeInternProgress(ctx, tx, user.ID, profession); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
 	}
 	return user, nil
 }
