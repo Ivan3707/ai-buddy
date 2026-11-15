@@ -5,9 +5,9 @@
 | Часть | Команда | Тестов | Строки | Ветвления | Отчёт |
 |---|---|---|---|---|---|
 | Go backend | `docker compose -f compose.test.yaml run --rm go` | 14 пакетов: unit, интеграция с PostgreSQL, E2E HTTP | **82,4%** (statements) | — | `coverage/go/index.html`, `coverage/go/coverage.out` |
-| Python AI | `docker compose -f compose.test.yaml run --rm python` | 125 | **99,8%** | — | `coverage/ai/index.html`, `coverage/ai/coverage.xml` (Cobertura) |
+| Python AI | `docker compose -f compose.test.yaml run --rm python` | 135 | **99,4%** | — | `coverage/ai/index.html`, `coverage/ai/coverage.xml` (Cobertura) |
 | Web (React) | `docker compose -f compose.test.yaml run --rm node` | 137 | **85,3%** | 82,3% | `coverage/web/index.html`, `coverage/web/lcov.info` |
-| Chrome-расширение | там же | 142 | **99,9%** | 95,8% | `coverage/extension/lcov.info` |
+| Chrome-расширение | там же | 144 | **99,8%** | 96,7% | `coverage/extension/lcov.info` |
 | API-клиент `packages/client` | там же | 6 | **90,6%** | 100% | `coverage/client.lcov.info` |
 
 Папка `coverage/` в Git не попадает (она в `.gitignore`), отчёты пересоздаются командой выше.
