@@ -53,3 +53,30 @@
   .tm { max-height: 94vh; }
   .tm-facts { padding: 14px 16px 0; }
 }
+
+/* Крестик закрытия: перебивает общие стили button */
+.tm .tm-head button.dialog-close { display: grid; place-items: center; flex: none; width: 36px; height: 36px; margin: 0; padding: 0 0 3px; border: 0; border-radius: 50%; background: var(--pink); color: #252525; font-size: 26px; font-weight: 400; line-height: 1; cursor: pointer; }
+.tm .tm-head button.dialog-close:hover:not(:disabled) { background: #fff; color: #252525; transform: none; }
+.tm-head h2, .tm-head small { overflow-wrap: anywhere; min-width: 0; }
+
+/* Зелёный окна задачи */
+.tm { --tm-green: #A7CB77; }
+.tm-head { background: var(--tm-green); color: #252525; }
+.tm-head small { color: #3a4a25; }
+.tm .tm-head button.dialog-close { background: #252525; color: #fff; }
+.tm .tm-head button.dialog-close:hover:not(:disabled) { background: #fff; color: #252525; }
+.tm-facts div { background: #A7CB7740; }
+.tm-primary, .tm-attach, .tm-file button { background: var(--tm-green); }
+.tm-primary:hover:not(:disabled), .tm-attach:hover, .tm-file button:hover { background: #252525; color: #fff; }
+.tm-advance { background: #A7CB7740; }
+.tm-msg.is-buddy, .tm-msg.is-teamlead { background: #A7CB7740; }
+.tm-picked li { background: #A7CB7740; }
+.tm-facts dd, .tm-facts dt { overflow-wrap: anywhere; }
+
+/* Текст в карточках доски не вылезает за контейнер */
+.kanban-card { min-width: 0; overflow: hidden; }
+.kanban-card h4, .kanban-card p, .kanban-card-stage, .kanban-card-time { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+.kanban-card h4 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.kanban-card p { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.kanban-card-actions, .kanban-card-bottom { min-width: 0; flex-wrap: wrap; }
+.kanban .kanban-card button.kanban-next { max-width: 100%; white-space: normal; overflow-wrap: anywhere; }

@@ -5,7 +5,7 @@ import { ProgressRing } from '../components/home/ProgressRing';
 import type { View } from '../components/shell/Sidebar';
 import { displayName, isDone, personName, professionLabel } from '../lib/format';
 
-type Props = { user: User; token: string; onNavigate: (view: View, tab?: 'review') => void };
+type Props = { user: User; token: string; onNavigate: (view: View, tab?: 'review', internId?: string) => void };
 type Stats = { review: number; questions: number; requests: number };
 
 /** Главная наставника и руководителя: что требует внимания и как идут стажёры. */
@@ -79,7 +79,7 @@ export function StaffHomePage({ user, token, onNavigate }: Props) {
           const data = progress[intern.id];
           const next = data?.professional.stages.flatMap(stage => stage.items).find(item => !isDone(item));
           return (
-            <article key={intern.id} className="intern-card" onClick={() => onNavigate('team')}>
+            <article key={intern.id} className="intern-card" onClick={() => onNavigate('team', undefined, intern.id)}>
               <span className="intern-name"><span className="avatar-sm" aria-hidden="true">{personName(intern).charAt(0).toUpperCase()}</span>
                 <span><b>{personName(intern)}</b><small>{professionLabel(intern.profession)}</small></span></span>
               <span className="intern-cell intern-progress">
