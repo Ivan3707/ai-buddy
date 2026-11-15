@@ -14,6 +14,7 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
+	"github.com/nvkmaksim/ai-buddy/backend/internal/repository"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/security"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/service"
 )
@@ -210,6 +211,45 @@ func TestSeedDemoScenario(t *testing.T) {
 	}
 	if n := count(t, db, `SELECT count(*) FROM calendar_events e JOIN users u ON u.id = e.user_id WHERE u.email IN ($1, $2)`, buddyEmail, teamleadEmail); n != 2 {
 		t.Errorf("staff events = %d, want 2", n)
+	}
+
+	// The assistant context of staff carries their interns' progress (RBAC: only their own interns).
+	assistant := service.NewAssistantService(db, "")
+	users := repository.NewUserRepository(db)
+	staffContext := func(email string) service.UserContext {
+		t.Helper()
+		u, err := users.GetByEmail(ctx, email)
+		if err != nil {
+			t.Fatal(err)
+		}
+		uc, err := assistant.UserContext(ctx, u)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return uc
+	}
+	buddyCtx := staffContext(buddyEmail)
+	if buddyCtx.Role != "buddy" || len(buddyCtx.MyInterns) < 3 {
+		t.Fatalf("buddy context: role=%s interns=%d", buddyCtx.Role, len(buddyCtx.MyInterns))
+	}
+	raw, _ := json.Marshal(buddyCtx)
+	for _, want := range []string{`"name":"Алексей Кузнецов"`, `"on_review":1`, `"returned":1`, `"checklist":"common"`} {
+		if !strings.Contains(string(raw), want) {
+			t.Errorf("buddy context lacks %s: %s", want, raw)
+		}
+	}
+	if len(buddyCtx.OpenQuestions) != 1 || buddyCtx.PendingApprovals != nil {
+		t.Errorf("buddy questions=%d approvals=%v", len(buddyCtx.OpenQuestions), buddyCtx.PendingApprovals)
+	}
+	leadCtx := staffContext(teamleadEmail)
+	if len(leadCtx.MyInterns) < 3 || len(leadCtx.PendingApprovals) < 2 || leadCtx.OpenQuestions != nil {
+		t.Errorf("teamlead context: interns=%d approvals=%d questions=%d", len(leadCtx.MyInterns), len(leadCtx.PendingApprovals), len(leadCtx.OpenQuestions))
+	}
+	if raw, _ := json.Marshal(leadCtx); !strings.Contains(string(raw), `"buddy":"Ольга Соколова"`) {
+		t.Errorf("teamlead context lacks the interns' buddy: %s", raw)
+	}
+	if internCtx := staffContext(mlEmail); internCtx.MyInterns != nil || internCtx.OpenQuestions != nil {
+		t.Errorf("intern context must not carry team data: %+v", internCtx.MyInterns)
 	}
 
 	// A second run must not touch a database that is already in use.

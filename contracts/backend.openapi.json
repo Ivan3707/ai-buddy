@@ -4871,6 +4871,151 @@
               "$ref": "#/components/schemas/ActionType"
             },
             "description": "RBAC: actions this user may perform. AI must not propose others."
+          },
+          "my_interns": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "maxItems": 30,
+            "description": "Staff only: interns of this buddy (buddy_id) or team lead (teamlead_id). Null for interns.",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "checklists",
+                "on_review",
+                "returned"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "profession": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "backend",
+                    "frontend",
+                    "ml",
+                    null
+                  ]
+                },
+                "team": {
+                  "type": "string"
+                },
+                "buddy": {
+                  "type": "string"
+                },
+                "current_stage": {
+                  "type": "string"
+                },
+                "checklists": {
+                  "type": "array",
+                  "maxItems": 2,
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "checklist",
+                      "done",
+                      "total"
+                    ],
+                    "properties": {
+                      "checklist": {
+                        "type": "string",
+                        "enum": [
+                          "common",
+                          "professional"
+                        ]
+                      },
+                      "done": {
+                        "type": "integer"
+                      },
+                      "total": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                },
+                "current_tasks": {
+                  "type": "array",
+                  "maxItems": 3,
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "on_review": {
+                  "type": "integer"
+                },
+                "returned": {
+                  "type": "integer"
+                },
+                "last_login": {
+                  "type": "string",
+                  "format": "date"
+                }
+              }
+            }
+          },
+          "open_mentor_questions": {
+            "type": "array",
+            "maxItems": 20,
+            "description": "Buddy only: open questions escalated by their interns.",
+            "items": {
+              "type": "object",
+              "required": [
+                "intern",
+                "question",
+                "since"
+              ],
+              "properties": {
+                "intern": {
+                  "type": "string"
+                },
+                "question": {
+                  "type": "string",
+                  "maxLength": 400
+                },
+                "since": {
+                  "type": "string",
+                  "format": "date"
+                }
+              }
+            }
+          },
+          "pending_approvals": {
+            "type": "array",
+            "maxItems": 20,
+            "description": "Team lead only: interns' requests waiting for their approval.",
+            "items": {
+              "type": "object",
+              "required": [
+                "intern",
+                "number",
+                "type",
+                "status"
+              ],
+              "properties": {
+                "intern": {
+                  "type": "string"
+                },
+                "number": {
+                  "type": "string"
+                },
+                "type": {
+                  "type": "string",
+                  "enum": [
+                    "leave_request",
+                    "access_request"
+                  ]
+                },
+                "status": {
+                  "type": "string"
+                }
+              }
+            }
           }
         }
       },

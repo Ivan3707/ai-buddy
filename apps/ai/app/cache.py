@@ -32,7 +32,9 @@ class CachedAnswer:
 
 def personal_markers(req: AgentChatRequest) -> list[str]:
     ctx = req.user_context
-    markers = [ctx.display_name, ctx.buddy_name, *(t.title for t in ctx.tasks), *(r.number for r in ctx.open_requests)]
+    markers = [ctx.display_name, ctx.buddy_name, *(t.title for t in ctx.tasks), *(r.number for r in ctx.open_requests),
+               *(i.name for i in ctx.my_interns or []), *(q.intern for q in ctx.open_mentor_questions or []),
+               *(a.number for a in ctx.pending_approvals or [])]
     return [m for m in markers if m and len(m) > 2]
 
 

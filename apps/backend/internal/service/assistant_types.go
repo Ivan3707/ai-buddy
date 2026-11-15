@@ -62,6 +62,43 @@ type UserContext struct {
 	Tasks          []taskContext    `json:"tasks"`
 	OpenRequests   []ServiceRequest `json:"open_requests"`
 	AllowedActions []string         `json:"allowed_actions"`
+	// Staff only (buddy, teamlead): the interns this user is responsible for, as the backend sees them.
+	MyInterns        []teamInternContext `json:"my_interns"`
+	OpenQuestions    []openQuestionInfo  `json:"open_mentor_questions,omitempty"`
+	PendingApprovals []pendingApproval   `json:"pending_approvals,omitempty"`
+}
+
+// teamInternContext is a short progress summary of one intern for a mentor or team lead.
+type teamInternContext struct {
+	Name         string              `json:"name"`
+	Profession   *string             `json:"profession,omitempty"`
+	Team         string              `json:"team,omitempty"`
+	Buddy        string              `json:"buddy,omitempty"`
+	CurrentStage string              `json:"current_stage,omitempty"`
+	Checklists   []checklistProgress `json:"checklists"`
+	CurrentTasks []string            `json:"current_tasks,omitempty"`
+	OnReview     int                 `json:"on_review"`
+	Returned     int                 `json:"returned"`
+	LastLogin    string              `json:"last_login,omitempty"`
+}
+
+type checklistProgress struct {
+	Checklist string `json:"checklist"`
+	Done      int    `json:"done"`
+	Total     int    `json:"total"`
+}
+
+type openQuestionInfo struct {
+	Intern   string `json:"intern"`
+	Question string `json:"question"`
+	Since    string `json:"since"`
+}
+
+type pendingApproval struct {
+	Intern string `json:"intern"`
+	Number string `json:"number"`
+	Type   string `json:"type"`
+	Status string `json:"status"`
 }
 
 type ChatTurn = model.ChatTurn
