@@ -96,7 +96,7 @@
   grid-template-rows: 22px;
   grid-auto-rows: 1fr;
   gap: 0;
-  grid-template-columns: repeat(7, 60.7px); /* шаг колонок в макете */
+  grid-template-columns: repeat(6, minmax(0, 1fr)) 36px; /* на всю ширину карточки: последний столбец у самого края, без пустого поля справа */
   align-items: start;
 }
 .calendar-weekday { line-height: 19px; color: #d9d9d9; justify-self: start; text-align: left; }
@@ -230,39 +230,6 @@
 /* Высота строки «normal», как в Figma */
 .greeting p, .card-weeks, .calendar-date, .task-empty { line-height: normal; }
 
-/* ───────── Календарь (страница): набросок, ждём макет дизайнера ───────── */
-.calendar-page {
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-  width: calc(100% + 1px); /* кадр макета: x=350, 1375×996 */
-  margin-left: -1px;
-  height: 100%;
-  min-height: 0;
-  padding: 20px;
-  border-radius: 32px;
-  background: var(--cream);
-  color: #252525;
-}
-.calendar-page-head { display: flex; justify-content: space-between; align-items: flex-start; flex: none; }
-.calendar-page-head h1 { margin: 0; font-family: var(--font-title); font-size: 24px; font-weight: 700; line-height: 33px; }
-.calendar-page-month { font-family: var(--font-text); font-size: 16px; font-weight: var(--w-light); }
-.calendar-page-grid {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  grid-template-rows: 28px;
-  grid-auto-rows: 1fr;
-  gap: 10px;
-  margin-top: 16px;
-}
-.calendar-page-weekday { font-family: var(--font-text); font-size: 16px; font-weight: var(--w-light); color: #d9d9d9; }
-.calendar-page-cell { padding: 12px 16px; border-radius: 20px; background: #f3efef; font-family: var(--font-text); font-size: 16px; font-weight: var(--w-light); }
-.calendar-page-cell b { font-weight: inherit; }
-.calendar-page-cell.is-empty { background: transparent; }
-.calendar-page-cell.is-today { background: #252525; color: #fff; }
-
 /* ───────── Задачи: кадр check.png ─────────
  * Белая вкладка с названием 599×138, выбор чек-листа (чёрная 289×107 / белая 289×93),
  * под ними белая панель 1374×858 (в макете пустая). */
@@ -274,6 +241,7 @@
   display: flex; align-items: center; padding: 20px;
   border-radius: 32px 32px 0 0; background: #fff;
 }
+.tasks-title h2 span { display: block; }
 .tasks-title h2 { margin: 0; font-family: var(--font-title); font-size: 44px; font-weight: 700; line-height: 1.1; color: #000; }
 .tasks-switch { position: absolute; left: 619px; top: 0; display: flex; align-items: flex-start; gap: 21px; }
 .tasks-switch-btn {
@@ -310,10 +278,6 @@
 .kanban-card.is-unavailable { background: rgba(217, 217, 217, 0.4); }
 .kanban-card.is-active { background: var(--pink); color: #000; }
 .kanban-card.is-active .kanban-card-stage, .kanban-card.is-active .kanban-card-time { color: #252525; }
-.kanban-card.is-review { background: #fff; }
-.kanban-card.is-done { background: #252525; color: #fff; }
-.kanban-card.is-done .kanban-card-stage, .kanban-card.is-done .kanban-card-time { color: #d9d9d9; }
-.kanban-card.is-draggable, .kanban-card.is-review, .kanban-card.is-done, .kanban-card.is-active { cursor: pointer; }
 
 /* Состояния строки задачи (task.png). Активная: кружок белый → при наведении и нажатии чёрный.
  * Выполненная: чёрное название, розовый кружок с белой галочкой; при наведении и нажатии кружок остаётся

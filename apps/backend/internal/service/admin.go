@@ -87,6 +87,19 @@ func (s *AdminService) AnswerFeedback(ctx context.Context) (AnswerFeedback, erro
 	return out, rows.Err()
 }
 
+// RestartOnboarding makes the intern's next login a "first" one again (last_login_at = NULL), so the welcome tour starts.
+// Returns sql.ErrNoRows when there is no such intern. Staff accounts have no tour.
+func (s *AdminService) RestartOnboarding(ctx context.Context, userID string) error {
+	res, err := s.db.ExecContext(ctx, `UPDATE users SET last_login_at = NULL WHERE id = $1::uuid AND role = 'intern'`, userID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
 func (s *AdminService) Accounts(ctx context.Context) ([]AdminAccount, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT u.id::text, u.email, COALESCE(u.first_name,''), COALESCE(u.last_name,''), u.role, COALESCE(u.profession,''),

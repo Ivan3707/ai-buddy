@@ -1,12 +1,14 @@
 import { useState } from 'react';
-import { WEEKDAYS, isSameDay, monthGrid, monthTitle, shiftMonth } from '../../lib/calendar';
+import { useCalendarEvents } from '../../hooks/useCalendarEvents';
+import { WEEKDAYS, dayMonthLabel, isSameDay, monthGrid, monthTitle, shiftMonth } from '../../lib/calendar';
 import { ChevronIcon } from '../icons';
 
-type Props = { today?: Date };
+type Props = { today?: Date; token?: string; onPickDate?: (date: Date) => void };
 
-/** Компактный календарь месяца для главной страницы. */
-export function MiniCalendar({ today = new Date() }: Props) {
+/** Компактный календарь месяца для главной: у даты видно число дел, клик открывает календарь на этом дне. */
+export function MiniCalendar({ today = new Date(), token, onPickDate }: Props) {
   const [{ year, month }, setMonth] = useState({ year: today.getFullYear(), month: today.getMonth() });
+  const { eventsOf } = useCalendarEvents(token);
   const cells = monthGrid(year, month);
   return (
     <section className="mini-calendar" aria-label="Календарь">
@@ -26,9 +28,22 @@ export function MiniCalendar({ today = new Date() }: Props) {
       </header>
       <div className="calendar-grid">
         {WEEKDAYS.map(day => <span key={day} className="calendar-weekday">{day}</span>)}
-        {cells.map((cell, index) => cell === null
-          ? <span key={`empty-${index}`} />
-          : <span key={cell.day} className={`calendar-day${isSameDay(cell.date, today) ? ' is-today' : ''}`}>{cell.day}</span>)}
+        {cells.map((cell, index) => {
+          if (cell === null) return <span key={`empty-${index}`} />;
+          const count = eventsOf(cell.date).length;
+          return (
+            <button
+              key={cell.day}
+              type="button"
+              className="calendar-cell"
+              aria-label={`${dayMonthLabel(cell.date)}${count ? `, дел: ${count}` : ''}`}
+              onClick={() => onPickDate?.(cell.date)}
+            >
+              <span className={`calendar-day${isSameDay(cell.date, today) ? ' is-today' : ''}`}>{cell.day}</span>
+              {count > 0 && <i className="calendar-count">{count}</i>}
+            </button>
+          );
+        })}
       </div>
     </section>
   );

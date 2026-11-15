@@ -8,9 +8,15 @@ import { TaskTable } from '../components/home/TaskTable';
 import { TaskModal } from '../components/tasks/TaskModal';
 import { advanceItem } from '../lib/advance';
 
-type Props = { user: User; token: string; checklists: ChecklistsState; onFeedback: () => void };
+type Props = {
+  user: User;
+  token: string;
+  checklists: ChecklistsState;
+  onFeedback: () => void;
+  onOpenCalendar?: (date: Date) => void;
+};
 
-export function HomePage({ user, token, checklists, onFeedback }: Props) {
+export function HomePage({ user, token, checklists, onFeedback, onOpenCalendar }: Props) {
   const [selected, setSelected] = useState<'common' | 'professional'>('common');
   const { data, loading, error, refresh } = checklists;
   const [openID, setOpenID] = useState('');
@@ -46,7 +52,7 @@ export function HomePage({ user, token, checklists, onFeedback }: Props) {
               selected={selected === 'professional'}
               onSelect={() => setSelected('professional')}
             />
-            <MiniCalendar />
+            <MiniCalendar token={token} onPickDate={onOpenCalendar} />
           </div>
           <TaskTable checklist={data[selected]} onOpen={item => setOpenID(item.id)} />
           {opened && (

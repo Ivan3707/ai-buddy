@@ -359,11 +359,7 @@
       if (signedIn) {
         void loadSuggestions();
         if (!readerOpen && tab === 'chat') input.focus();
-        const key = `buddyBrief:${user?.id || ''}`;
-        if (await store.get(key) !== today && !log.childElementCount) {
-          await store.set(key, today);
-          runBrief();
-        }
+        // The chat opens empty: the bot speaks only when asked (no automatic brief about current tasks).
       }
     }
     function closeChat() { input.value = ''; rotateTip(); chat.hidden = true; char.classList.remove('open'); layout(); setTimeout(showNext, 400); }
@@ -918,14 +914,6 @@
       if (message.op === 'view') { render(message.view); if (message.view.finished) setBusy(false); return; }
       setBusy(false);
       if (message.op === 'signed-out') void refreshSession();
-    }
-    function runBrief() {
-      setBusy(true);
-      const render = assistantBubble('brief');
-      abortCurrent = env.stream({op: 'brief'}, message => {
-        if (message.op === 'unsupported') { setBusy(false); log.lastElementChild?.remove(); return; }
-        finish(message, render);
-      });
     }
     // The page goes along only when the question is about it. Decided here, in the browser,
     // before anything leaves the machine: a selection is attached, or the question points at the page ("тут", "это",

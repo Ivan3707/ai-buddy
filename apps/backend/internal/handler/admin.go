@@ -1,6 +1,8 @@
 package handler
 
 import (
+	"database/sql"
+	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -30,6 +32,7 @@ func RegisterAdminRoutes(mux *http.ServeMux, auth func(http.Handler) http.Handle
 	route("GET /api/admin/kb/lint", h.kbLint)
 	route("GET /api/admin/kb/gaps", h.kbGaps)
 	route("GET /api/admin/accounts", h.accounts)
+	route("POST /api/admin/accounts/{userID}/onboarding", h.restartOnboarding)
 	route("GET /api/admin/llm", h.llm)
 	route("POST /api/admin/llm/ping", h.llmPing)
 	route("GET /api/admin/system", h.system)
@@ -52,6 +55,23 @@ func (h adminHandler) accounts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	send(w, http.StatusOK, map[string]any{"accounts": items})
+}
+
+// restartOnboarding: the intern sees the welcome tour again at the next login.
+func (h adminHandler) restartOnboarding(w http.ResponseWriter, r *http.Request) {
+	id, ok := parsePathUUID(w, r, "userID", "invalid user ID")
+	if !ok {
+		return
+	}
+	switch err := h.s.RestartOnboarding(r.Context(), id.String()); {
+	case err == nil:
+		w.WriteHeader(http.StatusNoContent)
+	case errors.Is(err, sql.ErrNoRows):
+		send(w, http.StatusNotFound, map[string]string{"error": "intern not found"})
+	default:
+		log.Printf("admin restart onboarding: %v", err)
+		send(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+	}
 }
 
 func (h adminHandler) feedback(w http.ResponseWriter, r *http.Request) {

@@ -51,7 +51,19 @@ const ROLE_FILTERS = [
 function AccountsTab({ token }: { token: string }) {
   const { data, error, loading, reload } = useLoad<AdminAccount[]>(useCallback(() => admin.accounts(token), [token]));
   const [role, setRole] = useState<string>('all');
+  const [notice, setNotice] = useState('');
+  const [busyId, setBusyId] = useState('');
   const rows = (data ?? []).filter(a => role === 'all' || a.role === role);
+  // стажёр увидит приветственный тур при следующем входе: бэкенд сбрасывает «первый вход»
+  const restartOnboarding = async (a: AdminAccount) => {
+    setBusyId(a.id); setNotice('');
+    try {
+      await admin.restartOnboarding(token, a.id);
+      setNotice(`Онбординг запущен: ${personName(a)} увидит приветственный тур при следующем входе.`);
+      await reload();
+    } catch (reason) { setNotice(reason instanceof Error ? reason.message : 'Не удалось запустить онбординг'); }
+    finally { setBusyId(''); }
+  };
   return (
     <section className="staff-card admin-block" aria-label="Аккаунты">
       <div className="panel-head">
@@ -67,6 +79,7 @@ function AccountsTab({ token }: { token: string }) {
         </div>
       </div>
       <Status loading={loading && !data} error={error} />
+      {notice && <p className="notice" role="status">{notice}</p>}
       <ul className="admin-list">
         {rows.map(a => {
           const name = personName(a);
@@ -81,7 +94,14 @@ function AccountsTab({ token }: { token: string }) {
               <div className="admin-cell" data-label="Наставник">{a.buddy_name || '—'}</div>
               <div className="admin-cell" data-label="Руководитель">{a.teamlead_name || '—'}</div>
               <div className="admin-cell" data-label="Создан">{date(a.created_at)}</div>
-              <div className="admin-cell" data-label="Последний вход">{date(a.last_login_at)}</div>
+              <div className="admin-cell" data-label="Последний вход">
+                {date(a.last_login_at)}
+                {a.role === 'intern' && (
+                  <button className="pill pill-light pill-sm" disabled={busyId === a.id} onClick={() => void restartOnboarding(a)}>
+                    {busyId === a.id ? 'Запускаем…' : 'Запустить онбординг'}
+                  </button>
+                )}
+              </div>
               <div className="admin-cell" data-label="Сессии"><span className={`chip${a.active_sessions ? ' completed' : ''}`}>{a.active_sessions}</span></div>
             </li>
           );

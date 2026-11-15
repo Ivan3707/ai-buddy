@@ -52,6 +52,7 @@ beforeEach(() => {
   calls = [];
   routes = {
     'GET /api/admin/accounts': () => json({ accounts: ACCOUNTS }),
+    'POST /api/admin/accounts/a1/onboarding': () => new Response(null, { status: 204 }),
     'GET /api/admin/llm': () => json(LLM),
     'POST /api/admin/llm/ping': () => json({ ok: true, latency_ms: 321, answer: 'pong', input_tokens: 12, output_tokens: 2 }),
     'GET /api/admin/system': () => json(SYSTEM),
@@ -139,6 +140,16 @@ describe('админ-панель', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Перечитать базу знаний' }));
     expect(await screen.findByText(/4 документов, 12 фрагментов/)).toBeInTheDocument();
     expect(calls).toContain('POST /api/admin/kb/reload');
+  });
+
+  it('«Запустить онбординг» есть только у стажёров и сбрасывает первый вход', async () => {
+    render(<AdminPage token="t" />);
+    await screen.findByText('Стажёрова Аня');
+    const buttons = screen.getAllByRole('button', { name: 'Запустить онбординг' });
+    expect(buttons).toHaveLength(1);
+    await userEvent.click(buttons[0]!);
+    expect(await screen.findByRole('status')).toHaveTextContent('Стажёрова Аня увидит приветственный тур при следующем входе');
+    expect(calls).toContain('POST /api/admin/accounts/a1/onboarding');
   });
 
   it('показывает ошибку, если бэкенд ответил отказом', async () => {

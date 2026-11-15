@@ -2,6 +2,7 @@ package handler_test
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -128,7 +129,7 @@ func TestAdminRoutesWithPostgres(t *testing.T) {
 		{"GET", "/api/admin/accounts"}, {"GET", "/api/admin/llm"}, {"POST", "/api/admin/llm/ping"},
 		{"GET", "/api/admin/system"}, {"POST", "/api/admin/kb/reload"}, {"GET", "/api/admin/notifications"},
 		{"POST", "/api/admin/notifications/stuck_task/check"}, {"GET", "/api/admin/kb/lint"}, {"GET", "/api/admin/kb/gaps"},
-		{"GET", "/api/admin/feedback"},
+		{"GET", "/api/admin/feedback"}, {"POST", "/api/admin/accounts/" + intern.ID.String() + "/onboarding"},
 	}
 	for _, rt := range routes {
 		if code, _ := call(nil, rt[0], rt[1]); code != http.StatusUnauthorized {
@@ -165,6 +166,24 @@ func TestAdminRoutesWithPostgres(t *testing.T) {
 	}
 	if found == nil || found.Role != "intern" || found.Profession != "backend" || found.BuddyName != buddy.Email || found.TeamleadName != "Ирина Руководова" || found.ActiveSessions != 1 {
 		t.Fatalf("unexpected intern account: %+v", found)
+	}
+
+	// "Запустить онбординг": the intern's next login is a first login again; staff and bad ids are refused.
+	if _, err := db.ExecContext(ctx, `UPDATE users SET last_login_at = now() WHERE id = $1`, intern.ID); err != nil {
+		t.Fatal(err)
+	}
+	if code, raw = call(lead, "POST", "/api/admin/accounts/"+intern.ID.String()+"/onboarding"); code != http.StatusNoContent {
+		t.Fatalf("restart onboarding: %d %s", code, raw)
+	}
+	var lastLogin sql.NullTime
+	if err := db.QueryRowContext(ctx, `SELECT last_login_at FROM users WHERE id = $1`, intern.ID).Scan(&lastLogin); err != nil || lastLogin.Valid {
+		t.Fatalf("last_login_at after restart = %v, err %v", lastLogin, err)
+	}
+	if code, _ = call(lead, "POST", "/api/admin/accounts/"+buddy.ID.String()+"/onboarding"); code != http.StatusNotFound {
+		t.Fatalf("restart onboarding for a buddy: %d, want 404", code)
+	}
+	if code, _ = call(lead, "POST", "/api/admin/accounts/not-a-uuid/onboarding"); code != http.StatusBadRequest {
+		t.Fatalf("restart onboarding with a bad id: %d, want 400", code)
 	}
 
 	code, raw = call(lead, "GET", "/api/admin/llm")

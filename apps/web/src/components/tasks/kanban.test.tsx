@@ -171,7 +171,7 @@ describe('KanbanBoard', () => {
 describe('окно задачи', () => {
   const openModal = async (data = checklistsResponse().professional, refresh = refreshed()) => {
     render(<KanbanBoard checklist={data} token="tok" refresh={refresh} />);
-    await userEvent.click(within(activeCard()).getByRole('button', { name: 'Подробнее' }));
+    await userEvent.click(within(activeCard()).getByRole('button', { name: /Открыть задачу/ }));
     return screen.findByRole('dialog');
   };
 
@@ -266,7 +266,7 @@ describe('окно задачи', () => {
   it('переносит задачу без проверки кнопкой «Завершить»', async () => {
     api.completeItem.mockResolvedValue(undefined);
     render(<KanbanBoard checklist={checklist()} token="tok" refresh={refreshed()} />);
-    await userEvent.click(within(activeCard()).getByRole('button', { name: 'Подробнее' }));
+    await userEvent.click(within(activeCard()).getByRole('button', { name: /Открыть задачу/ }));
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Завершить →' }));
     await vi.waitFor(() => expect(api.completeItem).toHaveBeenCalledTimes(1));
@@ -276,7 +276,7 @@ describe('окно задачи', () => {
     await openModal();
     await userEvent.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
-    await userEvent.click(within(activeCard()).getByRole('button', { name: 'Подробнее' }));
+    await userEvent.click(within(activeCard()).getByRole('button', { name: /Открыть задачу/ }));
     await userEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Закрыть' }));
     expect(screen.queryByRole('dialog')).toBeNull();
   });

@@ -41,6 +41,7 @@ export const admin = {
   kbGaps: (token: string) => request<GapsReport>(token, '/api/admin/kb/gaps'),
   kbLint: (token: string) => request<KbLintReport>(token, '/api/admin/kb/lint'),
   accounts: (token: string) => request<{ accounts: AdminAccount[] }>(token, '/api/admin/accounts').then(r => r.accounts),
+  restartOnboarding: (token: string, userId: string) => request<void>(token, `/api/admin/accounts/${userId}/onboarding`, { method: 'POST' }),
   llm: (token: string) => request<AdminLlm>(token, '/api/admin/llm'),
   ping: (token: string) => post<AdminPing>(token, '/api/admin/llm/ping'),
   system: (token: string) => request<AdminSystem>(token, '/api/admin/system'),

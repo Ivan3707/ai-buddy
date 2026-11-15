@@ -16,7 +16,7 @@ export function TasksPage({ token, checklists, selected = 'common', onSelect }: 
   return (
     <div className="tasks-page">
       <h1 className="visually-hidden">Задачи</h1>
-      <div className="tasks-title"><h2>{current.title}</h2></div>
+      <div className="tasks-title"><h2><span>{current.lines[0]}</span> <span>{current.lines[1]}</span></h2></div>
       <div className="tasks-switch" role="group" aria-label="Выбор чек-листа">
         {TABS.map(tab => (
           <button

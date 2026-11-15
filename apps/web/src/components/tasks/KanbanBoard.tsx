@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type Mous
 import type { Checklist, ChecklistItem } from '@ai-buddy/client';
 import { advanceItem } from '../../lib/advance';
 import { COLUMN_TITLES, columnOf, nextStepLabel, type Column } from '../../lib/taskColumns';
+import { CheckIcon, LockIcon } from '../icons';
 import { TaskModal } from './TaskModal';
 
 type Status = Column;
@@ -11,6 +12,8 @@ export const KANBAN_COLUMNS: { status: Status; title: string }[] = (['unavailabl
 
 /** Стажёр сам переносит активную задачу вперёд: в «На проверке» или «Завершено». Решение «проверено» принимает наставник. */
 const DROP_TARGETS: Status[] = ['review', 'done'];
+/** Цветовой класс из макета: «На проверке» оформлена как прежняя колонка «Завершено», «Завершено» как «Проверено». */
+const LOOK: Record<Status, string> = { unavailable: 'unavailable', active: 'active', review: 'completed', done: 'verified' };
 const DRAG_DISTANCE = 5;
 const EDGE_ZONE = 56;
 
@@ -41,7 +44,6 @@ export function KanbanBoard({ checklist, token, refresh }: Props) {
   const trackName = checklist.type === 'common' ? 'Общий' : 'Профессиональный';
   const cards = checklist.stages.flatMap(stage => stage.items.map(item => ({ item, stage })));
   const byID = useCallback((id: string) => cards.find(card => card.item.id === id)?.item, [cards]);
-
   const opened = cards.find(card => card.item.id === openID);
 
   /**
@@ -187,7 +189,7 @@ export function KanbanBoard({ checklist, token, refresh }: Props) {
           const inColumn = cards.filter(card => columnOf(card.item) === column.status);
           const over = (drag?.over === column.status && DROP_TARGETS.includes(column.status)) || (picked?.over === true && column.status === 'review');
           return (
-            <section key={column.status} data-status={column.status} className={`kanban-column is-${column.status}${over ? ' is-over' : ''}`} aria-label={column.title}>
+            <section key={column.status} data-status={column.status} className={`kanban-column is-${LOOK[column.status]}${over ? ' is-over' : ''}`} aria-label={column.title}>
               <header className="kanban-column-head">
                 <h3>{column.title}</h3>
                 <span>{inColumn.length}</span>
@@ -202,10 +204,11 @@ export function KanbanBoard({ checklist, token, refresh }: Props) {
                     <div key={item.id} className="kanban-slot">
                       {dragging && <div className="kanban-card-ghost" style={{ height: drag.height }} aria-hidden="true" />}
                       <article
-                        className={`kanban-card is-${column.status}${draggable ? ' is-draggable' : ''}${dragging ? ' is-dragging' : ''}${picked?.id === item.id ? ' is-picked' : ''}`}
+                        className={`kanban-card is-${LOOK[column.status]}${draggable ? ' is-draggable' : ''}${dragging ? ' is-dragging' : ''}${picked?.id === item.id ? ' is-picked' : ''}`}
                         style={style}
                         tabIndex={draggable ? 0 : undefined}
                         aria-describedby={draggable ? 'kanban-help' : undefined}
+                        data-review={item.requires_review ? 'true' : undefined}
                         onPointerDown={event => begin(event, item)}
                         onClick={event => openCard(event, item)}
                         onKeyDown={event => onKey(event, item)}
@@ -218,15 +221,20 @@ export function KanbanBoard({ checklist, token, refresh }: Props) {
                         </div>
                         <h4>{item.title}</h4>
                         {item.description && <p>{item.description}</p>}
-                        {item.estimated_minutes && <span className="kanban-card-time">≈ {item.estimated_minutes} мин</span>}
-                        {busyID === item.id && <span className="kanban-card-time">Сохраняем…</span>}
-                        {item.requires_review && <span className="kanban-card-time">Проверяет наставник</span>}
-                        <div className="kanban-card-actions">
-                          <button type="button" className="kanban-link" onClick={() => setOpenID(item.id)}>Подробнее</button>
-                          {item.status === 'active' && (
-                            <button type="button" className="kanban-next" disabled={busyID === item.id} onClick={() => void advance(item)}>{nextStepLabel(item)} →</button>
-                          )}
+                        <div className="kanban-card-bottom">
+                          <span className="kanban-card-time">
+                            {busyID === item.id ? 'Сохраняем…' : item.estimated_minutes ? `${item.estimated_minutes} мин` : ''}
+                          </span>
+                          <button type="button" className={`kanban-card-state is-${item.status}`} aria-label={`Открыть задачу «${item.title}»`} onClick={event => { event.stopPropagation(); setOpenID(item.id); }}>
+                            {item.status === 'active' && <LockIcon className="kanban-hover-lock" width={20} height={20} />}
+                            {item.status === 'unavailable' && <LockIcon width={20} height={20} />}
+                            {(item.status === 'completed' || item.status === 'verified') && <CheckIcon width={24} height={20} />}
+                          </button>
                         </div>
+                        {item.requires_review && <span className="kanban-card-time">Проверяет наставник</span>}
+                        {item.status === 'active' && (
+                          <button type="button" className="kanban-next" disabled={busyID === item.id} onClick={() => void advance(item)}>{nextStepLabel(item)} →</button>
+                        )}
                       </article>
                     </div>
                   );

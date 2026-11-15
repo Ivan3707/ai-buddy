@@ -24,6 +24,7 @@ export function AppShell({ user, token, onLogout }: Props) {
   const [view, setView] = useState<View>(isAdminPath() ? 'admin' : 'home');
   const [profileOpen, setProfileOpen] = useState(false);
   const [notesOpen, setNotesOpen] = useState(false);
+  const [calendarDate, setCalendarDate] = useState<Date | undefined>();
   const [tasksChecklist, setTasksChecklist] = useState<'common' | 'professional'>('common');
   const [onboarding, setOnboarding] = useState(() => isOnboardingPending(user.id));
   const checklists = useChecklists(token);
@@ -52,6 +53,8 @@ export function AppShell({ user, token, onLogout }: Props) {
     setView('feedback');
   }, [bothDone, user.id]);
 
+  // из меню календарь открывается на сегодня, с главной (клик по дате) — на выбранный день
+  const navigate = useCallback((next: View) => { if (next === 'calendar') setCalendarDate(undefined); setView(next); }, []);
   const endOnboarding = useCallback(() => {
     finishOnboarding(user.id);
     setOnboarding(false);
@@ -64,7 +67,7 @@ export function AppShell({ user, token, onLogout }: Props) {
   if (view === 'feedback') {
     return (
       <div className="shell">
-        <Sidebar view={view} onNavigate={setView} onLogout={onLogout} />
+        <Sidebar view={view} onNavigate={navigate} onLogout={onLogout} />
         <FeedbackPage user={user} token={token} checklists={checklists} />
       </div>
     );
@@ -72,10 +75,16 @@ export function AppShell({ user, token, onLogout }: Props) {
 
   return (
     <div className="shell">
-      <Sidebar view={view} onNavigate={setView} onLogout={onLogout} />
+      <Sidebar view={view} onNavigate={navigate} onLogout={onLogout} />
       <main className="workspace">
-        {view === 'home' && <HomePage user={user} token={token} checklists={checklists} onFeedback={() => setView('feedback')} />}
-        {view === 'calendar' && <CalendarPage />}
+        {view === 'home' && <HomePage
+          user={user}
+          token={token}
+          checklists={checklists}
+          onFeedback={() => setView('feedback')}
+          onOpenCalendar={date => { setCalendarDate(date); setView('calendar'); }}
+        />}
+        {view === 'calendar' && <CalendarPage key={calendarDate?.toDateString() ?? 'today'} token={token} initialDate={calendarDate} />}
         {view === 'tasks' && <TasksPage token={token} checklists={checklists} selected={tasksChecklist} onSelect={setTasksChecklist} />}
         {view === 'admin' && (isAdmin ? <AdminPage token={token} /> : <p className="muted">Нет доступа к админ-панели.</p>)}
       </main>

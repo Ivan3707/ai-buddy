@@ -716,6 +716,14 @@ backend_paths.update({
                        "number of active sessions. Never returns password hashes, tokens or secrets.",
         "responses": {"200": json_resp("Accounts", {"type": "object", "required": ["accounts"], "properties": {
             "accounts": {"type": "array", "items": ADMIN_ACCOUNT}}}), "403": ADMIN_FORBIDDEN}}},
+    "/api/admin/accounts/{userID}/onboarding": {"post": {
+        "operationId": "adminRestartOnboarding", "security": BEARER,
+        "description": "Admin only: start the onboarding tour again for an intern. Clears last_login_at, so the next login "
+                       "reports is_first_login=true and the web app shows the welcome tour. Staff accounts: 404.",
+        "parameters": [{"name": "userID", "in": "path", "required": True, "schema": {"type": "string", "format": "uuid"}}],
+        "responses": {"204": {"description": "Onboarding will start at the next login"},
+                      "400": json_resp("Invalid user ID", ERROR), "403": ADMIN_FORBIDDEN,
+                      "404": json_resp("No such intern", ERROR)}}},
     "/api/admin/access": {"get": {
         "operationId": "adminAccess", "security": BEARER,
         "description": "Any signed-in user: is the admin panel open for this role (teamlead, or everyone with ADMIN_OPEN_FOR_ALL=1).",

@@ -1,0 +1,116 @@
+/* ───────── Календарь по макету calendar.png ─────────
+ * Вкладка с названием (белая, как «Задачи»), розовый переключатель месяца справа над карточкой,
+ * белая карточка 1374 px: серая панель «Дела на сегодня» 246 px и сетка дней. */
+.cal-page { position: relative; height: calc(var(--stage-h, 100vh) - 84px); min-height: 0; }
+.cal-title {
+  position: absolute; left: 0; top: 0; z-index: 1;
+  box-sizing: border-box; width: 599px; height: 100px;
+  display: flex; align-items: center; margin: 0; padding: 0 28px;
+  border-radius: 32px 32px 0 0; background: #fff;
+  font-family: var(--font-title); font-size: 44px; font-weight: 800; line-height: 1.1; color: #000;
+}
+.cal-switch {
+  position: absolute; right: 0; top: 7px; z-index: 1;
+  display: flex; align-items: center; justify-content: space-between; box-sizing: border-box;
+  width: 286px; height: 77px; padding: 0 22px; border-radius: 999px; background: var(--pink); color: #fff;
+}
+.cal-switch button { display: grid; place-items: center; width: 28px; height: 40px; padding: 0; border: 0; background: none; color: #fff; cursor: pointer; }
+.cal-switch button:hover { opacity: 0.7; }
+.cal-switch button:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; border-radius: 8px; }
+.cal-switch svg { width: 18px; height: 26px; stroke-width: 2.2; }
+.cal-month { font-family: var(--font-title); font-size: 22px; font-weight: 800; line-height: 1; }
+
+.cal-card {
+  position: absolute; left: 0; right: 0; top: 100px; bottom: 0;
+  display: grid; grid-template-columns: 246px minmax(0, 1fr); overflow: hidden;
+  border-radius: 0 32px 32px 32px; background: #fff; color: #252525;
+}
+.cal-today { display: flex; flex-direction: column; gap: 14px; padding: 22px 20px; overflow-y: auto; background: #d9d9d9; scrollbar-width: none; }
+.cal-today::-webkit-scrollbar { display: none; }
+.cal-today h2 { margin: 0; font-family: var(--font-title); font-size: 21px; font-weight: 800; line-height: 1.2; color: #000; }
+.cal-today ul { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.cal-today li { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 16px; background: #fff; font-family: var(--font-text); font-size: 14px; line-height: 1.3; }
+.cal-today li b { font-size: 12px; font-weight: 600; color: #808080; }
+.cal-today-empty { margin: 0; font-family: var(--font-text); font-size: 15px; font-weight: var(--w-light); color: #555; }
+
+.cal-grid {
+  box-sizing: border-box; min-height: 0; display: grid; gap: 18px 14px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: 62px repeat(var(--cal-rows, 5), minmax(0, 1fr));
+  padding: 0 22px 22px;
+}
+.cal-weekday { align-self: end; padding: 0 0 6px 4px; font-family: var(--font-title); font-size: 18px; font-weight: 700; color: #808080; text-transform: lowercase; }
+.cal-cell {
+  text-align: left; border: 0; color: inherit; cursor: pointer; align-items: stretch;
+  box-sizing: border-box; display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; overflow: hidden;
+  padding: 14px 14px 10px; border-radius: 32px; background: #d9d9d9; font-family: var(--font-text); font-size: 18px; font-weight: 700;
+}
+.cal-cell b { font-weight: 700; }
+.cal-cell.is-empty { background: transparent; }
+.cal-cell.is-today { background: #252525; color: #fff; }
+.cal-chip { display: block; overflow: hidden; padding: 3px 8px; border-radius: 999px; background: var(--pink); color: #000; font-size: 12px; font-style: normal; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.cal-chip.is-more { background: #fff; color: #252525; }
+
+@media (max-width: 899px) {
+  .cal-page { height: auto; display: flex; flex-direction: column; gap: 12px; }
+  .cal-title, .cal-switch, .cal-card { position: static; }
+  .cal-title { width: auto; height: auto; padding: 16px 18px; border-radius: 24px; font-size: 24px; }
+  .cal-switch { width: auto; height: 56px; }
+  .cal-month { font-size: 18px; }
+  .cal-card { display: flex; flex-direction: column; border-radius: 24px; }
+  .cal-today { padding: 16px; }
+  .cal-grid { gap: 4px; grid-template-rows: 28px; grid-auto-rows: 54px; padding: 12px; }
+  .cal-weekday { font-size: 13px; padding: 0; text-align: center; }
+  .cal-cell { padding: 6px 8px; border-radius: 12px; font-size: 14px; }
+  .cal-chip { display: none; }
+}
+
+.cal-cell:disabled { cursor: default; }
+.cal-cell.is-empty { cursor: default; }
+button.cal-cell:hover:not(:disabled) { background: #c9c9c9; transform: none; }
+button.cal-cell.is-today:hover:not(:disabled) { background: #252525; }
+.cal-cell.is-selected { box-shadow: inset 0 0 0 3px var(--pink); }
+.cal-cell:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
+
+/* панель дел выбранного дня */
+.cal-today li { position: relative; padding-right: 32px; }
+.cal-today li span { font-weight: 600; overflow-wrap: anywhere; }
+.cal-today li small { color: #666; overflow-wrap: anywhere; }
+button.cal-remove { position: absolute; top: 6px; right: 8px; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: none; color: #555; font-size: 22px; line-height: 26px; cursor: pointer; }
+button.cal-remove:hover:not(:disabled) { background: #d9d9d9; color: #252525; transform: none; }
+button.cal-add {
+  margin-top: auto; padding: 12px 16px; border: 0; border-radius: 999px; background: #252525; color: #fff; font-weight: 600;
+  font: inherit; font-family: var(--font-text); font-size: 15px; cursor: pointer;
+}
+button.cal-add:hover:not(:disabled) { background: var(--pink); color: #000; transform: none; }
+button.cal-add:disabled { opacity: 0.45; cursor: default; }
+.cal-form { display: flex; flex-direction: column; gap: 8px; margin-top: auto; font-family: var(--font-text); }
+.cal-form input, .cal-form textarea {
+  box-sizing: border-box; width: 100%; padding: 9px 12px; border: 2px solid transparent; border-radius: 14px;
+  background: #fff; color: #252525; font: inherit; font-size: 14px;
+}
+.cal-form input:focus, .cal-form textarea:focus { border-color: var(--pink); outline: none; }
+.cal-form textarea { resize: vertical; min-height: 64px; }
+.cal-form-time { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.cal-form-time label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; font-weight: 600; color: #555; }
+.cal-form-bar { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+button.cal-cancel { padding: 8px 4px; border: 0; background: none; color: #555; font: inherit; font-size: 14px; cursor: pointer; }
+button.cal-cancel:hover:not(:disabled) { background: none; color: #252525; transform: none; }
+button.cal-save { padding: 9px 18px; border: 0; border-radius: 999px; background: #252525; color: #fff; font: inherit; font-size: 14px; cursor: pointer; }
+button.cal-save:hover:not(:disabled) { background: var(--pink); color: #000; transform: none; }
+.cal-error { margin: 0; padding: 8px 12px; border-radius: 12px; background: var(--pink-soft); color: #252525; font-family: var(--font-text); font-size: 13px; }
+
+/* ───────── Календарь на главной: число дел у даты, клик по дню ───────── */
+.calendar-grid button.calendar-cell {
+  display: flex; align-items: flex-start; gap: 3px; justify-self: start; width: auto; height: 22px; margin: 0; padding: 0;
+  border: 0; border-radius: 0; background: none; color: inherit; font: inherit; cursor: pointer;
+}
+.calendar-grid button.calendar-cell:hover:not(:disabled) { background: none; transform: none; }
+.calendar-grid button.calendar-cell:hover .calendar-day:not(.is-today) { background: #f3efef; border-radius: 50%; }
+.calendar-grid button.calendar-cell:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; border-radius: 8px; }
+.calendar-day { display: grid; flex: none; }
+.calendar-count {
+  display: inline-grid; place-content: center; min-width: 16px; height: 16px; margin-top: -3px; padding: 0 4px; box-sizing: border-box;
+  border-radius: 999px; background: var(--pink); color: #000;
+  font-family: var(--font-text); font-size: 11px; font-style: normal; font-weight: 700; line-height: 1; color: #000;
+}
