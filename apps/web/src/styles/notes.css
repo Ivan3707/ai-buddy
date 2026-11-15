@@ -47,3 +47,5 @@
 /* заметки в панели: минималистичные, ч/б + розовый акцент */
 .notes-list button { border-left: 4px solid var(--pink); }
 .notes-error { background: var(--pink); color: #252525; }
+.note-modal-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 16px; line-height: 1.5; min-height: 80px; }
+.note-modal-foot .note-modal-edit { display: inline-flex; align-items: center; gap: 8px; }

@@ -70,7 +70,12 @@ type PageContext struct {
 	URL       string `json:"url"`
 	Title     string `json:"title,omitempty"`
 	Selection string `json:"selection,omitempty"`
+	// Text is the readable text of the page (not HTML), at most MaxPageTextRunes; untrusted data.
+	Text string `json:"text,omitempty"`
 }
+
+// MaxPageTextRunes limits PageContext.Text (also in the AI service schema and in the contract).
+const MaxPageTextRunes = 6000
 
 type taskContext struct {
 	ID             string `json:"id"`

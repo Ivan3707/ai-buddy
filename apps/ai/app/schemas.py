@@ -128,6 +128,7 @@ class PageContext(BaseModel):
     url: str = Field(max_length=2000)
     title: str | None = Field(default=None, max_length=300)
     selection: str | None = Field(default=None, max_length=2000)
+    text: str | None = Field(default=None, max_length=6000)  # readable page text (not HTML); sent only when the question is about the page
 
 
 class BriefRequest(BaseModel):

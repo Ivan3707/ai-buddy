@@ -28,8 +28,8 @@ export function RequestsDesk({ token }: { token: string }) {
         <div><b>{r.number}</b> · {intern_name || 'Стажёр'}<br /><small className="muted">{describe(r)}{r.params.justification ? ` · ${r.params.justification}` : ''}</small>
           {r.decision_comment && <><br /><small className="muted">Комментарий: {r.decision_comment}</small></>}</div>
         {r.status === 'pending_approval'
-          ? <a className="pill pill-black pill-sm" href={`/portal/requests/assistant/${r.id}`} target="_blank" rel="noreferrer">Согласовать</a>
-          : <a className={`chip ${r.status === 'approved' ? 'completed' : ''}`} href={`/portal/requests/assistant/${r.id}`} target="_blank" rel="noreferrer">{REQUEST_STATUS[r.status]}</a>}
+          ? <a className="req-action is-action" href={`/portal/requests/assistant/${r.id}`} target="_blank" rel="noreferrer">Согласовать</a>
+          : <a className={`req-action is-${r.status}`} href={`/portal/requests/assistant/${r.id}`} target="_blank" rel="noreferrer">{REQUEST_STATUS[r.status]}</a>}
       </div>) : <p className="muted">Заявок пока нет. Стажёр оформляет их в чате с ботом.</p>}
     </section>
   </div>;

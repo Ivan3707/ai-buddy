@@ -33,9 +33,10 @@
 .kanban-card.is-picked { box-shadow: 0 0 0 3px var(--ink); }
 .kanban-card-ghost { border: 2px dashed #25252570; border-radius: 24px; background: #2525250f; }
 
-/* пока тянут карточку: допустимая колонка подсвечена, остальные приглушены */
-.kanban-columns.is-dragging .kanban-column:not(.is-completed):not(.is-verified) { opacity: 0.55; transition: opacity 0.15s; }
-.kanban-columns.is-dragging .kanban-column:is(.is-completed, .is-verified) { outline: 3px dashed var(--pink); outline-offset: -3px; }
+/* пока тянут карточку: допустимые колонки подсвечены (из «Задачи» — «Активно», из «Активно» — «На проверке» и «Завершено»), остальные приглушены */
+.kanban-columns.is-dragging .kanban-column:not(.is-target) { opacity: 0.55; transition: opacity 0.15s; }
+.kanban-columns.is-dragging .kanban-column.is-target { outline: 3px dashed var(--pink); outline-offset: -3px; }
+.kanban-columns.is-dragging .kanban-column.is-active.is-target { outline-color: #252525; }
 .kanban-column.is-over { background: var(--pink-soft); outline-style: solid !important; }
 .kanban-notice { margin: 0 0 12px; padding: 10px 16px; border-radius: 16px; background: var(--pink-soft); color: #252525; font-size: 15px; }
 
@@ -69,17 +70,18 @@
 }
 .kanban-card-state.is-unavailable { background: #f5b7c8; }
 .kanban-card-state svg path { fill: #fff; }
-.kanban-card-state:hover { filter: brightness(0.95); }
+
 .kanban-card-state:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 
-.kanban-card button.kanban-card-state:hover:not(:disabled) { background: var(--pink); transform: none; filter: brightness(0.95); }
+/* наведение на кружок в любой колонке: кружок только светлеет, без значков */
+.kanban-card button.kanban-card-state:hover:not(:disabled) { background: var(--pink); transform: none; filter: none; opacity: 0.6; }
 .kanban-card button.kanban-card-state.is-unavailable:hover:not(:disabled) { background: #f5b7c8; }
 
 /* ───────── Состояния блока задачи (taskblock.png, «Активно блок», «Все блоки наведение») ─────────
  * По умолчанию: белая карточка 279×234, радиус 32, отступы 20/23/20/20, зазор 10.
- * Наведение (все блоки): в кружке справа появляется замок.
+ * Наведение (все блоки): кружок справа светлеет, значков не появляется.
  * Нажатие (только «Активно»): карточка розовая, кружок тёмный.
- * «Проверено»: чёрная карточка с розовым кружком и белой галочкой. */
+ * «Завершено»: белая карточка, как в остальных колонках, с розовым кружком и белой галочкой. */
 .kanban-card { box-sizing: border-box; min-height: 234px; gap: 10px; padding: 20px 23px 20px 20px; border-radius: 32px; }
 .kanban-card h4 { color: #252525; }
 .kanban-card p { color: #252525; }
@@ -87,13 +89,12 @@
 .kanban-card-bottom { margin-top: auto; }
 .kanban-card.is-draggable { min-height: 234px; }
 
-.kanban-card.is-verified { background: #252525; }
-.kanban-card.is-verified h4, .kanban-card.is-verified p { color: #fff; }
-.kanban-card.is-verified .kanban-card-stage, .kanban-card.is-verified .kanban-card-time { color: #777; }
+.kanban-card.is-verified { background: #fff; color: #252525; }
+.kanban-card.is-verified h4, .kanban-card.is-verified p { color: #252525; }
+.kanban-card.is-verified .kanban-card-stage, .kanban-card.is-verified .kanban-card-time { color: #808080; }
 
-.kanban-hover-lock { display: none; }
-.kanban-card:hover .kanban-hover-lock { display: block; }
-.kanban-card.is-active .kanban-card-state svg path { fill: #252525; }
+/* «Задачи»: доступная к старту карточка белая (как в «Активно»), заблокированные ниже — серые с замком */
+.kanban-card.is-unavailable.is-available { background: #fff; }
 
 .kanban-card.is-active:active, .kanban-card.is-active.is-dragging { background: var(--pink); }
 .kanban-card.is-active:active .kanban-card-stage, .kanban-card.is-active:active .kanban-card-time,
@@ -101,7 +102,7 @@
 .kanban-card.is-active:active p, .kanban-card.is-active.is-dragging p { color: rgba(255, 255, 255, 0.9); }
 .kanban-card.is-active:active h4, .kanban-card.is-active.is-dragging h4 { color: #252525; }
 .kanban-card.is-active:active button.kanban-card-state, .kanban-card.is-active.is-dragging button.kanban-card-state,
-.kanban-card.is-active:active button.kanban-card-state:hover:not(:disabled) { background: #252525; }
+.kanban-card.is-active:active button.kanban-card-state:hover:not(:disabled) { background: #252525; opacity: 1; }
 .kanban-card.is-active:active .kanban-card-state svg path, .kanban-card.is-active.is-dragging .kanban-card-state svg path { fill: #fff; }
 
 /* кнопки на карточке: «Подробнее» и переход на следующий этап (специфичность выше legacy-стилей button) */

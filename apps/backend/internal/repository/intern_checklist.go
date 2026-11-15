@@ -84,9 +84,10 @@ func (r *InternChecklistRepository) SetOverrides(ctx context.Context, progressID
 
 // ActivateFirstOpen keeps the sequential invariant after a shared item was removed: the first visible
 // shared item that is not done must be active. It does nothing when that item is already active or
-// when everything is done. Personal items are independent and are not considered.
+// when everything is done. Personal items are independent and are not considered. The opened item is
+// available, not started (activated_at NULL): the intern takes it into work by hand.
 func (r *InternChecklistRepository) ActivateFirstOpen(ctx context.Context, userID, checklistID uuid.UUID) error {
-	_, err := r.db.ExecContext(ctx, `UPDATE user_checklist_progress SET status = 'active', activated_at = now()
+	_, err := r.db.ExecContext(ctx, `UPDATE user_checklist_progress SET status = 'active', activated_at = NULL
 		WHERE status = 'unavailable' AND id = (
 			SELECT p.id FROM user_checklist_progress p JOIN checklist_items i ON i.id = p.checklist_item_id
 			WHERE p.user_id = $1 AND p.checklist_id = $2 AND p.hidden_at IS NULL AND i.assigned_user_id IS NULL

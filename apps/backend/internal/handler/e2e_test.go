@@ -380,11 +380,26 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 		t.Fatal("estimated_minutes missing from API")
 	}
 
+	// The first task is only available: the intern takes it into work by hand; a locked task cannot be started.
+	if itemState(initial.Common.Stages, commonItems[0]).Started {
+		t.Fatal("first task must be available, not started")
+	}
+	request(http.MethodPost, "/api/checklist-items/"+commonItems[1].String()+"/start", internToken, nil, http.StatusConflict, nil)
+	request(http.MethodPost, "/api/checklist-items/"+commonItems[0].String()+"/start", buddyToken, nil, http.StatusForbidden, nil)
+	request(http.MethodPost, "/api/checklist-items/"+commonItems[0].String()+"/start", internToken, nil, http.StatusNoContent, nil)
+	request(http.MethodPost, "/api/checklist-items/"+commonItems[0].String()+"/start", internToken, nil, http.StatusNoContent, nil)
+	if !itemState(getChecklists(internToken).Common.Stages, commonItems[0]).Started {
+		t.Fatal("started task must be reported as started")
+	}
+
 	commonPath := "/api/checklist-items/" + commonItems[0].String() + "/complete"
 	request(http.MethodPost, commonPath, internToken, nil, http.StatusNoContent, nil)
 	completed := getChecklists(internToken)
 	assertStatus(itemState(completed.Common.Stages, commonItems[0]), model.StatusCompleted)
 	assertStatus(itemState(completed.Common.Stages, commonItems[1]), model.StatusActive)
+	if itemState(completed.Common.Stages, commonItems[1]).Started {
+		t.Fatal("the next task must open as available, not started")
+	}
 	if completed.Common.CompletedItems != 1 || completed.Common.CompletionPercent != 50 {
 		t.Fatalf("unexpected common completion: %+v", completed.Common)
 	}
@@ -439,6 +454,9 @@ func TestE2E_InternBuddyWorkflow(t *testing.T) {
 		map[string]any{"approved": true}, http.StatusConflict, nil)
 	afterReject := getChecklists(internToken)
 	assertStatus(itemState(afterReject.Professional.Stages, professionalItems[0]), model.StatusActive)
+	if !itemState(afterReject.Professional.Stages, professionalItems[0]).Started {
+		t.Fatal("a task returned for rework stays in work (started)")
+	}
 	assertStatus(itemState(afterReject.Professional.Stages, professionalItems[1]), model.StatusActive)
 	if afterReject.Professional.CompletedItems != 0 ||
 		itemState(afterReject.Professional.Stages, professionalItems[0]).CompletedAt != nil {

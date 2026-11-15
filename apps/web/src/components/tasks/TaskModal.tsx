@@ -4,10 +4,9 @@ import {
   type ChecklistItem, type ChecklistStage, type TaskAttachment, type TaskComment,
 } from '@ai-buddy/client';
 import { formatDateTime, staffRoleLabel, weekLabel } from '../../lib/format';
-import { COLUMN_TITLES, columnOf, nextStepLabel } from '../../lib/taskColumns';
+import { isAvailable, nextStepLabel, statusLabel } from '../../lib/taskColumns';
 import { PaperclipIcon } from '../icons';
-import { History } from './TaskReview';
-import { InternHistory } from '../staff/InternHistory';
+import { History, StaffHistory } from './TaskReview';
 
 export const MAX_FILES = 5;
 export const MAX_FILE_BYTES = 5 * 1024 * 1024;
@@ -21,6 +20,8 @@ type Props = {
   internId?: string;
   /** Есть только у стажёра: перенос на следующий этап прямо из окна. */
   onAdvance?: (result: { text: string; url: string }) => Promise<void>;
+  /** Есть только у стажёра на доске: взять доступную задачу в работу («Задачи» → «Активно»). */
+  onStart?: () => Promise<void>;
   busy?: boolean;
   onClose: () => void;
 };
@@ -57,7 +58,7 @@ function Attachment({ file, token }: { file: TaskAttachment; token: string }) {
  * Окно задачи: полное описание, перенос на следующий этап и переписка стажёра с наставником (с файлами).
  * Открывается с канбана, с главной и из раздела «Команда» у наставника.
  */
-export function TaskModal({ item, stage, checklistName, token, internId, onAdvance, busy, onClose }: Props) {
+export function TaskModal({ item, stage, checklistName, token, internId, onAdvance, onStart, busy, onClose }: Props) {
   const [comments, setComments] = useState<TaskComment[] | null>(null);
   const [loadError, setLoadError] = useState('');
   const [text, setText] = useState('');
@@ -69,10 +70,11 @@ export function TaskModal({ item, stage, checklistName, token, internId, onAdvan
   const [advanceError, setAdvanceError] = useState('');
   const picker = useRef<HTMLInputElement>(null);
   const thread = useRef<HTMLDivElement>(null);
-  const column = columnOf(item);
-  /** Комментарии и файлы нужны только по задаче на проверке: в работе, завершённая и недоступная — только чтение. */
-  const canDiscuss = column === 'review';
-  const canAdvance = Boolean(onAdvance) && item.status === 'active';
+  /** Доступную задачу сначала берут в работу; следующий этап — только у начатой. */
+  const canStart = Boolean(onStart) && isAvailable(item);
+  const canAdvance = Boolean(onAdvance) && item.status === 'active' && !isAvailable(item);
+  /** История отправок бывает только у задачи с проверкой, которую уже открыли. */
+  const hasHistory = item.requires_review && item.status !== 'unavailable';
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
@@ -113,6 +115,15 @@ export function TaskModal({ item, stage, checklistName, token, internId, onAdvan
     finally { setSending(false); }
   };
 
+  const start = async () => {
+    if (!onStart) return;
+    setAdvanceError('');
+    try {
+      await onStart();
+      onClose();
+    } catch (reason) { setAdvanceError(errorText(reason, 'Не удалось взять задачу в работу')); }
+  };
+
   const advance = async () => {
     if (!onAdvance) return;
     setAdvanceError('');
@@ -123,7 +134,7 @@ export function TaskModal({ item, stage, checklistName, token, internId, onAdvan
   };
 
   const facts: [string, string][] = [
-    ['Статус', COLUMN_TITLES[column]],
+    ['Статус', statusLabel(item)],
     ...(checklistName ? [['Чек-лист', checklistName] as [string, string]] : []),
     ...(stage ? [['Срок', weekLabel(stage)] as [string, string]] : []),
     ...(item.due_at ? [['Дедлайн', formatDateTime(item.due_at)] as [string, string]] : []),
@@ -156,6 +167,16 @@ export function TaskModal({ item, stage, checklistName, token, internId, onAdvan
                 <p className="tm-text">{item.rework_comment || 'Наставник вернул работу без комментария.'}</p></div>
             )}
 
+            {canStart && (
+              <div className="tm-advance">
+                <h3>Следующий этап</h3>
+                {advanceError && <p className="tm-error" role="alert">{advanceError}</p>}
+                <button type="button" className="tm-primary" disabled={busy} onClick={() => void start()}>
+                  {busy ? 'Сохраняем…' : 'В работу →'}
+                </button>
+                <small>Задача перейдёт в колонку «Активно».</small>
+              </div>
+            )}
             {canAdvance && (
               <div className="tm-advance">
                 <h3>Следующий этап</h3>
@@ -176,8 +197,8 @@ export function TaskModal({ item, stage, checklistName, token, internId, onAdvan
                 <small>{item.requires_review ? 'Нужен комментарий или ссылка на результат. Задачу примет наставник: пока он не проверит, она будет в колонке «На проверке».' : 'Проверка не нужна: задача сразу окажется в «Завершено».'}</small>
               </div>
             )}
-            {internId && item.requires_review && item.status !== 'unavailable' && <InternHistory internId={internId} itemId={item.id} token={token} />}
-            {onAdvance && item.requires_review && item.status !== 'unavailable' && <History itemID={item.id} token={token} />}
+            {internId && hasHistory && <StaffHistory internId={internId} itemId={item.id} token={token} />}
+            {onAdvance && hasHistory && <History itemID={item.id} token={token} />}
           </div>
 
           <div className="tm-chat">
@@ -185,7 +206,7 @@ export function TaskModal({ item, stage, checklistName, token, internId, onAdvan
             <div className="tm-thread" ref={thread} aria-live="polite">
               {loadError && <p className="tm-error" role="alert">{loadError} <button type="button" className="link-button" onClick={() => void load()}>Повторить</button></p>}
               {!comments && !loadError && <p className="muted">Загружаем…</p>}
-              {comments && comments.length === 0 && <p className="muted">{canDiscuss ? 'Пока нет сообщений. Здесь стажёр и наставник обсуждают задачу и делятся файлами.' : 'Пока нет сообщений. Комментарии и файлы появятся, когда задача уйдёт на проверку.'}</p>}
+              {comments && comments.length === 0 && <p className="muted">Пока нет сообщений. Здесь стажёр и наставник обсуждают задачу и делятся файлами.</p>}
               {comments?.map(comment => (
                 <article key={comment.id} className={`tm-msg is-${comment.author_role}`}>
                   <header><b>{comment.author_name}</b><span>{staffRoleLabel(comment.author_role)}</span><time>{formatDateTime(comment.created_at)}</time></header>
@@ -194,7 +215,7 @@ export function TaskModal({ item, stage, checklistName, token, internId, onAdvan
                 </article>
               ))}
             </div>
-            {canDiscuss && <form className="tm-compose" onSubmit={event => void send(event)}>
+            <form className="tm-compose" onSubmit={event => void send(event)}>
               <textarea rows={2} aria-label="Новый комментарий" maxLength={2000} value={text} onChange={event => setText(event.target.value)} placeholder="Напишите комментарий…" />
               {files.length > 0 && (
                 <ul className="tm-picked">
@@ -211,7 +232,7 @@ export function TaskModal({ item, stage, checklistName, token, internId, onAdvan
                 <button type="button" className="tm-attach" onClick={() => picker.current?.click()}><PaperclipIcon width={16} height={16} /> Прикрепить файл</button>
                 <button className="tm-primary" disabled={sending || (!text.trim() && files.length === 0)}>{sending ? 'Отправляем…' : 'Отправить'}</button>
               </div>
-            </form>}
+            </form>
           </div>
         </div>
       </section>

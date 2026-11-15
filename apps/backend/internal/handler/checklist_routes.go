@@ -22,6 +22,12 @@ func (d Dependencies) RegisterChecklistRoutes(
 		"POST /api/checklist-items/{itemID}/complete",
 		authenticated(internOnly(d.completeItemHandler())),
 	)
+	if starter, ok := d.Items.(ChecklistItemStarter); ok {
+		mux.Handle(
+			"POST /api/checklist-items/{itemID}/start",
+			authenticated(internOnly(startItemHandler(starter))),
+		)
+	}
 	mux.Handle(
 		"POST /api/checklist-items/{itemID}/submissions",
 		authenticated(internOnly(d.submitItemHandler())),

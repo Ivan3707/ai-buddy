@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/middleware"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/model"
 	"github.com/nvkmaksim/ai-buddy/backend/internal/service"
@@ -28,6 +30,8 @@ type checklistItemDTO struct {
 	ReworkComment     *string `json:"rework_comment"`
 	// Personal: the task was added for this intern by the teamlead (not from the shared catalog).
 	Personal bool `json:"personal"`
+	// Started: the intern took the active task into work. Active and not started = available ("Задачи" column).
+	Started bool `json:"started"`
 }
 
 type checklistStageDTO struct {
@@ -120,6 +124,27 @@ func (d Dependencies) completeItemHandler() http.Handler {
 		}
 		user, _ := middleware.CurrentUser(r.Context())
 		if err := d.Items.CompleteItem(r.Context(), user.ID, itemID); err != nil {
+			writeServiceError(w, err)
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+	})
+}
+
+// ChecklistItemStarter takes an available task into work. It is optional so that test doubles of
+// ChecklistItemService keep compiling; the route is registered only when Items implements it.
+type ChecklistItemStarter interface {
+	StartItem(context.Context, uuid.UUID, uuid.UUID) error
+}
+
+func startItemHandler(starter ChecklistItemStarter) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		itemID, ok := parsePathUUID(w, r, "itemID", "invalid checklist item ID")
+		if !ok {
+			return
+		}
+		user, _ := middleware.CurrentUser(r.Context())
+		if err := starter.StartItem(r.Context(), user.ID, itemID); err != nil {
 			writeServiceError(w, err)
 			return
 		}
@@ -285,6 +310,7 @@ func toChecklistDTO(value service.ChecklistWithProgress) checklistDTO {
 				ReturnedForRework: item.ReturnedForRework,
 				ReworkComment:     item.ReworkComment,
 				Personal:          item.Item.AssignedUserID != nil,
+				Started:           item.Started,
 			})
 		}
 		stages = append(stages, checklistStageDTO{

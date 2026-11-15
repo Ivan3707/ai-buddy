@@ -268,6 +268,8 @@ func TestAssistantFlowWithPostgres(t *testing.T) {
 	expect(nil, http.MethodPost, "/api/chat/stream", map[string]string{"message": "x"}, http.StatusUnauthorized)
 	expect(intern, http.MethodPost, "/api/chat/stream", map[string]string{"message": "  "}, http.StatusBadRequest)
 	expect(intern, http.MethodPost, "/api/chat/stream", map[string]any{"message": "x", "page_context": map[string]string{"url": ""}}, http.StatusBadRequest)
+	// readable page text: up to 6000 characters, more is rejected
+	expect(intern, http.MethodPost, "/api/chat/stream", map[string]any{"message": "x", "page_context": map[string]string{"url": "https://x", "text": strings.Repeat("я", 6001)}}, http.StatusBadRequest)
 	expect(intern, http.MethodPost, "/api/chat/stream", map[string]any{"message": "x", "extra": 1}, http.StatusBadRequest)
 	expect(intern, http.MethodPost, "/api/chat/stream", map[string]any{"message": "x", "conversation_id": uuid.NewString()}, http.StatusNotFound)
 

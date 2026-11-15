@@ -81,6 +81,14 @@
 .task-row.is-locked .task-name { background: var(--pink-soft); font-weight: 500; }
 .task-row.is-locked .task-cell { background: var(--grey-soft); color: #555; }
 .task-empty { margin: 8px 0 0; color: var(--text-muted); }
+/* Наведение на кружок строки, как на доске задач: кружок только светлеет — не чернеет и значок не меняет.
+ * Префикс .task-table перебивает правила наведения из figma.css (он подключён позже). */
+.task-table .task-row:not(.is-locked):hover .task-mark,
+.task-table .task-row:not(.is-locked):active .task-mark { background: rgba(255, 255, 255, 0.6); }
+.task-table .task-row.is-done:hover .task-mark,
+.task-table .task-row.is-done:active .task-mark { background: var(--pink-soft); }
+.task-table .task-row.is-done:hover .task-check path,
+.task-table .task-row.is-done:active .task-check path { fill: #fff; }
 
 
 /* когда оба чек-листа пройдены */

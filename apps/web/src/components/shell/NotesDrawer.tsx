@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createNote, deleteNote, listNotes, updateNote, type Note } from '@ai-buddy/client';
 import { formatDateTime } from '../../lib/format';
+import { PencilIcon } from '../icons';
 
 type Props = { open: boolean; token: string; onClose: () => void };
-type Draft = { id?: string; title: string; content: string };
+type Draft = { id?: string; title: string; content: string; mode: 'view' | 'edit' };
 
 /** Заметки справа: список своих заметок, создание, правка и удаление (те же заметки, что во вкладке «Заметки» Бади). */
 export function NotesDrawer({ open, token, onClose }: Props) {
@@ -32,7 +33,7 @@ export function NotesDrawer({ open, token, onClose }: Props) {
     try {
       const input = { title: draft.title.trim(), content: draft.content };
       if (draft.id) await updateNote('', token, draft.id, input); else await createNote('', token, input);
-      setDraft(null);
+      if (draft.id) setDraft({ ...draft, title: input.title, mode: 'view' }); else setDraft(null);
       await load();
     } catch (reason) { setError(reason instanceof Error ? reason.message : 'Не удалось сохранить'); }
     finally { setBusy(false); }
@@ -62,7 +63,7 @@ export function NotesDrawer({ open, token, onClose }: Props) {
               <ul className="notes-list">
                 {notes.map(note => (
                   <li key={note.id}>
-                    <button type="button" onClick={() => setDraft({ id: note.id, title: note.title, content: note.content })}>
+                    <button type="button" onClick={() => setDraft({ id: note.id, title: note.title, content: note.content, mode: 'view' })}>
                       <b>{note.title}</b>
                       {note.content && <span>{note.content}</span>}
                       <time>{formatDateTime(note.updated_at)}</time>
@@ -73,7 +74,7 @@ export function NotesDrawer({ open, token, onClose }: Props) {
             )}
           </div>
           <div className="notes-actions">
-            <button type="button" className="notes-action" aria-label="Добавить заметку" onClick={() => setDraft({ title: '', content: '' })}>
+            <button type="button" className="notes-action" aria-label="Добавить заметку" onClick={() => setDraft({ title: '', content: '', mode: 'edit' })}>
               <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" aria-hidden="true">
                 <path d="M14 4v20M4 14h20" />
               </svg>
@@ -90,22 +91,36 @@ export function NotesDrawer({ open, token, onClose }: Props) {
                 <h2>{draft.title.trim() || 'Без названия'}</h2>
               </div>
             </header>
-            <form className="note-modal-form" onSubmit={event => { event.preventDefault(); void save(); }}>
-              {error && <p className="note-modal-error" role="alert">{error}</p>}
-              <label>Заголовок
-                <input aria-label="Заголовок" placeholder="О чём заметка" maxLength={120} value={draft.title} autoFocus
-                  onChange={event => setDraft({ ...draft, title: event.target.value })} />
-              </label>
-              <label>Текст заметки
-                <textarea aria-label="Текст заметки" placeholder="Что важно запомнить" rows={9} value={draft.content}
-                  onChange={event => setDraft({ ...draft, content: event.target.value })} />
-              </label>
-              <div className="note-modal-foot">
-                {draft.id && <button type="button" className="note-modal-delete" disabled={busy} onClick={() => void remove()}>Удалить</button>}
-                <button type="button" className="note-modal-close" disabled={busy} onClick={() => setDraft(null)}>Закрыть</button>
-                <button type="submit" className="note-modal-save" disabled={busy}>{busy ? 'Сохраняем…' : 'Сохранить'}</button>
+            {draft.mode === 'view' ? (
+              <div className="note-modal-form note-modal-view">
+                {error && <p className="note-modal-error" role="alert">{error}</p>}
+                <p className="note-modal-text">{draft.content || 'Текста нет'}</p>
+                <div className="note-modal-foot">
+                  <button type="button" className="note-modal-delete" disabled={busy} onClick={() => void remove()}>Удалить</button>
+                  <button type="button" className="note-modal-close" disabled={busy} onClick={() => setDraft(null)}>Закрыть</button>
+                  <button type="button" className="note-modal-save note-modal-edit" disabled={busy} onClick={() => setDraft({ ...draft, mode: 'edit' })}>
+                    <PencilIcon width={18} height={18} />Редактировать
+                  </button>
+                </div>
               </div>
-            </form>
+            ) : (
+              <form className="note-modal-form" onSubmit={event => { event.preventDefault(); void save(); }}>
+                {error && <p className="note-modal-error" role="alert">{error}</p>}
+                <label>Заголовок
+                  <input aria-label="Заголовок" placeholder="О чём заметка" maxLength={120} value={draft.title} autoFocus
+                    onChange={event => setDraft({ ...draft, title: event.target.value })} />
+                </label>
+                <label>Текст заметки
+                  <textarea aria-label="Текст заметки" placeholder="Что важно запомнить" rows={9} value={draft.content}
+                    onChange={event => setDraft({ ...draft, content: event.target.value })} />
+                </label>
+                <div className="note-modal-foot">
+                  <button type="button" className="note-modal-close" disabled={busy}
+                    onClick={() => { setError(''); const orig = notes.find(note => note.id === draft.id); if (draft.id && orig) setDraft({ id: orig.id, title: orig.title, content: orig.content, mode: 'view' }); else setDraft(null); }}>Отмена</button>
+                  <button type="submit" className="note-modal-save" disabled={busy}>{busy ? 'Сохраняем…' : 'Сохранить'}</button>
+                </div>
+              </form>
+            )}
           </section>
         </div>
       )}

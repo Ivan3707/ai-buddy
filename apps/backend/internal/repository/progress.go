@@ -75,7 +75,8 @@ func (r *ProgressRepository) GetByUserID(
 			p.status,
 			p.completed_at,
 			p.created_at,
-			p.position
+			p.position,
+			p.activated_at
 		FROM user_checklist_progress AS p
 		JOIN checklist_items AS ci
 			ON ci.id = p.checklist_item_id
@@ -96,7 +97,7 @@ func (r *ProgressRepository) GetByUserID(
 
 	for rows.Next() {
 		var item model.UserChecklistProgress
-		var completedAt sql.NullTime
+		var completedAt, activatedAt sql.NullTime
 
 		err := rows.Scan(
 			&item.ID,
@@ -107,6 +108,7 @@ func (r *ProgressRepository) GetByUserID(
 			&completedAt,
 			&item.CreatedAt,
 			&item.Position,
+			&activatedAt,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("scan progress: %w", err)
@@ -114,6 +116,9 @@ func (r *ProgressRepository) GetByUserID(
 
 		if completedAt.Valid {
 			item.CompletedAt = &completedAt.Time
+		}
+		if activatedAt.Valid {
+			item.ActivatedAt = &activatedAt.Time
 		}
 
 		progress = append(progress, item)
@@ -300,4 +305,39 @@ func (r *ProgressRepository) UpdateStatus(
 	}
 
 	return nil
+}
+
+// MakeAvailable opens an item for the intern without starting it: status 'active' with activated_at NULL.
+// The web shows such a task at the top of the "Задачи" column; the intern starts it by hand (Start).
+// The hint worker and the overdue report ignore it until then (they require activated_at).
+func (r *ProgressRepository) MakeAvailable(ctx context.Context, userID, itemID uuid.UUID) error {
+	result, err := r.db.ExecContext(ctx, `UPDATE user_checklist_progress
+		SET status = 'active', completed_at = NULL, activated_at = NULL
+		WHERE user_id = $1 AND checklist_item_id = $2`, userID, itemID)
+	if err != nil {
+		return fmt.Errorf("make progress available: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("get affected rows: %w", err)
+	}
+	if affected == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Start marks an available (active, not started) item as taken into work: activated_at = now().
+// It reports whether the row changed; an already started item is left as is.
+func (r *ProgressRepository) Start(ctx context.Context, userID, itemID uuid.UUID) (bool, error) {
+	result, err := r.db.ExecContext(ctx, `UPDATE user_checklist_progress SET activated_at = now()
+		WHERE user_id = $1 AND checklist_item_id = $2 AND status = 'active' AND activated_at IS NULL`, userID, itemID)
+	if err != nil {
+		return false, fmt.Errorf("start progress item: %w", err)
+	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("get affected rows: %w", err)
+	}
+	return affected > 0, nil
 }

@@ -1282,6 +1282,11 @@
             "type": "string",
             "maxLength": 2000,
             "description": "Text the user selected on the page"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 6000,
+            "description": "Readable text of the page (not HTML), cut to the limit; sent only when the question is about the page"
           }
         }
       },

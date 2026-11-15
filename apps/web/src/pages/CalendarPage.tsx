@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { ChevronIcon } from '../components/icons';
+import { CalendarEventModal } from './CalendarEventModal';
 import { useCalendarEvents } from '../hooks/useCalendarEvents';
 import { WEEKDAYS, combineDateTime, defaultDayOfMonth, dayMonthLabel, isSameDay, monthGrid, monthTitle, shiftMonth } from '../lib/calendar';
 
@@ -27,7 +28,9 @@ export function CalendarPage({ today = new Date(), token, initialDate }: Props) 
   const [to, setTo] = useState('11:00');
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
-  const { events, error, add, remove, eventsOf } = useCalendarEvents(token);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const { events, error, add, update, remove, eventsOf } = useCalendarEvents(token);
+  const openEvent = openId ? events.find(e => e.id === openId) : undefined;
 
   const cells = monthGrid(year, month);
   const rows = Math.ceil(cells.length / 7);
@@ -83,9 +86,11 @@ export function CalendarPage({ today = new Date(), token, initialDate }: Props) 
           <ul>
             {dayEvents.map(event => (
               <li key={event.id}>
-                <b>{timeLabel(event.starts_at)}–{timeLabel(event.ends_at)}</b>
-                <span>{event.title}</span>
-                {event.description && <small>{event.description}</small>}
+                <button type="button" className="cal-open" aria-label={`Открыть дело «${event.title}»`} onClick={() => setOpenId(event.id)}>
+                  <b>{timeLabel(event.starts_at)}–{timeLabel(event.ends_at)}</b>
+                  <span>{event.title}</span>
+                  {event.description && <small>{event.description}</small>}
+                </button>
                 <button type="button" className="cal-remove" aria-label={`Удалить дело «${event.title}»`} onClick={() => void drop(event.id)}>×</button>
               </li>
             ))}
@@ -127,13 +132,21 @@ export function CalendarPage({ today = new Date(), token, initialDate }: Props) 
                 onClick={() => { setSelected(cell.date); setFormError(''); }}
               >
                 <b>{cell.day}</b>
-                {list.slice(0, MAX_CHIPS).map(event => <i key={event.id} className="cal-chip" title={event.title}>{event.title}</i>)}
+                {list.slice(0, MAX_CHIPS).map(event => (
+                  <i
+                    key={event.id}
+                    className="cal-chip is-link"
+                    title={event.title}
+                    onClick={e => { e.stopPropagation(); setSelected(cell.date); setOpenId(event.id); }}
+                  >{event.title}</i>
+                ))}
                 {list.length > MAX_CHIPS && <i className="cal-chip is-more">+{list.length - MAX_CHIPS}</i>}
               </button>
             );
           })}
         </div>
       </div>
+      {openEvent && <CalendarEventModal key={openEvent.id} event={openEvent} onClose={() => setOpenId(null)} onSave={update} onDelete={remove} />}
     </div>
   );
 }

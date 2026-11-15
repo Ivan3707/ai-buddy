@@ -194,6 +194,7 @@ SHARED = {
             "url": {"type": "string", "maxLength": 2000},
             "title": {"type": "string", "maxLength": 300},
             "selection": {"type": "string", "maxLength": 2000, "description": "Text the user selected on the page"},
+            "text": {"type": "string", "maxLength": 6000, "description": "Readable text of the page (not HTML), cut to the limit; sent only when the question is about the page"},
         },
     },
     "MentorDraft": {
@@ -366,7 +367,8 @@ BACKEND_ONLY = {
     "ChecklistItem": {
         "type": "object",
         "required": ["id", "title", "description", "expected_result", "requires_review", "estimated_minutes", "due_at",
-                     "position", "status", "completed_at", "returned_for_rework", "rework_comment", "personal"],
+                     "position", "status", "completed_at", "returned_for_rework", "rework_comment", "personal",
+                     "started"],
         "description": "One task of the intern's checklist as this intern sees it: the teamlead's per-intern edits "
                        "(title, description, expected_result, estimated_minutes, due_at) are already applied and removed "
                        "tasks are not listed.",
@@ -386,6 +388,11 @@ BACKEND_ONLY = {
                                                    "resubmitted yet. Status is 'active' again: the task belongs in the 'Активно' column."},
             "rework_comment": {"type": ["string", "null"], "description": "The buddy's comment of that return; null when not returned"},
             "personal": {"type": "boolean", "description": "Added for this intern by the teamlead (not from the shared catalog)"},
+            "started": {"type": "boolean",
+                        "description": "Only for status 'active': the intern took the task into work (POST "
+                                       "/api/checklist-items/{itemID}/start). An active task that is not started is "
+                                       "available: the web shows it at the top of the 'Задачи' column. Always false "
+                                       "for other statuses."},
         },
     },
     "ChecklistStage": {
@@ -924,6 +931,16 @@ create_task["requestBody"]["content"]["application/json"]["schema"]["properties"
 create_task["responses"]["201"] = json_resp("Personal task ID", {
     "type": "object", "required": ["id"], "properties": {"id": {"type": "string", "format": "uuid"}}})
 backend_paths.update({
+    "/api/checklist-items/{itemID}/start": {"post": {
+        "operationId": "startChecklistItem", "security": BEARER, "parameters": [ITEM_PARAM],
+        "description": "Intern only: take an available task into work (the board moves it from 'Задачи' to 'Активно'). "
+                       "Completing or submitting a task makes the next catalog task available (status 'active', "
+                       "started=false), not started. Idempotent for a started task.",
+        "responses": {"204": {"description": "Started (or already started)"},
+                      "400": json_resp("Invalid item ID", ERROR), "401": json_resp("Unauthorized", ERROR),
+                      "403": json_resp("Not an intern", ERROR),
+                      "404": json_resp("Task is not in the intern's checklists", ERROR),
+                      "409": json_resp("Task is locked or finished, or belongs to the previous profession track", ERROR)}}},
     "/api/staff/interns/{internID}/checklist-items/{itemID}/submissions": {"get": {
         "operationId": "getInternSubmissionHistory", "security": BEARER, "parameters": [INTERN_PARAM, ITEM_PARAM],
         "description": "Read-only review history of one task of an intern, oldest attempt first: the intern's buddy or the "

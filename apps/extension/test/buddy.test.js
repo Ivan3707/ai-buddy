@@ -101,3 +101,19 @@ test('display name: profile name, a real-looking email name, or nothing', () => 
   assert.equal(displayName({email: 'a.b-1@x'}), '');
   assert.equal(displayName(null), '');
 });
+
+test('bubble layout stays inside the window and moves up near the bottom edge', async () => {
+  await import('../buddy/widget.js');
+  const {bubbleLayout} = globalThis.AIBuddyWidget;
+  const view = {w: 1000, h: 700};
+  const low = bubbleLayout({pos: {x: 900, y: 620}, size: 72, view, bubble: {w: 300, h: 300}});
+  assert.ok(low.y + low.h <= view.h - 8 && low.y >= 8);
+  assert.ok(low.x + low.w < 900); // character on the right half: bubble to his left
+  const tall = bubbleLayout({pos: {x: 20, y: 600}, size: 72, view, bubble: {w: 300, h: 2000}});
+  assert.equal(tall.h, 684);
+  assert.equal(tall.y, 8);
+  assert.ok(tall.x >= 8 && tall.x + tall.w <= view.w - 8);
+  const tiny = bubbleLayout({pos: {x: 0, y: 0}, size: 72, view: {w: 200, h: 200}, bubble: {w: 300, h: 50}});
+  assert.equal(tiny.w, 184);
+  assert.equal(tiny.x, 8);
+});

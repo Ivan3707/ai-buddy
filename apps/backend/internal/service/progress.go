@@ -104,6 +104,45 @@ func (s *ProgressService) CompleteItem(
 	})
 }
 
+// StartItem is the intern taking an available task into work ("Задачи" -> "Активно" on the board).
+// An available task is active with activated_at NULL; starting sets activated_at, from which the hint
+// worker counts the estimate. Starting an already started task is a no-op; a locked, finished or
+// hidden task gives ErrItemNotActive.
+func (s *ProgressService) StartItem(
+	ctx context.Context,
+	userID uuid.UUID,
+	itemID uuid.UUID,
+) error {
+	return withTransaction(ctx, s.db, func(tx *sql.Tx) error {
+		if err := lockProgressOwner(ctx, tx, userID); err != nil {
+			return err
+		}
+		progressRepo := repository.NewProgressRepository(tx)
+		currentProgress, err := progressRepo.GetByUserAndItem(ctx, userID, itemID)
+		if err != nil {
+			return fmt.Errorf("get started item progress: %w", err)
+		}
+		if err := ensureCurrentTrack(ctx, tx, userID, currentProgress.ChecklistID); err != nil {
+			return err
+		}
+		if currentProgress.Status != model.StatusActive {
+			return ErrItemNotActive
+		}
+		var hidden bool
+		if err := tx.QueryRowContext(ctx, `SELECT hidden_at IS NOT NULL FROM user_checklist_progress WHERE id=$1`,
+			currentProgress.ID).Scan(&hidden); err != nil {
+			return fmt.Errorf("check started item visibility: %w", err)
+		}
+		if hidden {
+			return ErrItemNotActive
+		}
+		if _, err := progressRepo.Start(ctx, userID, itemID); err != nil {
+			return err
+		}
+		return nil
+	})
+}
+
 func (s *ProgressService) SubmitItem(
 	ctx context.Context,
 	userID uuid.UUID,
@@ -579,14 +618,9 @@ func openNextChecklistItem(
 
 	switch nextProgress.Status {
 	case model.StatusUnavailable:
-		if err := progressRepo.UpdateStatus(
-			ctx,
-			userID,
-			nextItem.ID,
-			model.StatusActive,
-			nil,
-		); err != nil {
-			return fmt.Errorf("activate next checklist item: %w", err)
+		// The next item becomes available, not started: the intern takes it into work by hand (StartItem).
+		if err := progressRepo.MakeAvailable(ctx, userID, nextItem.ID); err != nil {
+			return fmt.Errorf("open next checklist item: %w", err)
 		}
 	case model.StatusActive, model.StatusCompleted, model.StatusVerified:
 		// A later item can already be open after an earlier attempt was rejected.

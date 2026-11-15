@@ -36,12 +36,15 @@
 /* Вкладки справа: 64×137, верхняя на 38, нижняя на 195 */
 .side-tabs { top: 35px; gap: 24px; }
 .side-tab {
-  place-content: start start;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 64px;
   height: 137px;
-  padding: 40px 16px;
+  padding: 0;
   border-radius: 32px 0 0 32px;
 }
+.side-tab svg, .side-tab img { display: block; flex: none; }
 .side-tab svg { width: 33px; height: 33px; }
 .side-tab:hover { width: 72px; }
 

@@ -178,6 +178,90 @@ func TestChecklistAPI_CompleteItem(t *testing.T) {
 	}
 }
 
+type startingItemServiceStub struct {
+	checklistItemServiceStub
+	startErr error
+	started  []uuid.UUID
+}
+
+func (s *startingItemServiceStub) StartItem(_ context.Context, userID, itemID uuid.UUID) error {
+	s.userID = userID
+	s.started = append(s.started, itemID)
+	return s.startErr
+}
+
+func TestChecklistAPI_StartItem(t *testing.T) {
+	itemID := uuid.New()
+	items := &startingItemServiceStub{}
+	handler, token, user := newChecklistAPIHandler(t, model.RoleIntern, &checklistReaderStub{}, items, &buddySubmissionServiceStub{})
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, authorizedRequest(http.MethodPost, "/api/checklist-items/"+itemID.String()+"/start", "", token))
+	if w.Code != http.StatusNoContent || items.userID != user.ID || len(items.started) != 1 || items.started[0] != itemID {
+		t.Fatalf("unexpected start result: status=%d user=%s started=%v", w.Code, items.userID, items.started)
+	}
+
+	items.startErr = service.ErrItemNotActive
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, authorizedRequest(http.MethodPost, "/api/checklist-items/"+itemID.String()+"/start", "", token))
+	if w.Code != http.StatusConflict {
+		t.Fatalf("locked item start: got %d %s", w.Code, w.Body.String())
+	}
+
+	w = httptest.NewRecorder()
+	handler.ServeHTTP(w, authorizedRequest(http.MethodPost, "/api/checklist-items/not-a-uuid/start", "", token))
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("invalid item ID: got %d", w.Code)
+	}
+
+	staff, staffToken, _ := newChecklistAPIHandler(t, model.RoleBuddy, &checklistReaderStub{}, &startingItemServiceStub{}, &buddySubmissionServiceStub{})
+	w = httptest.NewRecorder()
+	staff.ServeHTTP(w, authorizedRequest(http.MethodPost, "/api/checklist-items/"+itemID.String()+"/start", "", staffToken))
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("buddy must not start intern tasks: got %d", w.Code)
+	}
+}
+
+func TestChecklistAPI_GetChecklistsStarted(t *testing.T) {
+	stageID := uuid.New()
+	available, started := uuid.New(), uuid.New()
+	result := &service.UserChecklists{
+		Common: service.ChecklistWithProgress{
+			Checklist: model.Checklist{ID: uuid.New(), Name: "Common", Type: model.ChecklistTypeCommon},
+			Stages: []service.ChecklistStageWithProgress{{
+				Stage: model.ChecklistStage{ID: stageID, Title: "Week 1", Position: 1},
+				Items: []service.ChecklistItemProgress{
+					{Item: model.ChecklistItem{ID: started, Title: "Started", Position: 1}, Status: model.StatusActive, Started: true},
+					{Item: model.ChecklistItem{ID: available, Title: "Available", Position: 2}, Status: model.StatusActive},
+				},
+			}},
+		},
+		Professional: service.ChecklistWithProgress{
+			Checklist: model.Checklist{ID: uuid.New(), Name: "Backend", Type: model.ChecklistTypeProfessional},
+			Stages:    []service.ChecklistStageWithProgress{},
+		},
+	}
+	handler, token, _ := newChecklistAPIHandler(t, model.RoleIntern, &checklistReaderStub{result: result}, &checklistItemServiceStub{}, &buddySubmissionServiceStub{})
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, authorizedRequest(http.MethodGet, "/api/checklists", "", token))
+	var response struct {
+		Common struct {
+			Stages []struct {
+				Items []struct {
+					ID      string `json:"id"`
+					Started bool   `json:"started"`
+				} `json:"items"`
+			} `json:"stages"`
+		} `json:"common"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &response); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	got := response.Common.Stages[0].Items
+	if len(got) != 2 || got[0].ID != started.String() || !got[0].Started || got[1].Started {
+		t.Fatalf("started flags: %s", w.Body.String())
+	}
+}
+
 func TestChecklistAPI_SubmitItem(t *testing.T) {
 	itemID, submissionID, progressID := uuid.New(), uuid.New(), uuid.New()
 	now := time.Now().UTC().Truncate(time.Second)

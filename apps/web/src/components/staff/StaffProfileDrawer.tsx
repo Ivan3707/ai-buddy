@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import type { User } from '@ai-buddy/client';
-import { personName, staffRoleLabel } from '../../lib/format';
+import { personName, plural, staffRoleLabel } from '../../lib/format';
 
 type Props = { user: User; open: boolean; onClose: () => void };
 
@@ -29,16 +29,16 @@ export function StaffProfileDrawer({ user, open, onClose }: Props) {
           </section>
           <div className="fact-row">
             <section className="fact-card"><h3>Роль:</h3><p>{staffRoleLabel(user.role)}</p></section>
-            <section className="fact-card"><h3>Возраст:</h3><p>{user.age_years ? `${user.age_years} лет` : '—'}</p></section>
+            {user.age_years != null && <section className="fact-card"><h3>Возраст:</h3><p>{user.age_years} {plural(user.age_years, ['год', 'года', 'лет'])}</p></section>}
           </div>
           <section className="about-card" aria-label="О себе">
             <h3>О себе</h3>
             <dl>
               <div><dt>Почта:</dt><dd>{user.email}</dd></div>
-              <div><dt>Команда:</dt><dd>{user.team ?? '—'}</dd></div>
+              {user.department && <div><dt>Подразделение:</dt><dd>{user.department}</dd></div>}
+              {user.team && <div><dt>Команда:</dt><dd>{user.team}</dd></div>}
               {user.telegram_username && <div><dt>Telegram:</dt><dd>@{user.telegram_username.replace(/^@/, '')}</dd></div>}
             </dl>
-            <p className="about-org">{user.department ?? ''}</p>
           </section>
         </div>
       </aside>

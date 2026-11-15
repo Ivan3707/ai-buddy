@@ -76,6 +76,26 @@ describe('Главная наставника', () => {
   });
 });
 
+describe('Главная: активные задачи и вопросы', () => {
+  it('в карточке стажёра перечислены все активные задачи', async () => {
+    const act = (title: string) => item({ title, status: 'active' });
+    const list = checklist({ id: 'p2', type: 'professional', stages: [{ id: 's', title: 'Э', week_start: 1, week_end: 1, goal: '', expected_result: '', position: 1, items: [act('Первая активная'), act('Вторая активная'), item({ title: 'Закрытая', status: 'completed' })] }] });
+    api.getInternProgress.mockResolvedValue({ ...(progress as object), professional: list } as never);
+    render(<StaffHomePage user={buddyUser} token="t" onNavigate={vi.fn()} />);
+    expect(await screen.findByText('Активные задачи')).toBeInTheDocument();
+    expect(screen.getByText('Первая активная')).toBeInTheDocument();
+    expect(screen.getByText('Вторая активная')).toBeInTheDocument();
+    expect(screen.queryByText('Закрытая')).not.toBeInTheDocument();
+    expect(screen.queryByText('Следующая задача')).not.toBeInTheDocument();
+  });
+
+  it('без активных задач пишет «нет активных задач», карточка вопросов переименована', async () => {
+    render(<StaffHomePage user={buddyUser} token="t" onNavigate={vi.fn()} />);
+    expect(await screen.findByText('нет активных задач')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Вопросы от стажёра/ })).toBeInTheDocument();
+  });
+});
+
 const commonList = checklist({ id: 'c', type: 'common', stages: [{ id: 's0', title: 'Знакомство', week_start: 1, week_end: 1, goal: '', expected_result: '', position: 1, items: [item({ title: 'Общая задача', status: 'active' })] }], total_items: 1 });
 const both = { ...(progress as object), common: commonList, total_items: 2 } as never;
 
@@ -95,6 +115,10 @@ describe('Команда руководителя', () => {
   beforeEach(() => { api.getInternProgress.mockResolvedValue(both); });
 
   it('видит оба чек-листа, но не вкладку проверки и не кнопки решения', async () => {
+    // Блок «История отправок» в окне задачи появляется только при наличии отправок.
+    api.getInternSubmissionHistory.mockResolvedValue([
+      { id: 'h0', attempt_number: 1, status: 'pending', result_text: 'Отчёт', result_url: null, submitted_at: '2026-11-13T10:00:00Z', reviewed_at: null, review_comment: null },
+    ] as never);
     render(<StaffTeamPage user={leadUser} token="t" />);
     expect(await screen.findByText('Общая задача')).toBeInTheDocument();
     expect(screen.getByText('Сдать отчёт')).toBeInTheDocument();
