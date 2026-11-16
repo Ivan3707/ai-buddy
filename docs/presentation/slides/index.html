@@ -26,7 +26,6 @@
 @page{size:1920px 1080px;margin:0}
 *{box-sizing:border-box}
 html,body{margin:0;background:#fff;color:var(--ink);font-family:M,Montserrat,Arial,sans-serif}
-body:not(.review) .review{display:none}
 .slide{position:relative;width:1920px;height:1080px;overflow:hidden;background:#fff;page-break-after:always;break-after:page}
 .label{position:absolute;left:128px;top:62px;font-weight:700;font-size:21px;text-transform:uppercase;letter-spacing:.2px}
 .title{position:absolute;left:128px;top:124px;right:128px;font-weight:700;font-size:50px;line-height:1.16;margin:0}
@@ -61,11 +60,6 @@ code{font-family:Consolas,"Courier New",monospace;font-size:.92em;background:#f3
 /* original slides used as images */
 .orig{background-size:1920px 1080px;background-repeat:no-repeat}
 .patch{position:absolute;background:#fff}
-/* review stamps */
-.stamp{position:absolute;right:60px;top:40px;transform:rotate(-4deg);border:6px solid;border-radius:18px;padding:14px 26px;font-weight:800;font-size:40px;background:rgba(255,255,255,.92);max-width:900px;line-height:1.15}
-.stamp small{display:block;font-size:22px;font-weight:600;margin-top:6px}
-.st-changed{color:#c46a00;border-color:#c46a00}.st-removed{color:#c21f3a;border-color:#c21f3a}.st-moved{color:#2563b8;border-color:#2563b8}
-.dim::after{content:"";position:absolute;inset:0;background:rgba(255,255,255,.18)}
 .arrow{font-weight:800;color:#888;font-size:28px;align-self:center}
 .flow{display:flex;gap:14px;align-items:stretch}
 .step{flex:1;background:var(--gray);border-radius:24px;padding:22px 22px 20px;font-size:20px;line-height:1.36}
