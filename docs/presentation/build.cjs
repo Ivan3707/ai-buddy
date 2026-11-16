@@ -13,14 +13,13 @@ const pngDir = process.argv.includes('--png') ? process.argv[process.argv.indexO
 (async () => {
   const browser = await chromium.launch();
   const tab = await browser.newPage({ viewport: { width: 1920, height: 1080 } });
-  for (const [file, review] of [['AI-buddy-draft.pdf', false]]) {
+  for (const file of ['AI-buddy-draft.pdf']) {
     await tab.goto(page, { waitUntil: 'networkidle' });
-    await tab.evaluate(on => document.body.classList.toggle('review', on), review);
     await tab.evaluate(() => document.fonts.ready);
     await tab.pdf({ path: path.join(here, file), width: '1920px', height: '1080px', printBackground: true, preferCSSPageSize: true });
     const count = await tab.evaluate(() => [...document.querySelectorAll('.slide')].filter(s => getComputedStyle(s).display !== 'none').length);
     console.log(`${file}: ${count} slides`);
-    if (pngDir && !review) {
+    if (pngDir) {
       fs.mkdirSync(pngDir, { recursive: true });
       const slides = await tab.$$('.slide');
       let n = 0;
