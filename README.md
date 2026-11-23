@@ -4,10 +4,7 @@
 
 AI-Buddy помогает стажёру пройти адаптацию. Он показывает план, этапы и следующий шаг, отвечает на рабочие вопросы по базе знаний со ссылками на источники и сам оформляет заявки через имитации корпоративных сервисов. Результат каждой заявки (номер и статус) сохраняется и показывается в интерфейсе. Наставнику помощник снимает рутину, руководителю показывает прогресс команды.
 
-- **Видео «от запроса до результата»** (11 мин 30 с): [Google Drive](https://drive.google.com/file/d/1kuRmNZizFP01LUOvLBwlQaFMYRHfnIiZ/view?usp=sharing) · [GitHub, релиз submission-2026-11-16](https://github.com/nvkmaksim/ai-buddy/releases/download/submission-2026-11-16/AI-buddy-video.mp4). Обе ссылки есть и на первом слайде презентации.
-- **Прототип дизайна (Figma):** [открыть прототип](https://www.figma.com/proto/ACcTg19b2zcQIWTQFI3Ume/%D0%90%D0%B2%D0%B8%D1%82%D0%BE?node-id=117-435&p=f&t=eotvPJmMogOCOxuP-1&scaling=contain&content-scaling=fixed&page-id=117%3A420&starting-point-node-id=117%3A435).
-- **Презентация:** [`docs/presentation/AI-buddy.pdf`](docs/presentation/AI-buddy.pdf) (также приложена к релизу).
-- **Развёрнутый стенд:** <http://94.41.19.241:8088> (там же скачивается расширение Chrome: `/install-extension.html`).
+- **Развёрнутый стенд:** <> (там же скачивается расширение Chrome: `/install-extension.html`).
 - **Для AI-агентов** (Claude Code, Codex, Cursor): [`README_FOR_AI.md`](README_FOR_AI.md).
 
 > Все данные синтетические. Документы базы знаний — тестовые инструкции, а не регламенты Авито. Внешних систем прототип не вызывает, кроме выбранного LLM-провайдера.
